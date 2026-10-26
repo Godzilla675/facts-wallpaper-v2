@@ -47,12 +47,16 @@ class FactsViewModel @Inject constructor(
     private val initialDocumentId: String? = savedStateHandle["documentId"]
     private val initialLessonId: String? = savedStateHandle["lessonId"]
     private val initialTag: String? = savedStateHandle["tag"]
+    private val initialStatus: FactStatusFilter = (savedStateHandle.get<String>("status"))
+        ?.let { raw -> FactStatusFilter.entries.firstOrNull { it.name == raw } }
+        ?: FactStatusFilter.ALL
 
     private val filter = MutableStateFlow(
         FactFilter(
             documentId = initialDocumentId,
             lessonId = initialLessonId,
             tag = initialTag,
+            status = initialStatus,
         ),
     )
 

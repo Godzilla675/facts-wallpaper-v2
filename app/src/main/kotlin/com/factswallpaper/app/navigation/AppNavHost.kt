@@ -96,6 +96,9 @@ fun AppNavHost(
                     onOpenTag = { tag ->
                         navController.navigate(AppRoute.Facts(tag = tag))
                     },
+                    onOpenFacts = { status ->
+                        navController.navigate(AppRoute.Facts(status = status.name))
+                    },
                 )
             }
         }
@@ -142,6 +145,9 @@ fun AppNavHost(
                     onBack = { navController.popBackStack() },
                     onOpenFacts = {
                         navController.navigateTopLevel(TopLevelDestination.FACTS)
+                    },
+                    onOpenWallpaperSettings = {
+                        navController.navigate(AppRoute.WallpaperSettings)
                     },
                 )
             }

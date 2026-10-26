@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>Facts Wallpaper Offline TikZ Renderer</title>
+    <link rel="stylesheet" href="tikz/fonts.css">
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            min-height: 100%;
+            background: transparent;
+            overflow: hidden;
+        }
+        #stage {
+            display: inline-block;
+            box-sizing: border-box;
+            max-width: 100%;
+            padding: 8px;
+            color: #E2E8F0;
+        }
+        #stage svg {
+            display: block;
+            max-width: 100%;
+            height: auto;
+        }
+        #tikz-status {
+            font: 14px monospace;
+            color: #94a3b8;
+        }
+    </style>
+</head>
+<body>
+<div id="stage"><span id="tikz-status">Rendering diagram...</span></div>
+<script>
+    (function () {
+        var params = new URLSearchParams(window.location.search);
+        var source = params.get("src") || "";
+        window.__tikzSource = source;
+        var script = document.createElement("script");
+        script.type = "text/tikz";
+        script.textContent = source;
+        script.style.display = "none";
+        document.getElementById("stage").appendChild(script);
+    })();
+</script>
+<script src="tikz/tikzjax.js"></script>
+<script>
+    (function () {
+        "use strict";
+        var stage = document.getElementById("stage");
+        var finished = false;
+
+        function post(payload) {
+            try {
+                if (window.AndroidRenderBridge && typeof window.AndroidRenderBridge.postResult === "function") {
+                    window.AndroidRenderBridge.postResult(JSON.stringify(payload));
+                }
+            } catch (ignore) {
+                // Host may have timed out; nothing else to do.
+            }
+        }
+
+        function mountFallbackSvg(source) {
+            var ns = "http://www.w3.org/2000/svg";
+            var svg = document.createElementNS(ns, "svg");
+            svg.setAttribute("viewBox", "0 0 560 220");
+            svg.setAttribute("width", "560");
+
+            var rect = document.createElementNS(ns, "rect");
+            rect.setAttribute("x", "8");
+            rect.setAttribute("y", "8");
+            rect.setAttribute("width", "544");
+            rect.setAttribute("height", "204");
+            rect.setAttribute("rx", "14");
+            rect.setAttribute("fill", "none");
+            rect.setAttribute("stroke", "#76D1FF");
+            rect.setAttribute("stroke-width", "2");
+            svg.appendChild(rect);
+
+            var lines = String(source || "").split(/\r?\n|;/).map(function (s) { return s.trim(); }).filter(Boolean).slice(0, 6);
+            lines.forEach(function (line, idx) {
+                var text = document.createElementNS(ns, "text");
+                text.setAttribute("x", "28");
+                text.setAttribute("y", String(46 + idx * 28));
+                text.setAttribute("fill", "#E2E8F0");
+                text.setAttribute("font-family", "monospace");
+                text.setAttribute("font-size", "14");
+                text.textContent = line.slice(0, 64);
+                svg.appendChild(text);
+            });
+            var status = document.getElementById("tikz-status");
+            if (status) status.remove();
+            stage.appendChild(svg);
+        }
+
+        function complete() {
+            if (finished) return;
+            var svg = stage.querySelector("svg") || document.querySelector("svg");
+            if (!svg) return;
+            finished = true;
+            if (svg.parentNode !== stage) {
+                var status = document.getElementById("tikz-status");
+                if (status) status.remove();
+                stage.appendChild(svg);
+            }
+            svg.removeAttribute("height");
+            svg.style.maxWidth = "100%";
+            svg.style.height = "auto";
+            requestAnimationFrame(function () {
+                requestAnimationFrame(function () {
+                    var rect = stage.getBoundingClientRect();
+                    post({
+                        ok: true,
+                        width: Math.max(1, Math.ceil(rect.width)),
+                        height: Math.max(1, Math.ceil(rect.height))
+                    });
+                });
+            });
+        }
+
+        function fallbackOrFail(message) {
+            if (finished) return;
+            if (window.__tikzSource && String(window.__tikzSource).trim().length > 0) {
+                mountFallbackSvg(window.__tikzSource);
+                complete();
+                return;
+            }
+            finished = true;
+            post({ ok: false, width: 0, height: 0, error: message });
+        }
+
+        window.addEventListener("load", function () {
+            var attempts = 0;
+            var timer = setInterval(function () {
+                attempts += 1;
+                if (finished) {
+                    clearInterval(timer);
+                    return;
+                }
+                if (stage.querySelector("svg") || document.querySelector("svg")) {
+                    clearInterval(timer);
+                    complete();
+                } else if (attempts > 120) {
+                    clearInterval(timer);
+                    fallbackOrFail("TikZ compilation timed out");
+                }
+            }, 50);
+        });
+        window.addEventListener("error", function (event) {
+            fallbackOrFail(event && event.message ? event.message : "TikZ rendering failed");
+        });
+    })();
+</script>
+</body>
+</html>

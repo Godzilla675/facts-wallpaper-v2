@@ -27,6 +27,7 @@ sealed interface AppRoute {
         val documentId: String? = null,
         val lessonId: String? = null,
         val tag: String? = null,
+        val status: String? = null,
     ) : AppRoute
 
     @Serializable

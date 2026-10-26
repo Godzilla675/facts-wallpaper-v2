@@ -71,6 +71,20 @@ abstract class CollectionDao {
     @Query("UPDATE collections SET accepted = :accepted WHERE id = :collectionId")
     abstract suspend fun setCollectionAccepted(collectionId: String, accepted: Boolean)
 
+    @Query(
+        "UPDATE collections SET name = :name, description = :description WHERE id = :collectionId"
+    )
+    abstract suspend fun renameCollection(collectionId: String, name: String, description: String)
+
+    @Query("UPDATE user_folders SET name = :name WHERE id = :folderId")
+    abstract suspend fun renameFolder(folderId: String, name: String)
+
+    @Query("DELETE FROM collection_fact_cross_ref WHERE collectionId = :collectionId")
+    abstract suspend fun clearCollectionFacts(collectionId: String)
+
+    @Query("DELETE FROM folder_fact_cross_ref WHERE folderId = :folderId")
+    abstract suspend fun clearFolderFacts(folderId: String)
+
     @Query("DELETE FROM collections WHERE id = :collectionId")
     abstract suspend fun deleteCollection(collectionId: String)
 

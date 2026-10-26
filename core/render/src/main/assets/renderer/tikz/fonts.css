@@ -1,0 +1,142 @@
+/* Offline font mapping for TikZJax SVG text. The BaKoMa TTFs are not redistributed; system fonts with broad math coverage are used instead. */
+@font-face { font-family: cmb10; src: local('Times New Roman'); }
+@font-face { font-family: cmbsy10; src: local('Cambria Math'); }
+@font-face { font-family: cmbsy6; src: local('Cambria Math'); }
+@font-face { font-family: cmbsy7; src: local('Cambria Math'); }
+@font-face { font-family: cmbsy8; src: local('Cambria Math'); }
+@font-face { font-family: cmbsy9; src: local('Cambria Math'); }
+@font-face { font-family: cmbx10; src: local('Times New Roman'); }
+@font-face { font-family: cmbx12; src: local('Times New Roman'); }
+@font-face { font-family: cmbx5; src: local('Times New Roman'); }
+@font-face { font-family: cmbx6; src: local('Times New Roman'); }
+@font-face { font-family: cmbx7; src: local('Times New Roman'); }
+@font-face { font-family: cmbx8; src: local('Times New Roman'); }
+@font-face { font-family: cmbx9; src: local('Times New Roman'); }
+@font-face { font-family: cmbxsl10; src: local('Times New Roman'); }
+@font-face { font-family: cmbxti10; src: local('Times New Roman'); }
+@font-face { font-family: cmcsc10; src: local('Times New Roman'); }
+@font-face { font-family: cmcsc8; src: local('Times New Roman'); }
+@font-face { font-family: cmcsc9; src: local('Times New Roman'); }
+@font-face { font-family: cmdunh10; src: local('Times New Roman'); }
+@font-face { font-family: cmex10; src: local('Cambria Math'); }
+@font-face { font-family: cmex7; src: local('Cambria Math'); }
+@font-face { font-family: cmex8; src: local('Cambria Math'); }
+@font-face { font-family: cmex9; src: local('Cambria Math'); }
+@font-face { font-family: cmff10; src: local('Times New Roman'); }
+@font-face { font-family: cmfi10; src: local('Times New Roman'); }
+@font-face { font-family: cmfib8; src: local('Times New Roman'); }
+@font-face { font-family: cminch; src: local('Times New Roman'); }
+@font-face { font-family: cmitt10; src: local('Times New Roman'); }
+@font-face { font-family: cmmi10; src: local('Cambria Math'); }
+@font-face { font-family: cmmi12; src: local('Cambria Math'); }
+@font-face { font-family: cmmi5; src: local('Cambria Math'); }
+@font-face { font-family: cmmi6; src: local('Cambria Math'); }
+@font-face { font-family: cmmi7; src: local('Cambria Math'); }
+@font-face { font-family: cmmi8; src: local('Cambria Math'); }
+@font-face { font-family: cmmi9; src: local('Cambria Math'); }
+@font-face { font-family: cmmib10; src: local('Cambria Math'); }
+@font-face { font-family: cmmib6; src: local('Cambria Math'); }
+@font-face { font-family: cmmib7; src: local('Cambria Math'); }
+@font-face { font-family: cmmib8; src: local('Cambria Math'); }
+@font-face { font-family: cmmib9; src: local('Cambria Math'); }
+@font-face { font-family: cmr10; src: local('Times New Roman'); }
+@font-face { font-family: cmr12; src: local('Times New Roman'); }
+@font-face { font-family: cmr17; src: local('Times New Roman'); }
+@font-face { font-family: cmr5; src: local('Times New Roman'); }
+@font-face { font-family: cmr6; src: local('Times New Roman'); }
+@font-face { font-family: cmr7; src: local('Times New Roman'); }
+@font-face { font-family: cmr8; src: local('Times New Roman'); }
+@font-face { font-family: cmr9; src: local('Times New Roman'); }
+@font-face { font-family: cmsl10; src: local('Segoe UI'); }
+@font-face { font-family: cmsl12; src: local('Segoe UI'); }
+@font-face { font-family: cmsl8; src: local('Segoe UI'); }
+@font-face { font-family: cmsl9; src: local('Segoe UI'); }
+@font-face { font-family: cmsltt10; src: local('Consolas'); }
+@font-face { font-family: cmss10; src: local('Segoe UI'); }
+@font-face { font-family: cmss12; src: local('Segoe UI'); }
+@font-face { font-family: cmss17; src: local('Segoe UI'); }
+@font-face { font-family: cmss8; src: local('Segoe UI'); }
+@font-face { font-family: cmss9; src: local('Segoe UI'); }
+@font-face { font-family: cmssbx10; src: local('Segoe UI'); }
+@font-face { font-family: cmssdc10; src: local('Segoe UI'); }
+@font-face { font-family: cmssi10; src: local('Segoe UI'); }
+@font-face { font-family: cmssi12; src: local('Segoe UI'); }
+@font-face { font-family: cmssi17; src: local('Segoe UI'); }
+@font-face { font-family: cmssi8; src: local('Segoe UI'); }
+@font-face { font-family: cmssi9; src: local('Segoe UI'); }
+@font-face { font-family: cmssq8; src: local('Segoe UI'); }
+@font-face { font-family: cmssqi8; src: local('Segoe UI'); }
+@font-face { font-family: cmsy10; src: local('Cambria Math'); }
+@font-face { font-family: cmsy5; src: local('Cambria Math'); }
+@font-face { font-family: cmsy6; src: local('Cambria Math'); }
+@font-face { font-family: cmsy7; src: local('Cambria Math'); }
+@font-face { font-family: cmsy8; src: local('Cambria Math'); }
+@font-face { font-family: cmsy9; src: local('Cambria Math'); }
+@font-face { font-family: cmtcsc10; src: local('Times New Roman'); }
+@font-face { font-family: cmtex10; src: local('Times New Roman'); }
+@font-face { font-family: cmtex8; src: local('Times New Roman'); }
+@font-face { font-family: cmtex9; src: local('Times New Roman'); }
+@font-face { font-family: cmti10; src: local('Times New Roman'); }
+@font-face { font-family: cmti12; src: local('Times New Roman'); }
+@font-face { font-family: cmti7; src: local('Times New Roman'); }
+@font-face { font-family: cmti8; src: local('Times New Roman'); }
+@font-face { font-family: cmti9; src: local('Times New Roman'); }
+@font-face { font-family: cmtt10; src: local('Consolas'); }
+@font-face { font-family: cmtt12; src: local('Consolas'); }
+@font-face { font-family: cmtt8; src: local('Consolas'); }
+@font-face { font-family: cmtt9; src: local('Consolas'); }
+@font-face { font-family: cmu10; src: local('Times New Roman'); }
+@font-face { font-family: cmvtt10; src: local('Consolas'); }
+@font-face { font-family: euex10; src: local('Cambria Math'); }
+@font-face { font-family: euex7; src: local('Cambria Math'); }
+@font-face { font-family: euex8; src: local('Cambria Math'); }
+@font-face { font-family: euex9; src: local('Cambria Math'); }
+@font-face { font-family: eufb10; src: local('Times New Roman'); }
+@font-face { font-family: eufb5; src: local('Times New Roman'); }
+@font-face { font-family: eufb6; src: local('Times New Roman'); }
+@font-face { font-family: eufb7; src: local('Times New Roman'); }
+@font-face { font-family: eufb8; src: local('Times New Roman'); }
+@font-face { font-family: eufb9; src: local('Times New Roman'); }
+@font-face { font-family: eufm10; src: local('Cambria Math'); }
+@font-face { font-family: eufm5; src: local('Cambria Math'); }
+@font-face { font-family: eufm6; src: local('Cambria Math'); }
+@font-face { font-family: eufm7; src: local('Cambria Math'); }
+@font-face { font-family: eufm8; src: local('Cambria Math'); }
+@font-face { font-family: eufm9; src: local('Cambria Math'); }
+@font-face { font-family: eurb10; src: local('Times New Roman'); }
+@font-face { font-family: eurb5; src: local('Times New Roman'); }
+@font-face { font-family: eurb6; src: local('Times New Roman'); }
+@font-face { font-family: eurb7; src: local('Times New Roman'); }
+@font-face { font-family: eurb8; src: local('Times New Roman'); }
+@font-face { font-family: eurb9; src: local('Times New Roman'); }
+@font-face { font-family: eurm10; src: local('Times New Roman'); }
+@font-face { font-family: eurm5; src: local('Times New Roman'); }
+@font-face { font-family: eurm6; src: local('Times New Roman'); }
+@font-face { font-family: eurm7; src: local('Times New Roman'); }
+@font-face { font-family: eurm8; src: local('Times New Roman'); }
+@font-face { font-family: eurm9; src: local('Times New Roman'); }
+@font-face { font-family: eusb10; src: local('Times New Roman'); }
+@font-face { font-family: eusb5; src: local('Times New Roman'); }
+@font-face { font-family: eusb6; src: local('Times New Roman'); }
+@font-face { font-family: eusb7; src: local('Times New Roman'); }
+@font-face { font-family: eusb8; src: local('Times New Roman'); }
+@font-face { font-family: eusb9; src: local('Times New Roman'); }
+@font-face { font-family: eusm10; src: local('Cambria Math'); }
+@font-face { font-family: eusm5; src: local('Cambria Math'); }
+@font-face { font-family: eusm6; src: local('Cambria Math'); }
+@font-face { font-family: eusm7; src: local('Cambria Math'); }
+@font-face { font-family: eusm8; src: local('Cambria Math'); }
+@font-face { font-family: eusm9; src: local('Cambria Math'); }
+@font-face { font-family: msam10; src: local('Cambria Math'); }
+@font-face { font-family: msam5; src: local('Cambria Math'); }
+@font-face { font-family: msam6; src: local('Cambria Math'); }
+@font-face { font-family: msam7; src: local('Cambria Math'); }
+@font-face { font-family: msam8; src: local('Cambria Math'); }
+@font-face { font-family: msam9; src: local('Cambria Math'); }
+@font-face { font-family: msbm10; src: local('Cambria Math'); }
+@font-face { font-family: msbm5; src: local('Cambria Math'); }
+@font-face { font-family: msbm6; src: local('Cambria Math'); }
+@font-face { font-family: msbm7; src: local('Cambria Math'); }
+@font-face { font-family: msbm8; src: local('Cambria Math'); }
+@font-face { font-family: msbm9; src: local('Cambria Math'); }
+

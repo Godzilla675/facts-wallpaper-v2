@@ -25,6 +25,9 @@ class RoomTemplateRepository @Inject constructor(
     override fun observeDefaultTemplate(): Flow<CardTemplate?> =
         templateDao.observeDefault().map { it?.toDomain() }
 
+    override suspend fun getTemplates(): List<CardTemplate> =
+        withContext(dispatchers.io) { templateDao.getAll().map { it.toDomain() } }
+
     override suspend fun getTemplate(templateId: String): CardTemplate? =
         withContext(dispatchers.io) { templateDao.getById(templateId)?.toDomain() }
 

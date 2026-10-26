@@ -207,3 +207,9 @@ pretends these features work.
   formatting, including locale-stable output.
 - `:app`: onboarding-vs-library start routing and all 11 type-safe routes,
   including optional arguments.
+
+## Phase P4 — Card Rendering, Templates & Collections
+
+- **Bundled offline renderer assets (`:core:render`)**: KaTeX (`katex.min.js`, `katex.min.css`, and all 19 `.woff2` font files), Mermaid (`mermaid.min.js`), and TikZJax (`tikzjax.js`, `tex.wasm`, `tex-core.gz`, `fonts.css`) are bundled under `core/render/src/main/assets/renderer/` and served strictly through `WebViewAssetLoader` (`https://appassets.androidplatform.net/assets/renderer/*`) with all external/network loads blocked (`403 Blocked`). If TikZ WASM compilation times out on a constrained WebView, `tikz.html` falls back to a clean inline SVG diagram stage as permitted by spec §7.3.
+- **Two-tier formula/diagram verification (`FormulaVerificationService`)**: Tier 1 runs `DiagramValidator` deterministically in `:core:render`. Tier 2 is exposed via the optional Hilt `@Multibinds Set<FormulaAiVerifier>` port so `:core:ai` (P3) can contribute its AI verifier without coupling `:core:render` to P3 internals during parallel development.
+- **Template AI generation & Smart Collections during parallel work**: `TemplateAiGenerator` and `CollectionsViewModel.generateAiCollections` provide deterministic local implementations backed by real Room data and validated by `CardTemplateCodec` so `:feature:templates` and `:feature:collections` work completely in isolation from P3 (`:core:ai`) and offline.

@@ -1,16 +1,21 @@
 package com.factswallpaper.feature.templates
 
+import android.graphics.Bitmap
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
@@ -27,8 +32,10 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -36,6 +43,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -48,15 +59,16 @@ import com.factswallpaper.core.ui.UiMessageEffect
 import com.factswallpaper.core.ui.component.BannerSeverity
 import com.factswallpaper.core.ui.component.EmptyStatePanel
 import com.factswallpaper.core.ui.component.InlineBanner
-import com.factswallpaper.core.ui.component.PhoneWallpaperMockup
 import com.factswallpaper.core.ui.component.SectionGroupCard
 import com.factswallpaper.core.ui.component.SourceBadge
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CardPreviewScreen(
     onBack: () -> Unit,
     onOpenFacts: () -> Unit,
+    onOpenWallpaperSettings: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: CardPreviewViewModel = hiltViewModel(),
 ) {
@@ -80,12 +92,12 @@ fun CardPreviewScreen(
                 },
                 actions = {
                     Button(
-                        onClick = viewModel::applyWallpaper,
+                        onClick = onOpenWallpaperSettings,
                         modifier = Modifier.padding(end = 8.dp),
                     ) {
                         Icon(Icons.Filled.Wallpaper, contentDescription = null)
                         Text(
-                            text = stringResource(R.string.preview_apply),
+                            text = stringResource(R.string.preview_wallpaper_settings),
                             modifier = Modifier.padding(start = 6.dp),
                         )
                     }
@@ -120,6 +132,9 @@ fun CardPreviewScreen(
                         onSelectTemplate = viewModel::selectTemplate,
                         onSelectTheme = viewModel::setThemeMode,
                         onSelectSourceMode = viewModel::setSourceReferenceMode,
+                        onFontScaleChange = viewModel::setBodyFontScale,
+                        onTopMarginChange = viewModel::setTopSafeMarginFraction,
+                        onApplyToWallpaper = viewModel::applyToWallpaper,
                         modifier = Modifier.padding(padding),
                     )
                 }
@@ -136,6 +151,9 @@ private fun CardPreviewContent(
     onSelectTemplate: (String) -> Unit,
     onSelectTheme: (ThemeMode) -> Unit,
     onSelectSourceMode: (SourceReferenceMode) -> Unit,
+    onFontScaleChange: (Float) -> Unit,
+    onTopMarginChange: (Float) -> Unit,
+    onApplyToWallpaper: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val spacing = LocalSpacing.current
@@ -150,18 +168,29 @@ private fun CardPreviewContent(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         item {
-            Box(
+            RenderedCardPanel(
+                preview = state.preview,
+                fallbackLabel = templateName,
                 modifier = Modifier.fillMaxWidth(),
-                contentAlignment = Alignment.Center,
-            ) {
-                PhoneWallpaperMockup(
-                    fact = fact,
-                    templateName = templateName,
-                    themeMode = state.wallpaper.wallpaperThemeMode,
-                    sourceReferenceMode = state.wallpaper.sourceReferenceMode,
-                    topSafeInsetFraction = state.wallpaper.topClockSafeInsetFraction,
-                    modifier = Modifier.fillMaxWidth(0.62f),
-                )
+            )
+        }
+        if (state.preview is PreviewBitmapState.Ready) {
+            val ready = state.preview as PreviewBitmapState.Ready
+            if (ready.needsReview) {
+                item {
+                    InlineBanner(
+                        message = stringResource(R.string.preview_needs_review),
+                        severity = BannerSeverity.ERROR,
+                    )
+                }
+            }
+            if (ready.missingStage) {
+                item {
+                    InlineBanner(
+                        message = stringResource(R.string.preview_diagram_pending),
+                        severity = BannerSeverity.WARNING,
+                    )
+                }
             }
         }
         item {
@@ -279,6 +308,50 @@ private fun CardPreviewContent(
             }
         }
         item {
+            SectionGroupCard(
+                title = stringResource(R.string.preview_layout_section),
+                subtitle = stringResource(R.string.preview_layout_helper),
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(spacing.sm)) {
+                    Text(
+                        text = stringResource(R.string.preview_font_scale_label, state.bodyFontScale),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Slider(
+                        value = state.bodyFontScale.coerceIn(0.8f, 1.4f),
+                        onValueChange = onFontScaleChange,
+                        valueRange = 0.8f..1.4f,
+                        steps = 11,
+                    )
+                    Text(
+                        text = stringResource(
+                            R.string.preview_top_margin_label,
+                            (state.topSafeMarginFraction * 100f).roundToInt(),
+                        ),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Slider(
+                        value = state.topSafeMarginFraction.coerceIn(0.18f, 0.32f),
+                        onValueChange = onTopMarginChange,
+                        valueRange = 0.18f..0.32f,
+                        steps = 13,
+                    )
+                }
+            }
+        }
+        item {
+            Button(
+                onClick = onApplyToWallpaper,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Icon(Icons.Filled.Wallpaper, contentDescription = null)
+                Text(
+                    text = stringResource(R.string.preview_apply_cta),
+                    modifier = Modifier.padding(start = spacing.xs),
+                )
+            }
+        }
+        item {
             OutlinedButton(
                 onClick = onNext,
                 enabled = state.pool.size > 1,
@@ -289,6 +362,82 @@ private fun CardPreviewContent(
                     text = stringResource(R.string.preview_next_fact),
                     modifier = Modifier.padding(start = spacing.xs),
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun RenderedCardPanel(
+    preview: PreviewBitmapState,
+    fallbackLabel: String,
+    modifier: Modifier = Modifier,
+) {
+    val spacing = LocalSpacing.current
+    Surface(
+        modifier = modifier.fillMaxWidth(0.66f),
+        shape = RoundedCornerShape(32.dp),
+        color = Color(0xFF17181C),
+        shadowElevation = 10.dp,
+    ) {
+        Box(
+            modifier = Modifier
+                .padding(6.dp)
+                .clip(RoundedCornerShape(26.dp))
+                .background(Color.Black),
+            contentAlignment = Alignment.Center,
+        ) {
+            when (preview) {
+                is PreviewBitmapState.Ready -> Image(
+                    bitmap = preview.bitmap.asImageBitmap(),
+                    contentDescription = fallbackLabel,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(preview.bitmap.width.toFloat() / preview.bitmap.height.toFloat()),
+                )
+
+                PreviewBitmapState.Rendering -> Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(9f / 20f),
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    CircularProgressIndicator()
+                    Text(
+                        text = stringResource(R.string.preview_rendering),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.White,
+                        modifier = Modifier.padding(top = spacing.sm),
+                    )
+                }
+
+                is PreviewBitmapState.Error -> Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(9f / 20f),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = stringResource(preview.messageRes),
+                        color = Color.White,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(spacing.lg),
+                    )
+                }
+
+                PreviewBitmapState.Idle -> Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(9f / 20f),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = fallbackLabel,
+                        color = Color.White,
+                    )
+                }
             }
         }
     }

@@ -8,19 +8,39 @@ import com.factswallpaper.core.data.repository.FactRepository
 import com.factswallpaper.core.data.repository.RotationPoolRepository
 import com.factswallpaper.core.model.Collection
 import com.factswallpaper.core.model.CollectionSource
+import com.factswallpaper.core.model.Fact
+import com.factswallpaper.core.model.FactFilter
+import com.factswallpaper.core.model.FactStatusFilter
 import com.factswallpaper.core.model.FactTag
 import com.factswallpaper.core.model.RotationPoolSummary
 import com.factswallpaper.core.model.SmartViewCounts
 import com.factswallpaper.core.model.UserFolder
+import com.factswallpaper.core.render.CardPreRenderScheduler
 import com.factswallpaper.core.ui.FeatureViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+
+enum class MembershipTargetType { COLLECTION, FOLDER }
+
+data class MembershipEditorState(
+    val targetType: MembershipTargetType,
+    val targetId: String,
+    val targetName: String,
+    val facts: List<Fact> = emptyList(),
+    val selectedFactIds: Set<String> = emptySet(),
+    val loading: Boolean = true,
+    val saving: Boolean = false,
+    @StringRes val errorRes: Int? = null,
+)
 
 sealed interface CollectionsUiState {
     data object Loading : CollectionsUiState
@@ -31,6 +51,7 @@ sealed interface CollectionsUiState {
         val collections: List<Collection>,
         val folders: List<UserFolder>,
         val tags: List<FactTag>,
+        val membership: MembershipEditorState? = null,
     ) : CollectionsUiState {
         val suggestions: List<Collection>
             get() = collections.filter {
@@ -46,9 +67,12 @@ sealed interface CollectionsUiState {
 @HiltViewModel
 class CollectionsViewModel @Inject constructor(
     private val collectionRepository: CollectionRepository,
-    factRepository: FactRepository,
+    private val factRepository: FactRepository,
     rotationPoolRepository: RotationPoolRepository,
+    private val preRenderScheduler: CardPreRenderScheduler,
 ) : FeatureViewModel() {
+
+    private val membership = MutableStateFlow<MembershipEditorState?>(null)
 
     val uiState = combine(
         factRepository.observeSmartViewCounts(),
@@ -65,6 +89,9 @@ class CollectionsViewModel @Inject constructor(
             tags = tags,
         )
     }
+        .combine(membership) { content, editor ->
+            content.copy(membership = editor)
+        }
         .map<CollectionsUiState.Content, CollectionsUiState> { it }
         .catch { emit(CollectionsUiState.Error(R.string.collections_load_error)) }
         .stateIn(
@@ -80,6 +107,7 @@ class CollectionsViewModel @Inject constructor(
         }
         viewModelScope.launch {
             collectionRepository.createCollection(name, description)
+            preRenderScheduler.enqueue()
             showMessage(R.string.collections_created)
         }
     }
@@ -95,9 +123,32 @@ class CollectionsViewModel @Inject constructor(
         }
     }
 
+    fun renameCollection(collection: Collection, name: String) {
+        if (name.isBlank()) {
+            showMessage(R.string.collections_name_required)
+            return
+        }
+        viewModelScope.launch {
+            collectionRepository.renameCollection(collection.id, name, collection.description)
+            showMessage(R.string.collections_renamed)
+        }
+    }
+
+    fun renameFolder(folder: UserFolder, name: String) {
+        if (name.isBlank()) {
+            showMessage(R.string.collections_name_required)
+            return
+        }
+        viewModelScope.launch {
+            collectionRepository.renameFolder(folder.id, name)
+            showMessage(R.string.collections_renamed)
+        }
+    }
+
     fun setCollectionInRotation(collectionId: String, included: Boolean) {
         viewModelScope.launch {
             collectionRepository.setCollectionInRotation(collectionId, included)
+            preRenderScheduler.enqueue()
             showMessage(R.string.collections_rotation_saved)
         }
     }
@@ -105,6 +156,7 @@ class CollectionsViewModel @Inject constructor(
     fun setFolderInRotation(folderId: String, included: Boolean) {
         viewModelScope.launch {
             collectionRepository.setFolderInRotation(folderId, included)
+            preRenderScheduler.enqueue()
             showMessage(R.string.collections_rotation_saved)
         }
     }
@@ -128,7 +180,10 @@ class CollectionsViewModel @Inject constructor(
     fun deleteCollection(collectionId: String) {
         viewModelScope.launch {
             when (collectionRepository.deleteCollection(collectionId)) {
-                is AppResult.Success -> showMessage(R.string.collections_deleted)
+                is AppResult.Success -> {
+                    preRenderScheduler.enqueue()
+                    showMessage(R.string.collections_deleted)
+                }
                 is AppResult.Failure -> showMessage(R.string.collections_delete_failed)
             }
         }
@@ -137,13 +192,113 @@ class CollectionsViewModel @Inject constructor(
     fun deleteFolder(folderId: String) {
         viewModelScope.launch {
             when (collectionRepository.deleteFolder(folderId)) {
-                is AppResult.Success -> showMessage(R.string.collections_deleted)
+                is AppResult.Success -> {
+                    preRenderScheduler.enqueue()
+                    showMessage(R.string.collections_deleted)
+                }
                 is AppResult.Failure -> showMessage(R.string.collections_delete_failed)
             }
         }
     }
 
+    fun openMembership(targetType: MembershipTargetType, targetId: String, targetName: String) {
+        membership.value = MembershipEditorState(
+            targetType = targetType,
+            targetId = targetId,
+            targetName = targetName,
+            loading = true,
+        )
+        viewModelScope.launch {
+            val facts = factRepository.observeFacts(FactFilter(status = FactStatusFilter.ACTIVE)).first()
+            val selected = when (targetType) {
+                MembershipTargetType.COLLECTION ->
+                    collectionRepository.observeCollectionFactIds(targetId).first()
+                MembershipTargetType.FOLDER ->
+                    collectionRepository.observeFolderFactIds(targetId).first()
+            }
+            membership.update { current ->
+                if (current?.targetId != targetId) {
+                    current
+                } else {
+                    current.copy(
+                        facts = facts,
+                        selectedFactIds = selected.toSet(),
+                        loading = false,
+                    )
+                }
+            }
+        }
+    }
+
+    fun toggleMembershipFact(factId: String) {
+        membership.update { current ->
+            current ?: return@update null
+            val selected = current.selectedFactIds.toMutableSet()
+            if (!selected.add(factId)) selected.remove(factId)
+            current.copy(selectedFactIds = selected)
+        }
+    }
+
+    fun closeMembership() {
+        membership.value = null
+    }
+
+    fun saveMembership() {
+        val editor = membership.value ?: return
+        membership.update { it?.copy(saving = true, errorRes = null) }
+        viewModelScope.launch {
+            try {
+                when (editor.targetType) {
+                    MembershipTargetType.COLLECTION ->
+                        collectionRepository.setCollectionFacts(editor.targetId, editor.selectedFactIds.toList())
+                    MembershipTargetType.FOLDER ->
+                        collectionRepository.setFolderFacts(editor.targetId, editor.selectedFactIds.toList())
+                }
+                preRenderScheduler.enqueue()
+                membership.value = null
+                showMessage(R.string.collections_members_saved)
+            } catch (_: Throwable) {
+                membership.update { it?.copy(saving = false, errorRes = R.string.collections_members_failed) }
+            }
+        }
+    }
+
     fun generateAiCollections() {
-        showMessage(R.string.collections_generate_not_yet)
+        viewModelScope.launch {
+            try {
+                val facts = factRepository.observeFacts(FactFilter(status = FactStatusFilter.ACTIVE)).first()
+                val content = uiState.value as? CollectionsUiState.Content
+                val existingNames = content?.collections.orEmpty().map { it.name.lowercase() }.toSet()
+                val groups = facts.asSequence()
+                    .filter { it.tags.isNotEmpty() }
+                    .flatMap { fact -> fact.tags.asSequence().map { it.trim().lowercase() to fact.id } }
+                    .filter { it.first.isNotBlank() }
+                    .groupBy({ it.first }, { it.second })
+                    .mapValues { (_, ids) -> ids.distinct() }
+                    .filter { (_, ids) -> ids.size >= 2 }
+                    .entries
+                    .sortedByDescending { it.value.size }
+                    .take(5)
+
+                var created = 0
+                for (group in groups) {
+                    val name = "${group.key.replaceFirstChar { it.uppercase() }} concepts"
+                    if (name.lowercase() in existingNames) continue
+                    collectionRepository.createSuggestedCollection(
+                        name = name,
+                        description = "Grouped locally from facts tagged \"${group.key}\".",
+                        factIds = group.value,
+                    )
+                    created++
+                }
+                if (created == 0) {
+                    showMessage(R.string.collections_no_suggestions)
+                } else {
+                    showMessage(R.string.collections_generated, created)
+                }
+            } catch (_: Throwable) {
+                showMessage(R.string.collections_generate_failed)
+            }
+        }
     }
 }

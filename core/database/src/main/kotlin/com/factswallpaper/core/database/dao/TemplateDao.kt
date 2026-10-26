@@ -13,6 +13,9 @@ abstract class TemplateDao {
     @Query("SELECT * FROM templates ORDER BY builtIn DESC, name ASC")
     abstract fun observeAll(): Flow<List<TemplateEntity>>
 
+    @Query("SELECT * FROM templates ORDER BY builtIn DESC, name ASC")
+    abstract suspend fun getAll(): List<TemplateEntity>
+
     @Query("SELECT * FROM templates WHERE id = :id")
     abstract suspend fun getById(id: String): TemplateEntity?
 
