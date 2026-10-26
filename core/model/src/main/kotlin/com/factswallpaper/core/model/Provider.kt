@@ -35,6 +35,10 @@ data class ProviderProfile(
     val qualityTier: Int = 2,
     val enabled: Boolean = true,
     val isDefault: Boolean = false,
+    val supportsTemperature: Boolean = true,
+    val maxInlinePdfBytes: Long = 20_000_000L,
+    val maxDirectPdfPages: Int = 100,
+    val keyStatus: ProviderKeyStatus = ProviderKeyStatus.UNKNOWN,
 )
 
 @Serializable

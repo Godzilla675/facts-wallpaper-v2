@@ -22,4 +22,5 @@ data class AppPreferences(
     val encryptedDatabaseEnabled: Boolean = false,
     val enableAiDiagnosticsLog: Boolean = true,
     val enableDoubleTapWallpaperAdvance: Boolean = false,
+    val aiCostGuardThresholdUsd: Double = 0.50,
 )

@@ -84,7 +84,12 @@ fun AppNavHost(
 
         composable<AppRoute.Outline> {
             DetailFrame {
-                OutlineScreen(onBack = { navController.popBackStack() })
+                OutlineScreen(
+                    onBack = { navController.popBackStack() },
+                    onOpenFacts = { documentId ->
+                        navController.navigate(AppRoute.Facts(documentId = documentId))
+                    },
+                )
             }
         }
 

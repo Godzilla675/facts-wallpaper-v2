@@ -23,4 +23,5 @@ interface SettingsRepository {
     suspend fun setEncryptedDatabaseEnabled(enabled: Boolean)
     suspend fun setEnableAiDiagnosticsLog(enabled: Boolean)
     suspend fun setEnableDoubleTapWallpaperAdvance(enabled: Boolean)
+    suspend fun setAiCostGuardThresholdUsd(thresholdUsd: Double)
 }

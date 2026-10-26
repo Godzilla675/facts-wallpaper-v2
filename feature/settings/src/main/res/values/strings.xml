@@ -157,4 +157,16 @@
     <string name="advanced_task_formulas">Formula verification</string>
     <string name="advanced_task_diagrams">Diagram generation</string>
     <string name="advanced_task_templates">Template generation</string>
+
+    <string name="provider_set_key">Set API key</string>
+    <string name="provider_update_key">Update API key</string>
+    <string name="provider_clear_key">Clear API key</string>
+    <string name="provider_key_dialog_title">API Key for %1$s</string>
+    <string name="provider_key_dialog_body">Stored in the Android Keystore with AES-GCM encryption. Keys are never logged, synced, or exported.</string>
+    <string name="provider_key_saved">API key saved securely.</string>
+    <string name="provider_key_cleared">API key removed.</string>
+    <string name="provider_fetch_models">Fetch models</string>
+    <string name="provider_fetch_models_loading">Fetching models...</string>
+    <string name="provider_test_success">Connected in %1$d ms.</string>
+    <string name="provider_test_failed">Connection failed: %1$s</string>
 </resources>

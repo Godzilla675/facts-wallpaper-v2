@@ -2,16 +2,20 @@ package com.factswallpaper.feature.outline
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CallMerge
+import androidx.compose.material.icons.filled.CallSplit
 import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Replay
@@ -21,6 +25,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -31,6 +36,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -39,7 +45,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -56,11 +61,13 @@ import com.factswallpaper.core.ui.component.MetricPill
 import com.factswallpaper.core.ui.component.SectionGroupCard
 import com.factswallpaper.core.ui.component.SettingSwitchRow
 import com.factswallpaper.core.ui.component.VerificationBadge
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun OutlineScreen(
     onBack: () -> Unit,
+    onOpenFacts: (String) -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: OutlineViewModel = hiltViewModel(),
 ) {
@@ -70,6 +77,14 @@ fun OutlineScreen(
     var editingLesson by remember { mutableStateOf<Lesson?>(null) }
     var addingLesson by remember { mutableStateOf(false) }
     UiMessageEffect(message, snackbarHostState, viewModel::onMessageShown)
+
+    val content = state as? OutlineUiState.Content
+    LaunchedEffect(content?.factsJobStarted, content?.document?.id) {
+        if (content != null && content.factsJobStarted) {
+            viewModel.consumeFactsJobStarted()
+            onOpenFacts(content.document.id)
+        }
+    }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -107,13 +122,13 @@ fun OutlineScreen(
                 onIncludeDiagramsChange = viewModel::setIncludeDiagrams,
                 onVerifyFormulasChange = viewModel::setAutoVerifyFormulas,
                 onReDetect = viewModel::reDetectOutline,
+                onCancelWork = viewModel::cancelWork,
                 onGenerateFacts = viewModel::generateFacts,
                 modifier = Modifier.padding(padding),
             )
         }
     }
 
-    val content = state as? OutlineUiState.Content
     if (content != null && (addingLesson || editingLesson != null)) {
         LessonEditorDialog(
             initial = editingLesson,
@@ -133,6 +148,12 @@ fun OutlineScreen(
                 addingLesson = false
                 editingLesson = null
             },
+            onSplit = editingLesson?.let { lesson ->
+                { splitPage ->
+                    viewModel.splitLesson(lesson.id, splitPage)
+                    editingLesson = null
+                }
+            },
             onDelete = editingLesson?.let { lesson ->
                 {
                     viewModel.deleteLesson(lesson.id)
@@ -141,8 +162,36 @@ fun OutlineScreen(
             },
         )
     }
+
+    val pendingCostGuard = content?.pendingCostGuard
+    if (content != null && pendingCostGuard != null) {
+        AlertDialog(
+            onDismissRequest = viewModel::dismissCostGuard,
+            title = { Text(stringResource(R.string.outline_cost_guard_title)) },
+            text = {
+                Text(
+                    stringResource(
+                        R.string.outline_cost_guard_body,
+                        pendingCostGuard.estimateUsd,
+                        content.costGuardThresholdUsd,
+                    ),
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = viewModel::confirmCostGuard) {
+                    Text(stringResource(R.string.outline_cost_guard_confirm))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = viewModel::dismissCostGuard) {
+                    Text(stringResource(R.string.outline_cancel))
+                }
+            },
+        )
+    }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun OutlineContent(
     state: OutlineUiState.Content,
@@ -157,6 +206,7 @@ private fun OutlineContent(
     onIncludeDiagramsChange: (Boolean) -> Unit,
     onVerifyFormulasChange: (Boolean) -> Unit,
     onReDetect: () -> Unit,
+    onCancelWork: () -> Unit,
     onGenerateFacts: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -173,6 +223,51 @@ private fun OutlineContent(
     ) {
         item {
             DocumentHeader(document = state.document, lessonCount = state.lessons.size)
+        }
+        if (!state.online) {
+            item {
+                InlineBanner(
+                    message = stringResource(R.string.outline_offline_banner),
+                    severity = BannerSeverity.WARNING,
+                )
+            }
+        }
+        if (state.generation.isRunning) {
+            item {
+                SectionGroupCard(
+                    title = if (state.generation.total > 0) {
+                        stringResource(
+                            R.string.outline_work_running,
+                            state.generation.completed,
+                            state.generation.total,
+                        )
+                    } else {
+                        stringResource(R.string.outline_work_preparing)
+                    },
+                ) {
+                    if (state.generation.total > 0) {
+                        LinearProgressIndicator(
+                            progress = {
+                                (state.generation.completed.toFloat() / state.generation.total.toFloat())
+                                    .coerceIn(0f, 1f)
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    } else {
+                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                    }
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = spacing.sm),
+                        horizontalArrangement = Arrangement.End,
+                    ) {
+                        TextButton(onClick = onCancelWork) {
+                            Text(stringResource(R.string.outline_work_cancel))
+                        }
+                    }
+                }
+            }
         }
         if (documentError != null) {
             item {
@@ -210,7 +305,10 @@ private fun OutlineContent(
                                 modifier = Modifier.padding(start = spacing.xs),
                             )
                         }
-                        OutlinedButton(onClick = onReDetect) {
+                        OutlinedButton(
+                            onClick = onReDetect,
+                            enabled = state.online && !state.generation.isRunning,
+                        ) {
                             Text(stringResource(R.string.outline_redetect))
                         }
                     }
@@ -242,7 +340,10 @@ private fun OutlineContent(
                 title = stringResource(R.string.outline_estimate_title),
                 subtitle = stringResource(R.string.outline_estimate_helper),
             ) {
-                Row(horizontalArrangement = Arrangement.spacedBy(spacing.sm)) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(spacing.sm),
+                    verticalArrangement = Arrangement.spacedBy(spacing.xs),
+                ) {
                     MetricPill(
                         value = stringResource(
                             R.string.outline_estimate_facts,
@@ -256,6 +357,16 @@ private fun OutlineContent(
                             selected.size,
                         ),
                     )
+                    state.estimate?.let { est ->
+                        MetricPill(
+                            value = String.format(
+                                Locale.US,
+                                "~$%.4f (%s)",
+                                est.estimatedCostUsd,
+                                est.profile.name,
+                            ),
+                        )
+                    }
                 }
                 Row(
                     modifier = Modifier
@@ -266,6 +377,7 @@ private fun OutlineContent(
                     OutlinedButton(
                         onClick = onReDetect,
                         modifier = Modifier.weight(1f),
+                        enabled = state.online && !state.generation.isRunning,
                     ) {
                         Icon(Icons.Filled.Refresh, contentDescription = null)
                         Text(
@@ -276,7 +388,7 @@ private fun OutlineContent(
                     Button(
                         onClick = onGenerateFacts,
                         modifier = Modifier.weight(1f),
-                        enabled = selected.isNotEmpty(),
+                        enabled = selected.isNotEmpty() && state.online && !state.generation.isRunning,
                     ) {
                         Icon(Icons.Filled.Replay, contentDescription = null)
                         Text(
@@ -289,9 +401,11 @@ private fun OutlineContent(
         }
     }
 }
-
 @Composable
-private fun DocumentHeader(document: Document, lessonCount: Int) {
+private fun DocumentHeader(
+    document: Document,
+    lessonCount: Int,
+) {
     val spacing = LocalSpacing.current
     SectionGroupCard(
         title = document.title,
@@ -445,6 +559,7 @@ private fun LessonEditorDialog(
     maxPage: Int,
     onDismiss: () -> Unit,
     onSave: (String, String, Int, Int) -> Unit,
+    onSplit: ((Int) -> Unit)?,
     onDelete: (() -> Unit)?,
 ) {
     var title by remember(initial) { mutableStateOf(initial?.title.orEmpty()) }
@@ -452,6 +567,10 @@ private fun LessonEditorDialog(
     var startPage by remember(initial) { mutableStateOf((initial?.startPage ?: 1).toString()) }
     var endPage by remember(initial) {
         mutableStateOf((initial?.endPage ?: maxPage).toString())
+    }
+    var splitPage by remember(initial) {
+        val defaultSplit = initial?.let { ((it.startPage + it.endPage + 1) / 2).coerceAtLeast(it.startPage + 1) }
+        mutableStateOf(defaultSplit?.toString().orEmpty())
     }
     var confirmDelete by remember { mutableStateOf(false) }
     val spacing = LocalSpacing.current
@@ -506,6 +625,41 @@ private fun LessonEditorDialog(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                if (initial != null && onSplit != null && initial.endPage > initial.startPage) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(spacing.sm),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        OutlinedTextField(
+                            value = splitPage,
+                            onValueChange = { value -> splitPage = value.filter(Char::isDigit) },
+                            label = {
+                                Text(
+                                    stringResource(
+                                        R.string.outline_split_at_page_label,
+                                        initial.startPage + 1,
+                                        initial.endPage,
+                                    ),
+                                )
+                            },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            modifier = Modifier.weight(1f),
+                        )
+                        OutlinedButton(
+                            onClick = {
+                                val target = splitPage.toIntOrNull() ?: return@OutlinedButton
+                                onSplit(target)
+                            },
+                        ) {
+                            Icon(Icons.Filled.CallSplit, contentDescription = null)
+                            Text(
+                                text = stringResource(R.string.outline_split_action),
+                                modifier = Modifier.padding(start = 4.dp),
+                            )
+                        }
+                    }
+                }
                 if (confirmDelete) {
                     InlineBanner(
                         message = stringResource(R.string.outline_delete_confirm_body),

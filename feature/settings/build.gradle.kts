@@ -9,4 +9,6 @@ android {
 dependencies {
     implementation(project(":core:backup"))
     implementation(project(":core:wallpaper"))
+    implementation(project(":core:ai"))
+    implementation(project(":core:security"))
 }

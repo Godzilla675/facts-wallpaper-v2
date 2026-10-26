@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 1,
-    "identityHash": "8fc48c1b42e185f2a79a99a18d4ad655",
+    "identityHash": "f7b0ceb29ea75c52d6bd866da9a729f7",
     "entities": [
       {
         "tableName": "pdf_documents",
@@ -1196,7 +1196,7 @@
       },
       {
         "tableName": "provider_profiles",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `providerType` TEXT NOT NULL, `baseUrl` TEXT NOT NULL, `modelName` TEXT NOT NULL, `apiVersion` TEXT, `deploymentName` TEXT, `customHeadersJson` TEXT NOT NULL, `supportsPdfInput` INTEGER NOT NULL, `supportsImageInput` INTEGER NOT NULL, `supportsJsonMode` INTEGER NOT NULL, `supportsJsonSchema` INTEGER NOT NULL, `maxContextTokens` INTEGER NOT NULL, `inputUsdPerMillion` REAL NOT NULL, `outputUsdPerMillion` REAL NOT NULL, `speedTier` INTEGER NOT NULL, `qualityTier` INTEGER NOT NULL, `enabled` INTEGER NOT NULL, `isDefault` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `providerType` TEXT NOT NULL, `baseUrl` TEXT NOT NULL, `modelName` TEXT NOT NULL, `apiVersion` TEXT, `deploymentName` TEXT, `customHeadersJson` TEXT NOT NULL, `supportsPdfInput` INTEGER NOT NULL, `supportsImageInput` INTEGER NOT NULL, `supportsJsonMode` INTEGER NOT NULL, `supportsJsonSchema` INTEGER NOT NULL, `maxContextTokens` INTEGER NOT NULL, `inputUsdPerMillion` REAL NOT NULL, `outputUsdPerMillion` REAL NOT NULL, `speedTier` INTEGER NOT NULL, `qualityTier` INTEGER NOT NULL, `enabled` INTEGER NOT NULL, `isDefault` INTEGER NOT NULL, `supportsTemperature` INTEGER NOT NULL, `maxInlinePdfBytes` INTEGER NOT NULL, `maxDirectPdfPages` INTEGER NOT NULL, `keyStatus` TEXT NOT NULL, PRIMARY KEY(`id`))",
         "fields": [
           {
             "fieldPath": "id",
@@ -1308,6 +1308,30 @@
             "fieldPath": "isDefault",
             "columnName": "isDefault",
             "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "supportsTemperature",
+            "columnName": "supportsTemperature",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "maxInlinePdfBytes",
+            "columnName": "maxInlinePdfBytes",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "maxDirectPdfPages",
+            "columnName": "maxDirectPdfPages",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "keyStatus",
+            "columnName": "keyStatus",
+            "affinity": "TEXT",
             "notNull": true
           }
         ],
@@ -1620,7 +1644,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '8fc48c1b42e185f2a79a99a18d4ad655')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'f7b0ceb29ea75c52d6bd866da9a729f7')"
     ]
   }
 }
