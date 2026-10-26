@@ -207,3 +207,30 @@ pretends these features work.
   formatting, including locale-stable output.
 - `:app`: onboarding-vs-library start routing and all 11 type-safe routes,
   including optional arguments.
+
+
+## Phase P3: AI Layer, Outline, Facts, Provider Settings & Keystore
+
+### Architecture & Parallel Work Boundaries
+- To honor parallel-work isolation without waiting for P2 code to be merged, :core:data introduces DocumentTextRepository implemented by RoomDocumentTextRepository, which queries the existing Room database schema (imported pages/chunks) for document content.
+- StructuredAiService and ProviderDiagnosticsService are defined as clean interfaces with default implementations (DefaultStructuredAiService, DefaultProviderDiagnosticsService) bound via Hilt.
+- Json binding: Reused the singleton Json provided by :core:datastore rather than binding a duplicate in :core:ai.
+
+### Security (F23)
+- ApiKeyStore backed by AndroidKeystoreSecretCipher using Android Keystore AES/GCM/NoPadding (256-bit key alias acts_wallpaper_api_key_v1). Fresh 12-byte IV per encryption with authenticated tag.
+- SharedPreferences store only SHA-256 hashed profile IDs (pi_key_ + base64url(sha256(profileId))). Keys are never stored in plaintext or Room.
+- LogRedactor scrubs known credential prefixes and registered keys from all loggable output.
+
+### AI Wire Contracts & Routing (Section 6 & 11)
+- Ktor HTTP client with OkHttp engine, configurable timeouts, and full multi-format wire support: Gemini (generateContent API with contents, generationConfig, schema specification), OpenAI (chat completions & response format), Anthropic (messages API), and OpenAI-compatible providers (OpenRouter, DeepSeek, Qwen, Azure, custom).
+- Schema adapter handles dialect translations across providers (Gemini OpenAPI subset, OpenAI json_schema, Anthropic prompt-based tool schemas).
+- Reasoning models (e.g. o1, o3, deepseek-reasoner, 
+1): system prompts mapped to user messages where required; temperature suppressed; reasoning tokens parsed and billed.
+- AiRetryPolicy: exponential backoff (2s, 4s, 8s) for 429/5xx, honoring Retry-After. 400/401/403 are non-retryable.
+- Semantic TextChunker segments document text respecting page/paragraph/sentence boundaries with configurable token targets and overlap.
+- Fact deduplication uses normalized token overlap / Jaccard similarity threshold (0.75) against existing facts in the lesson/document.
+- Token cost ledger persisted to Room i_usage_logs table via AiCostEstimator with per-model pricing catalog.
+
+### Durable Generation Jobs (WorkManager)
+- OutlineGenerationWorker and FactsGenerationWorker implemented as @HiltWorker durable jobs with progress tracking and retry support.
+- Registered via HiltWorkerFactory in FactsWallpaperApplication.

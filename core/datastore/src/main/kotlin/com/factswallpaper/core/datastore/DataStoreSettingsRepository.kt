@@ -3,6 +3,7 @@ package com.factswallpaper.core.datastore
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.doublePreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.intPreferencesKey
@@ -107,6 +108,10 @@ class DataStoreSettingsRepository @Inject constructor(
     override suspend fun setEnableDoubleTapWallpaperAdvance(enabled: Boolean) {
         dataStore.edit { it[Keys.ENABLE_DOUBLE_TAP_ADVANCE] = enabled }
     }
+
+    override suspend fun setAiCostGuardThresholdUsd(thresholdUsd: Double) {
+        dataStore.edit { it[Keys.AI_COST_GUARD_THRESHOLD_USD] = thresholdUsd.coerceIn(0.0, 100.0) }
+    }
 }
 
 private object Keys {
@@ -122,6 +127,7 @@ private object Keys {
     val ENCRYPTED_DATABASE_ENABLED = booleanPreferencesKey("encrypted_database_enabled")
     val ENABLE_AI_DIAGNOSTICS_LOG = booleanPreferencesKey("enable_ai_diagnostics_log")
     val ENABLE_DOUBLE_TAP_ADVANCE = booleanPreferencesKey("enable_double_tap_wallpaper_advance")
+    val AI_COST_GUARD_THRESHOLD_USD = doublePreferencesKey("ai_cost_guard_threshold_usd")
 }
 
 private fun Preferences.toAppPreferences(
@@ -140,6 +146,7 @@ private fun Preferences.toAppPreferences(
     encryptedDatabaseEnabled = this[Keys.ENCRYPTED_DATABASE_ENABLED] ?: false,
     enableAiDiagnosticsLog = this[Keys.ENABLE_AI_DIAGNOSTICS_LOG] ?: true,
     enableDoubleTapWallpaperAdvance = this[Keys.ENABLE_DOUBLE_TAP_ADVANCE] ?: false,
+    aiCostGuardThresholdUsd = (this[Keys.AI_COST_GUARD_THRESHOLD_USD] ?: 0.50).coerceIn(0.0, 100.0),
 )
 
 private inline fun <reified T : Enum<T>> String?.toEnum(default: T): T =

@@ -58,6 +58,10 @@ enum class ProviderType {
 @Serializable
 enum class RoutingStrategy { CHEAPEST, BALANCED, HIGHEST_QUALITY, MANUAL }
 
+/** Result of the most recent provider connection test. */
+@Serializable
+enum class ProviderKeyStatus { UNKNOWN, VALID, INVALID }
+
 @Serializable
 enum class AiTask {
     OUTLINE,

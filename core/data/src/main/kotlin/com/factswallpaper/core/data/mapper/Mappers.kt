@@ -27,6 +27,7 @@ import com.factswallpaper.core.model.Lesson
 import com.factswallpaper.core.model.OcrEngineType
 import com.factswallpaper.core.model.OcrExecutionMode
 import com.factswallpaper.core.model.PdfProcessingRoute
+import com.factswallpaper.core.model.ProviderKeyStatus
 import com.factswallpaper.core.model.ProviderProfile
 import com.factswallpaper.core.model.ProviderType
 import com.factswallpaper.core.model.RotationOrder
@@ -279,6 +280,10 @@ fun ProviderProfileEntity.toDomain(): ProviderProfile = ProviderProfile(
     qualityTier = qualityTier,
     enabled = enabled,
     isDefault = isDefault,
+    supportsTemperature = supportsTemperature,
+    maxInlinePdfBytes = maxInlinePdfBytes,
+    maxDirectPdfPages = maxDirectPdfPages,
+    keyStatus = enumOrDefault(keyStatus, ProviderKeyStatus.UNKNOWN),
 )
 
 fun ProviderProfile.toEntity(): ProviderProfileEntity = ProviderProfileEntity(
@@ -301,6 +306,10 @@ fun ProviderProfile.toEntity(): ProviderProfileEntity = ProviderProfileEntity(
     qualityTier = qualityTier,
     enabled = enabled,
     isDefault = isDefault,
+    supportsTemperature = supportsTemperature,
+    maxInlinePdfBytes = maxInlinePdfBytes,
+    maxDirectPdfPages = maxDirectPdfPages,
+    keyStatus = keyStatus.name,
 )
 
 fun WallpaperStateEntity.toDomain(): WallpaperState = WallpaperState(

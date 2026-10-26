@@ -4,12 +4,14 @@ import com.factswallpaper.core.data.repository.CollectionRepository
 import com.factswallpaper.core.data.repository.DiagnosticsRepository
 import com.factswallpaper.core.data.repository.DiskStorageRepository
 import com.factswallpaper.core.data.repository.DocumentRepository
+import com.factswallpaper.core.data.repository.DocumentTextRepository
 import com.factswallpaper.core.data.repository.FactRepository
 import com.factswallpaper.core.data.repository.LessonRepository
 import com.factswallpaper.core.data.repository.ProviderProfileRepository
 import com.factswallpaper.core.data.repository.RoomCollectionRepository
 import com.factswallpaper.core.data.repository.RoomDiagnosticsRepository
 import com.factswallpaper.core.data.repository.RoomDocumentRepository
+import com.factswallpaper.core.data.repository.RoomDocumentTextRepository
 import com.factswallpaper.core.data.repository.RoomFactRepository
 import com.factswallpaper.core.data.repository.RoomLessonRepository
 import com.factswallpaper.core.data.repository.RoomProviderProfileRepository
@@ -33,6 +35,10 @@ abstract class DataModule {
     @Binds
     @Singleton
     abstract fun bindDocumentRepository(impl: RoomDocumentRepository): DocumentRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindDocumentTextRepository(impl: RoomDocumentTextRepository): DocumentTextRepository
 
     @Binds
     @Singleton

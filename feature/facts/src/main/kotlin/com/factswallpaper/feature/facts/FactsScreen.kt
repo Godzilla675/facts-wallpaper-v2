@@ -1,8 +1,10 @@
 package com.factswallpaper.feature.facts
 
-import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -11,7 +13,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FilterAlt
 import androidx.compose.material.icons.filled.Lightbulb
@@ -23,12 +29,15 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -37,14 +46,17 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.factswallpaper.core.designsystem.theme.LocalSpacing
 import com.factswallpaper.core.model.CardTemplateType
+import com.factswallpaper.core.model.DiagramKind
 import com.factswallpaper.core.model.Document
 import com.factswallpaper.core.model.Fact
 import com.factswallpaper.core.model.FactFilter
@@ -55,6 +67,7 @@ import com.factswallpaper.core.ui.component.BannerSeverity
 import com.factswallpaper.core.ui.component.EmptyStatePanel
 import com.factswallpaper.core.ui.component.FactListItemCard
 import com.factswallpaper.core.ui.component.InlineBanner
+import com.factswallpaper.core.ui.component.SectionGroupCard
 import com.factswallpaper.core.ui.component.SourceBadge
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -69,6 +82,7 @@ fun FactsScreen(
     val message by viewModel.message.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     var editingFact by remember { mutableStateOf<Fact?>(null) }
+    var regeneratingFact by remember { mutableStateOf<Fact?>(null) }
     UiMessageEffect(message, snackbarHostState, viewModel::onMessageShown)
 
     Scaffold(
@@ -106,7 +120,8 @@ fun FactsScreen(
                 onToggleActive = viewModel::toggleActive,
                 onToggleFavorite = viewModel::toggleFavorite,
                 onEdit = { editingFact = it },
-                onRegenerate = { viewModel.regenerate(it) },
+                onRegenerate = { fact -> regeneratingFact = fact },
+                onCancelWork = viewModel::cancelGeneration,
                 onOpenLibrary = onOpenLibrary,
                 modifier = Modifier.padding(padding),
             )
@@ -117,9 +132,34 @@ fun FactsScreen(
         FactEditorSheet(
             fact = fact,
             onDismiss = { editingFact = null },
-            onSave = { text, latex, tags, template ->
-                viewModel.saveFact(fact.id, text, latex, tags, template)
+            onSave = { text, latex, tags, template, diagramType, diagramSource, mode, page ->
+                viewModel.saveFact(
+                    factId = fact.id,
+                    text = text,
+                    latex = latex,
+                    tags = tags,
+                    templateType = template,
+                    diagramType = diagramType,
+                    diagramSource = diagramSource,
+                    sourceReferenceModeOverride = mode,
+                    sourcePage = page,
+                )
                 editingFact = null
+            },
+        )
+    }
+
+    regeneratingFact?.let { fact ->
+        val content = state as? FactsUiState.Content
+        val isRegeneratingThis = content?.isRegenerating == true && content.regeneratingFactId == fact.id
+        RegenerateFactSheet(
+            fact = fact,
+            isRegenerating = isRegeneratingThis,
+            isOnline = content?.isOnline ?: true,
+            onDismiss = { if (!isRegeneratingThis) regeneratingFact = null },
+            onRegenerate = { instruction ->
+                viewModel.regenerate(fact.id, instruction)
+                regeneratingFact = null
             },
         )
     }
@@ -138,7 +178,8 @@ private fun FactsContent(
     onToggleActive: (String, Boolean) -> Unit,
     onToggleFavorite: (String, Boolean) -> Unit,
     onEdit: (Fact) -> Unit,
-    onRegenerate: (String) -> Unit,
+    onRegenerate: (Fact) -> Unit,
+    onCancelWork: () -> Unit,
     onOpenLibrary: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -147,6 +188,66 @@ private fun FactsContent(
     val documentTitle = state.documents.firstOrNull { it.id == filter.documentId }?.title
 
     Column(modifier = modifier.fillMaxSize()) {
+        if (!state.isOnline) {
+            InlineBanner(
+                message = stringResource(R.string.facts_offline_banner),
+                severity = BannerSeverity.WARNING,
+                modifier = Modifier.padding(horizontal = spacing.lg, vertical = spacing.xs),
+            )
+        }
+
+        when (val work = state.generationWork) {
+            is FactsWorkUi.Running -> {
+                SectionGroupCard(
+                    title = if (work.totalLessons > 0) {
+                        stringResource(
+                            R.string.facts_work_running,
+                            work.completedLessons,
+                            work.totalLessons,
+                            work.factsCreated,
+                        )
+                    } else {
+                        stringResource(R.string.facts_work_preparing)
+                    },
+                    modifier = Modifier.padding(horizontal = spacing.lg, vertical = spacing.xs),
+                ) {
+                    if (work.totalLessons > 0) {
+                        LinearProgressIndicator(
+                            progress = { (work.completedLessons.toFloat() / work.totalLessons.toFloat()).coerceIn(0f, 1f) },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    } else {
+                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                    }
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = spacing.sm),
+                        horizontalArrangement = Arrangement.End,
+                    ) {
+                        TextButton(onClick = onCancelWork) {
+                            Text(stringResource(R.string.facts_work_cancel))
+                        }
+                    }
+                }
+            }
+            is FactsWorkUi.Failed -> {
+                InlineBanner(
+                    message = work.message ?: stringResource(R.string.facts_work_failed),
+                    severity = BannerSeverity.ERROR,
+                    modifier = Modifier.padding(horizontal = spacing.lg, vertical = spacing.xs),
+                )
+            }
+            is FactsWorkUi.Succeeded -> {
+                InlineBanner(
+                    message = work.message ?: stringResource(R.string.facts_work_succeeded),
+                    severity = BannerSeverity.INFO,
+                    modifier = Modifier.padding(horizontal = spacing.lg, vertical = spacing.xs),
+                )
+            }
+            FactsWorkUi.Idle -> Unit
+        }
+
         OutlinedTextField(
             value = filter.query,
             onValueChange = onQueryChange,
@@ -239,7 +340,7 @@ private fun FactsContent(
                 .fillMaxWidth()
                 .padding(horizontal = spacing.lg, vertical = spacing.xs),
             horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
                 text = if (documentTitle != null) {
@@ -299,7 +400,7 @@ private fun FactsContent(
                         onToggleActive = { active -> onToggleActive(fact.id, active) },
                         onToggleFavorite = { favorite -> onToggleFavorite(fact.id, favorite) },
                         onEdit = { onEdit(fact) },
-                        onRegenerate = { onRegenerate(fact.id) },
+                        onRegenerate = { onRegenerate(fact) },
                     )
                 }
             }
@@ -307,23 +408,37 @@ private fun FactsContent(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 private fun FactEditorSheet(
     fact: Fact,
     onDismiss: () -> Unit,
-    onSave: (String, String, List<String>, CardTemplateType) -> Unit,
+    onSave: (
+        text: String,
+        latex: String,
+        tags: List<String>,
+        template: CardTemplateType,
+        diagramType: DiagramKind,
+        diagramSource: String?,
+        sourceReferenceModeOverride: SourceReferenceMode?,
+        sourcePage: Int?,
+    ) -> Unit,
 ) {
     val spacing = LocalSpacing.current
     var text by remember(fact.id) { mutableStateOf(fact.text) }
     var latex by remember(fact.id) { mutableStateOf(fact.latex.orEmpty()) }
     var tags by remember(fact.id) { mutableStateOf(fact.tags.joinToString(", ")) }
     var template by remember(fact.id) { mutableStateOf(fact.templateType) }
+    var diagramType by remember(fact.id) { mutableStateOf(fact.diagramType) }
+    var diagramSource by remember(fact.id) { mutableStateOf(fact.diagramSource.orEmpty()) }
+    var sourceMode by remember(fact.id) { mutableStateOf(fact.sourceReferenceModeOverride) }
+    var sourcePageStr by remember(fact.id) { mutableStateOf(fact.sourcePage?.toString().orEmpty()) }
 
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
                 .padding(horizontal = spacing.lg)
                 .padding(bottom = spacing.xl),
             verticalArrangement = Arrangement.spacedBy(spacing.md),
@@ -334,9 +449,9 @@ private fun FactEditorSheet(
             )
             SourceBadge(
                 bookTitle = fact.sourceBookTitle,
-                mode = fact.sourceReferenceModeOverride ?: SourceReferenceMode.COMPACT,
+                mode = sourceMode ?: SourceReferenceMode.COMPACT,
                 lessonTitle = fact.sourceLessonTitle,
-                page = fact.sourcePage,
+                page = sourcePageStr.toIntOrNull() ?: fact.sourcePage,
             )
             OutlinedTextField(
                 value = text,
@@ -364,6 +479,14 @@ private fun FactEditorSheet(
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
+            OutlinedTextField(
+                value = sourcePageStr,
+                onValueChange = { sourcePageStr = it.filter(Char::isDigit) },
+                label = { Text(stringResource(R.string.facts_edit_source_page_label)) },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = Modifier.fillMaxWidth(),
+            )
             Text(
                 text = stringResource(R.string.facts_edit_template_label),
                 style = MaterialTheme.typography.labelLarge,
@@ -377,25 +500,74 @@ private fun FactEditorSheet(
                     )
                 }
             }
+            Text(
+                text = stringResource(R.string.facts_edit_diagram_kind_label),
+                style = MaterialTheme.typography.labelLarge,
+            )
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(spacing.sm)) {
+                DiagramKind.entries.forEach { kind ->
+                    FilterChip(
+                        selected = diagramType == kind,
+                        onClick = { diagramType = kind },
+                        label = { Text(diagramLabel(kind)) },
+                    )
+                }
+            }
+            if (diagramType != DiagramKind.NONE) {
+                OutlinedTextField(
+                    value = diagramSource,
+                    onValueChange = { diagramSource = it },
+                    label = { Text(stringResource(R.string.facts_edit_diagram_source_label)) },
+                    textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                    minLines = 3,
+                    maxLines = 8,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+            Text(
+                text = stringResource(R.string.facts_edit_source_mode_label),
+                style = MaterialTheme.typography.labelLarge,
+            )
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(spacing.sm)) {
+                listOf(
+                    null to "Default",
+                    SourceReferenceMode.FULL to "Full",
+                    SourceReferenceMode.COMPACT to "Compact",
+                    SourceReferenceMode.PAGE_ONLY to "Page only",
+                    SourceReferenceMode.HIDDEN to "Hidden",
+                ).forEach { (mode, label) ->
+                    FilterChip(
+                        selected = sourceMode == mode,
+                        onClick = { sourceMode = mode },
+                        label = { Text(label) },
+                    )
+                }
+            }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End,
-                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 TextButton(onClick = onDismiss) {
                     Text(stringResource(R.string.facts_cancel))
                 }
                 Button(
                     onClick = {
+                        val parsedTags = tags.split(",")
+                            .map { it.trim() }
+                            .filter { it.isNotEmpty() }
                         onSave(
                             text,
                             latex,
-                            tags.split(',').map { it.trim() }.filter { it.isNotEmpty() }.distinct(),
+                            parsedTags,
                             template,
+                            diagramType,
+                            diagramSource.ifBlank { null },
+                            sourceMode,
+                            sourcePageStr.toIntOrNull(),
                         )
                     },
                     enabled = text.isNotBlank(),
-                    modifier = Modifier.padding(start = spacing.sm),
                 ) {
                     Text(stringResource(R.string.facts_save))
                 }
@@ -404,29 +576,105 @@ private fun FactEditorSheet(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-private fun CenteredLoading(modifier: Modifier = Modifier) {
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
-    ) {
-        CircularProgressIndicator()
-    }
-}
+private fun RegenerateFactSheet(
+    fact: Fact,
+    isRegenerating: Boolean,
+    isOnline: Boolean,
+    onDismiss: () -> Unit,
+    onRegenerate: (String?) -> Unit,
+) {
+    val spacing = LocalSpacing.current
+    var instruction by remember(fact.id) { mutableStateOf("") }
 
-@Composable
-private fun CenteredMessage(text: String, modifier: Modifier = Modifier) {
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(24.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
-    ) {
-        Text(text = text, style = MaterialTheme.typography.bodyLarge)
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = spacing.lg)
+                .padding(bottom = spacing.xl),
+            verticalArrangement = Arrangement.spacedBy(spacing.md),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = stringResource(R.string.facts_regenerate_title),
+                    style = MaterialTheme.typography.titleLarge,
+                )
+                if (isRegenerating) {
+                    CircularProgressIndicator(modifier = Modifier.padding(end = spacing.sm))
+                }
+            }
+
+            Text(
+                text = stringResource(R.string.facts_regenerate_current_label),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                text = fact.text,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+
+            Text(
+                text = stringResource(R.string.facts_regenerate_instruction_label),
+                style = MaterialTheme.typography.labelLarge,
+            )
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(spacing.sm),
+                verticalArrangement = Arrangement.spacedBy(spacing.xs),
+            ) {
+                listOf(
+                    stringResource(R.string.facts_regenerate_preset_concise),
+                    stringResource(R.string.facts_regenerate_preset_qa),
+                    stringResource(R.string.facts_regenerate_preset_formula),
+                    stringResource(R.string.facts_regenerate_preset_intuitive),
+                ).forEach { preset ->
+                    SuggestionChip(
+                        onClick = { instruction = preset },
+                        label = { Text(preset) },
+                    )
+                }
+            }
+
+            OutlinedTextField(
+                value = instruction,
+                onValueChange = { instruction = it },
+                label = { Text(stringResource(R.string.facts_regenerate_instruction_label)) },
+                supportingText = { Text(stringResource(R.string.facts_regenerate_instruction_helper)) },
+                minLines = 2,
+                maxLines = 4,
+                enabled = !isRegenerating,
+                modifier = Modifier.fillMaxWidth(),
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TextButton(onClick = onDismiss, enabled = !isRegenerating) {
+                    Text(stringResource(R.string.facts_cancel))
+                }
+                Button(
+                    onClick = { onRegenerate(instruction.trim().ifBlank { null }) },
+                    enabled = isOnline && !isRegenerating,
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.AutoAwesome,
+                        contentDescription = null,
+                        modifier = Modifier.padding(end = spacing.xs),
+                    )
+                    Text(stringResource(R.string.facts_regenerate_action))
+                }
+            }
+        }
     }
 }
 
@@ -439,7 +687,7 @@ private fun statusLabel(status: FactStatusFilter): String = stringResource(
         FactStatusFilter.FAVORITES -> R.string.facts_status_favorites
         FactStatusFilter.FORMULAS -> R.string.facts_status_formulas
         FactStatusFilter.DIAGRAMS -> R.string.facts_status_diagrams
-    }
+    },
 )
 
 @Composable
@@ -453,5 +701,40 @@ private fun templateLabel(type: CardTemplateType): String = stringResource(
         CardTemplateType.FORMULA -> R.string.facts_template_formula
         CardTemplateType.DIAGRAM -> R.string.facts_template_diagram
         CardTemplateType.TIMELINE -> R.string.facts_template_timeline
-    }
+    },
 )
+
+@Composable
+private fun diagramLabel(kind: DiagramKind): String = stringResource(
+    when (kind) {
+        DiagramKind.NONE -> R.string.facts_diagram_none
+        DiagramKind.MERMAID -> R.string.facts_diagram_mermaid
+        DiagramKind.TIKZ -> R.string.facts_diagram_tikz
+        DiagramKind.SVG -> R.string.facts_diagram_svg
+        DiagramKind.HTML_CANVAS -> R.string.facts_diagram_html_canvas
+    },
+)
+
+@Composable
+private fun CenteredLoading(modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        CircularProgressIndicator()
+    }
+}
+
+@Composable
+private fun CenteredMessage(text: String, modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(text = text, style = MaterialTheme.typography.bodyLarge)
+    }
+}
