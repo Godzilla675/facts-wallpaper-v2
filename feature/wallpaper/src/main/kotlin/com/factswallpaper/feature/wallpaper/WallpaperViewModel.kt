@@ -2,6 +2,7 @@ package com.factswallpaper.feature.wallpaper
 
 import androidx.annotation.StringRes
 import androidx.lifecycle.viewModelScope
+import com.factswallpaper.core.common.AppResult
 import com.factswallpaper.core.data.repository.RotationPoolRepository
 import com.factswallpaper.core.data.repository.TemplateRepository
 import com.factswallpaper.core.data.repository.WallpaperRepository
@@ -14,8 +15,13 @@ import com.factswallpaper.core.model.SourceReferenceMode
 import com.factswallpaper.core.model.ThemeMode
 import com.factswallpaper.core.model.WallpaperScheduleMode
 import com.factswallpaper.core.model.WallpaperState
+import com.factswallpaper.core.model.WallpaperTarget
 import com.factswallpaper.core.ui.FeatureViewModel
+import com.factswallpaper.core.wallpaper.StaticWallpaperExporter
+import com.factswallpaper.core.wallpaper.WallpaperRotationController
+import com.factswallpaper.core.wallpaper.WallpaperRotationScheduler
 import dagger.hilt.android.lifecycle.HiltViewModel
+import java.io.File
 import javax.inject.Inject
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.catch
@@ -41,6 +47,9 @@ class WallpaperViewModel @Inject constructor(
     rotationPoolRepository: RotationPoolRepository,
     templateRepository: TemplateRepository,
     private val settingsRepository: SettingsRepository,
+    private val rotationController: WallpaperRotationController,
+    private val staticWallpaperExporter: StaticWallpaperExporter,
+    private val scheduler: WallpaperRotationScheduler,
 ) : FeatureViewModel() {
 
     init {
@@ -69,11 +78,26 @@ class WallpaperViewModel @Inject constructor(
         )
 
     fun setScheduleMode(mode: WallpaperScheduleMode) {
-        update { it.copy(scheduleMode = mode) }
+        viewModelScope.launch {
+            val current = wallpaperRepository.getState()
+            wallpaperRepository.updateState { it.copy(scheduleMode = mode) }
+            scheduler.updateSchedule(mode, current.intervalMinutes)
+            showMessage(R.string.wallpaper_saved)
+        }
     }
 
     fun setIntervalMinutes(minutes: Int) {
-        update { it.copy(intervalMinutes = minutes.coerceIn(15, 1_440)) }
+        val clamped = minutes.coerceIn(15, 1_440)
+        viewModelScope.launch {
+            val current = wallpaperRepository.getState()
+            wallpaperRepository.updateState { it.copy(intervalMinutes = clamped) }
+            scheduler.updateSchedule(current.scheduleMode, clamped)
+            showMessage(R.string.wallpaper_saved)
+        }
+    }
+
+    fun setWallpaperTarget(target: WallpaperTarget) {
+        update { it.copy(target = target) }
     }
 
     fun setRotationOrder(order: RotationOrder) {
@@ -103,24 +127,29 @@ class WallpaperViewModel @Inject constructor(
     }
 
     fun showNextCard() {
-        val content = uiState.value as? WallpaperUiState.Content ?: return
-        if (content.pool.isEmpty()) {
-            showMessage(R.string.wallpaper_pool_empty)
-            return
-        }
-        val currentIndex = content.pool.indexOfFirst {
-            it.id == content.wallpaper.currentFactId
-        }
-        val nextIndex = (currentIndex + 1).mod(content.pool.size)
-        val fact = content.pool[nextIndex]
         viewModelScope.launch {
-            wallpaperRepository.setCurrentFact(fact.id, nextIndex)
-            showMessage(R.string.wallpaper_next_ready)
+            val newState = rotationController.advance()
+            if (newState.currentFactId != null) {
+                showMessage(R.string.wallpaper_next_ready)
+            } else {
+                showMessage(R.string.wallpaper_pool_empty)
+            }
         }
     }
 
-    fun applyStaticWallpaper() {
-        showMessage(R.string.wallpaper_static_not_yet)
+    fun applyStaticWallpaper(target: WallpaperTarget) {
+        viewModelScope.launch {
+            val pngPath = rotationController.getCurrentOrFallbackPngPath()
+            if (pngPath != null) {
+                val result = staticWallpaperExporter.exportPngFile(File(pngPath), target)
+                when (result) {
+                    is AppResult.Success -> showMessage(R.string.wallpaper_static_applied)
+                    is AppResult.Failure -> showMessage(R.string.wallpaper_static_failed)
+                }
+            } else {
+                showMessage(R.string.wallpaper_static_failed)
+            }
+        }
     }
 
     private fun update(transform: (WallpaperState) -> WallpaperState) {

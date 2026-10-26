@@ -7,13 +7,19 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Compress
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Error
@@ -21,6 +27,7 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -43,11 +50,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.factswallpaper.core.backup.BackupOptions
 import com.factswallpaper.core.designsystem.theme.LocalSpacing
 import com.factswallpaper.core.model.AiRequestLogEntry
 import com.factswallpaper.core.model.AiTask
@@ -71,9 +79,14 @@ fun AdvancedSettingsScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val message by viewModel.message.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
+
     var editingOcrLimit by remember { mutableStateOf(false) }
     var editingQueueSize by remember { mutableStateOf(false) }
     var editingSuffixTask by remember { mutableStateOf<AiTask?>(null) }
+    var inspectedLog by remember { mutableStateOf<AiRequestLogEntry?>(null) }
+    var showBackupDialog by remember { mutableStateOf(false) }
+    var showRestoreDialog by remember { mutableStateOf(false) }
+
     UiMessageEffect(message, snackbarHostState, viewModel::onMessageShown)
 
     Scaffold(
@@ -107,13 +120,15 @@ fun AdvancedSettingsScreen(
                 onEnableLogsChange = viewModel::setEnableAiDiagnosticsLog,
                 onDoubleTapChange = viewModel::setEnableDoubleTapAdvance,
                 onEditSuffix = { editingSuffixTask = it },
+                onInspectLog = { inspectedLog = it },
                 onClearLogs = viewModel::clearLogs,
                 onRefreshStorage = viewModel::refreshStorage,
                 onClearRenderCache = viewModel::clearRenderCache,
                 onClearDiagramCache = viewModel::clearDiagramCache,
-                onBackup = viewModel::backupNotYet,
-                onRestore = viewModel::restoreNotYet,
-                onSqlCipher = viewModel::sqlCipherNotYet,
+                onCompactDatabase = viewModel::compactDatabase,
+                onOpenBackupDialog = { showBackupDialog = true },
+                onOpenRestoreDialog = { showRestoreDialog = true },
+                onSqlCipher = viewModel::sqlCipherInfo,
                 modifier = Modifier.padding(padding),
             )
         }
@@ -169,6 +184,35 @@ fun AdvancedSettingsScreen(
             },
         )
     }
+
+    inspectedLog?.let { log ->
+        PromptInspectorDialog(
+            log = log,
+            onDismiss = { inspectedLog = null },
+        )
+    }
+
+    if (showBackupDialog) {
+        BackupDialog(
+            onDismiss = { showBackupDialog = false },
+            onConfirm = { pass, options ->
+                viewModel.createBackup(pass, options) {
+                    showBackupDialog = false
+                }
+            },
+        )
+    }
+
+    if (showRestoreDialog) {
+        RestoreDialog(
+            onDismiss = { showRestoreDialog = false },
+            onConfirm = { pass ->
+                viewModel.restoreBackup(pass) { _, _ ->
+                    showRestoreDialog = false
+                }
+            },
+        )
+    }
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -181,12 +225,14 @@ private fun AdvancedContent(
     onEnableLogsChange: (Boolean) -> Unit,
     onDoubleTapChange: (Boolean) -> Unit,
     onEditSuffix: (AiTask) -> Unit,
+    onInspectLog: (AiRequestLogEntry) -> Unit,
     onClearLogs: () -> Unit,
     onRefreshStorage: () -> Unit,
     onClearRenderCache: () -> Unit,
     onClearDiagramCache: () -> Unit,
-    onBackup: () -> Unit,
-    onRestore: () -> Unit,
+    onCompactDatabase: () -> Unit,
+    onOpenBackupDialog: () -> Unit,
+    onOpenRestoreDialog: () -> Unit,
     onSqlCipher: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -312,8 +358,45 @@ private fun AdvancedContent(
                     )
                 } else {
                     state.logs.forEach { log ->
-                        LogRow(log)
+                        LogRow(log = log, onClick = { onInspectLog(log) })
                     }
+                }
+            }
+        }
+
+        item {
+            SectionGroupCard(
+                title = stringResource(R.string.advanced_ledger_title),
+                subtitle = stringResource(R.string.advanced_ledger_helper),
+            ) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(spacing.sm),
+                    verticalArrangement = Arrangement.spacedBy(spacing.sm),
+                ) {
+                    MetricPill(
+                        value = MetricsFormatter.compactTokens(
+                            state.usage.todayTokens.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(),
+                        ),
+                        label = stringResource(R.string.provider_usage_today),
+                    )
+                    MetricPill(
+                        value = MetricsFormatter.costUsd(state.usage.todayCostUsd),
+                        label = stringResource(R.string.provider_usage_today_cost),
+                    )
+                    MetricPill(
+                        value = MetricsFormatter.compactTokens(
+                            state.usage.last30DaysTokens.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(),
+                        ),
+                        label = stringResource(R.string.provider_usage_30d),
+                    )
+                    MetricPill(
+                        value = MetricsFormatter.costUsd(state.usage.last30DaysCostUsd),
+                        label = stringResource(R.string.provider_usage_30d_cost),
+                    )
+                    MetricPill(
+                        value = MetricsFormatter.costUsd(state.usage.allTimeCostUsd),
+                        label = stringResource(R.string.provider_usage_all_time),
+                    )
                 }
             }
         }
@@ -369,13 +452,22 @@ private fun AdvancedContent(
                         )
                     }
                 }
-                Button(
-                    onClick = onClearDiagramCache,
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = spacing.sm),
+                    horizontalArrangement = Arrangement.spacedBy(spacing.sm),
                 ) {
-                    Text(stringResource(R.string.advanced_storage_clear_diagrams))
+                    OutlinedButton(onClick = onClearDiagramCache, modifier = Modifier.weight(1f)) {
+                        Text(stringResource(R.string.advanced_storage_clear_diagrams))
+                    }
+                    OutlinedButton(onClick = onCompactDatabase, modifier = Modifier.weight(1f)) {
+                        Icon(Icons.Filled.Compress, contentDescription = null)
+                        Text(
+                            text = stringResource(R.string.advanced_storage_compact),
+                            modifier = Modifier.padding(start = 4.dp),
+                        )
+                    }
                 }
                 Text(
                     text = stringResource(R.string.advanced_storage_note),
@@ -392,10 +484,10 @@ private fun AdvancedContent(
                 subtitle = stringResource(R.string.advanced_data_helper),
             ) {
                 Row(horizontalArrangement = Arrangement.spacedBy(spacing.sm)) {
-                    OutlinedButton(onClick = onBackup, modifier = Modifier.weight(1f)) {
+                    Button(onClick = onOpenBackupDialog, modifier = Modifier.weight(1f)) {
                         Text(stringResource(R.string.advanced_backup))
                     }
-                    OutlinedButton(onClick = onRestore, modifier = Modifier.weight(1f)) {
+                    OutlinedButton(onClick = onOpenRestoreDialog, modifier = Modifier.weight(1f)) {
                         Text(stringResource(R.string.advanced_restore))
                     }
                 }
@@ -429,6 +521,220 @@ private fun AdvancedContent(
 }
 
 @Composable
+private fun LogRow(log: AiRequestLogEntry, onClick: () -> Unit) {
+    val spacing = LocalSpacing.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = spacing.sm),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(spacing.sm),
+    ) {
+        Icon(
+            imageVector = if (log.success) Icons.Filled.CheckCircle else Icons.Filled.Error,
+            contentDescription = null,
+            tint = if (log.success) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = stringResource(
+                    R.string.advanced_log_line,
+                    taskLabel(log.taskType),
+                    log.modelName,
+                ),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Text(
+                text = stringResource(
+                    R.string.advanced_log_meta,
+                    log.durationMs,
+                    log.inputTokens,
+                    log.outputTokens,
+                    formatEpoch(log.timestampEpochMs),
+                ),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun PromptInspectorDialog(
+    log: AiRequestLogEntry,
+    onDismiss: () -> Unit,
+) {
+    val spacing = LocalSpacing.current
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.advanced_log_details_title)) },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(spacing.sm),
+            ) {
+                Text(
+                    text = "${taskLabel(log.taskType)} • ${log.modelName}",
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                Text(
+                    text = "Latency: ${log.durationMs}ms | Tokens: ${log.inputTokens} in, ${log.outputTokens} out",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(modifier = Modifier.height(spacing.xs))
+                Text(
+                    text = stringResource(R.string.advanced_log_prompt),
+                    style = MaterialTheme.typography.labelLarge,
+                )
+                Text(
+                    text = log.redactedRequestSummary.ifBlank { "(empty)" },
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Spacer(modifier = Modifier.height(spacing.xs))
+                Text(
+                    text = stringResource(R.string.advanced_log_response),
+                    style = MaterialTheme.typography.labelLarge,
+                )
+                Text(
+                    text = log.redactedResponseSnippet.ifBlank { "(empty)" },
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                val errorMsg = log.errorMessage
+                if (!errorMsg.isNullOrBlank()) {
+                    Spacer(modifier = Modifier.height(spacing.xs))
+                    Text(
+                        text = stringResource(R.string.advanced_log_error),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                    Text(
+                        text = errorMsg,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.advanced_log_close))
+            }
+        },
+    )
+}
+
+@Composable
+private fun BackupDialog(
+    onDismiss: () -> Unit,
+    onConfirm: (passphrase: String, options: BackupOptions) -> Unit,
+) {
+    var passphrase by remember { mutableStateOf("") }
+    var includeAssets by remember { mutableStateOf(false) }
+    var includePdfs by remember { mutableStateOf(false) }
+    val isValid = passphrase.length >= 8
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.advanced_backup_title)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = passphrase,
+                    onValueChange = { passphrase = it },
+                    label = { Text(stringResource(R.string.advanced_backup_passphrase_label)) },
+                    visualTransformation = PasswordVisualTransformation(),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.clickable { includeAssets = !includeAssets },
+                ) {
+                    Checkbox(checked = includeAssets, onCheckedChange = { includeAssets = it })
+                    Text(
+                        text = stringResource(R.string.advanced_backup_include_assets),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.clickable { includePdfs = !includePdfs },
+                ) {
+                    Checkbox(checked = includePdfs, onCheckedChange = { includePdfs = it })
+                    Text(
+                        text = stringResource(R.string.advanced_backup_include_pdfs),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    onConfirm(passphrase, BackupOptions(includeAssets, includePdfs))
+                },
+                enabled = isValid,
+            ) {
+                Text(stringResource(R.string.advanced_backup_action))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.advanced_cancel))
+            }
+        },
+    )
+}
+
+@Composable
+private fun RestoreDialog(
+    onDismiss: () -> Unit,
+    onConfirm: (passphrase: String) -> Unit,
+) {
+    var passphrase by remember { mutableStateOf("") }
+    val isValid = passphrase.isNotBlank()
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.advanced_restore_title)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = stringResource(R.string.advanced_restore_warning),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+                OutlinedTextField(
+                    value = passphrase,
+                    onValueChange = { passphrase = it },
+                    label = { Text(stringResource(R.string.advanced_restore_passphrase_label)) },
+                    visualTransformation = PasswordVisualTransformation(),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = { onConfirm(passphrase) },
+                enabled = isValid,
+            ) {
+                Text(stringResource(R.string.advanced_restore_action))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.advanced_cancel))
+            }
+        },
+    )
+}
+
+@Composable
 private fun ValueRow(title: String, value: String, onClick: () -> Unit) {
     Row(
         modifier = Modifier
@@ -451,61 +757,6 @@ private fun ValueRow(title: String, value: String, onClick: () -> Unit) {
 }
 
 @Composable
-private fun LogRow(log: AiRequestLogEntry) {
-    val spacing = LocalSpacing.current
-    val errorMessage = log.errorMessage
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = spacing.sm),
-        verticalAlignment = Alignment.Top,
-    ) {
-        Icon(
-            imageVector = if (log.success) Icons.Filled.CheckCircle else Icons.Filled.Error,
-            contentDescription = null,
-            tint = if (log.success) MaterialTheme.colorScheme.primary
-            else MaterialTheme.colorScheme.error,
-        )
-        Column(
-            modifier = Modifier
-                .weight(1f)
-                .padding(start = spacing.sm),
-        ) {
-            Text(
-                text = stringResource(
-                    R.string.advanced_log_line,
-                    taskLabel(log.taskType),
-                    log.modelName,
-                ),
-                style = MaterialTheme.typography.bodySmall,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                text = stringResource(
-                    R.string.advanced_log_meta,
-                    log.durationMs,
-                    log.inputTokens,
-                    log.outputTokens,
-                    formatTimestamp(log.timestampEpochMs),
-                ),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            if (!errorMessage.isNullOrBlank()) {
-                Text(
-                    text = errorMessage,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.error,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
-    }
-}
-
-@Composable
 private fun NumberDialog(
     title: String,
     initial: Int,
@@ -514,29 +765,30 @@ private fun NumberDialog(
     onDismiss: () -> Unit,
     onSave: (Int) -> Unit,
 ) {
-    var value by remember { mutableStateOf(initial.toString()) }
+    var text by remember(initial) { mutableStateOf(initial.toString()) }
+    val parsed = text.toIntOrNull()
+    val isValid = parsed != null && parsed in min..max
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = {
-            OutlinedTextField(
-                value = value,
-                onValueChange = { value = it.filter(Char::isDigit) },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                supportingText = {
-                    Text(stringResource(R.string.advanced_number_range, min, max))
-                },
-            )
+            Column {
+                OutlinedTextField(
+                    value = text,
+                    onValueChange = { text = it.filter { char -> char.isDigit() } },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    singleLine = true,
+                    supportingText = {
+                        Text(stringResource(R.string.advanced_number_range, min, max))
+                    },
+                    isError = !isValid,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
         },
         confirmButton = {
-            TextButton(
-                onClick = {
-                    val parsed = value.toIntOrNull() ?: initial
-                    onSave(parsed.coerceIn(min, max))
-                },
-                enabled = value.toIntOrNull() != null,
-            ) {
+            TextButton(onClick = { parsed?.let(onSave) }, enabled = isValid) {
                 Text(stringResource(R.string.advanced_save))
             }
         },
@@ -555,28 +807,31 @@ private fun PromptSuffixDialog(
     onDismiss: () -> Unit,
     onSave: (String) -> Unit,
 ) {
-    var value by remember { mutableStateOf(initial) }
+    var text by remember(initial) { mutableStateOf(initial) }
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.advanced_suffix_title, taskLabel)) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column {
                 Text(
                     text = stringResource(R.string.advanced_suffix_body),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 OutlinedTextField(
-                    value = value,
-                    onValueChange = { value = it },
-                    minLines = 4,
-                    maxLines = 8,
-                    modifier = Modifier.fillMaxWidth(),
+                    value = text,
+                    onValueChange = { text = it },
+                    minLines = 3,
+                    maxLines = 6,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp),
                 )
             }
         },
         confirmButton = {
-            TextButton(onClick = { onSave(value) }) {
+            TextButton(onClick = { onSave(text) }) {
                 Text(stringResource(R.string.advanced_save))
             }
         },
@@ -597,12 +852,16 @@ private fun taskLabel(task: AiTask): String = stringResource(
         AiTask.FORMULA_VERIFICATION -> R.string.advanced_task_formulas
         AiTask.DIAGRAM_GENERATION -> R.string.advanced_task_diagrams
         AiTask.TEMPLATE_GENERATION -> R.string.advanced_task_templates
-    }
+    },
 )
 
-private fun formatTimestamp(epochMs: Long): String =
+private fun formatEpoch(epochMs: Long): String = try {
     DateTimeFormatter.ofPattern("MMM d, HH:mm", Locale.getDefault())
-        .format(Instant.ofEpochMilli(epochMs).atZone(ZoneId.systemDefault()))
+        .withZone(ZoneId.systemDefault())
+        .format(Instant.ofEpochMilli(epochMs))
+} catch (_: Throwable) {
+    epochMs.toString()
+}
 
 @Composable
 private fun AdvancedLoading(modifier: Modifier = Modifier) {
@@ -616,7 +875,10 @@ private fun AdvancedLoading(modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun AdvancedError(messageRes: Int, modifier: Modifier = Modifier) {
+private fun AdvancedError(
+    messageRes: Int,
+    modifier: Modifier = Modifier,
+) {
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -624,6 +886,9 @@ private fun AdvancedError(messageRes: Int, modifier: Modifier = Modifier) {
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text(text = stringResource(messageRes), style = MaterialTheme.typography.bodyLarge)
+        Text(
+            text = stringResource(messageRes),
+            style = MaterialTheme.typography.bodyLarge,
+        )
     }
 }

@@ -15,4 +15,5 @@ interface StorageRepository {
     suspend fun stats(): StorageStats
     suspend fun clearRenderCache(): AppResult<Unit>
     suspend fun clearDiagramCache(): AppResult<Unit>
+    suspend fun compactDatabase(): AppResult<Unit>
 }

@@ -52,6 +52,7 @@ import com.factswallpaper.core.model.RotationOrder
 import com.factswallpaper.core.model.SourceReferenceMode
 import com.factswallpaper.core.model.ThemeMode
 import com.factswallpaper.core.model.WallpaperScheduleMode
+import com.factswallpaper.core.model.WallpaperTarget
 import com.factswallpaper.core.ui.UiMessageEffect
 import com.factswallpaper.core.ui.component.BannerSeverity
 import com.factswallpaper.core.ui.component.InlineBanner
@@ -104,6 +105,7 @@ fun WallpaperScreen(
                 onPreviewTemplate = onPreviewTemplate,
                 onScheduleModeChange = viewModel::setScheduleMode,
                 onIntervalChange = viewModel::setIntervalMinutes,
+                onTargetChange = viewModel::setWallpaperTarget,
                 onRotationOrderChange = viewModel::setRotationOrder,
                 onOnlyFavoritesChange = viewModel::setOnlyFavorites,
                 onSourceModeChange = viewModel::setSourceReferenceMode,
@@ -125,13 +127,14 @@ private fun WallpaperContent(
     onPreviewTemplate: (String?) -> Unit,
     onScheduleModeChange: (WallpaperScheduleMode) -> Unit,
     onIntervalChange: (Int) -> Unit,
+    onTargetChange: (WallpaperTarget) -> Unit,
     onRotationOrderChange: (RotationOrder) -> Unit,
     onOnlyFavoritesChange: (Boolean) -> Unit,
     onSourceModeChange: (SourceReferenceMode) -> Unit,
     onThemeModeChange: (ThemeMode) -> Unit,
     onTemplateChange: (String) -> Unit,
     onNextCard: () -> Unit,
-    onApplyStatic: () -> Unit,
+    onApplyStatic: (WallpaperTarget) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val spacing = LocalSpacing.current
@@ -359,9 +362,53 @@ private fun WallpaperContent(
                 title = stringResource(R.string.wallpaper_static_title),
                 subtitle = stringResource(R.string.wallpaper_static_helper),
             ) {
+                Text(
+                    text = stringResource(R.string.wallpaper_target_label),
+                    style = MaterialTheme.typography.labelLarge,
+                )
+                Row(
+                    modifier = Modifier.padding(top = spacing.xs),
+                    horizontalArrangement = Arrangement.spacedBy(spacing.sm),
+                ) {
+                    listOf(
+                        WallpaperTarget.HOME to R.string.wallpaper_target_home,
+                        WallpaperTarget.LOCK to R.string.wallpaper_target_lock,
+                        WallpaperTarget.BOTH to R.string.wallpaper_target_both,
+                    ).forEach { (target, labelRes) ->
+                        FilterChip(
+                            selected = wallpaper.target == target,
+                            onClick = { onTargetChange(target) },
+                            label = { Text(stringResource(labelRes)) },
+                        )
+                    }
+                }
+
+                if (wallpaper.target != WallpaperTarget.LIVE && wallpaper.scheduleMode == WallpaperScheduleMode.ON_UNLOCK) {
+                    InlineBanner(
+                        message = stringResource(R.string.wallpaper_static_unlock_disabled),
+                        severity = BannerSeverity.WARNING,
+                        modifier = Modifier.padding(top = spacing.sm),
+                    )
+                }
+
+                InlineBanner(
+                    message = stringResource(R.string.wallpaper_lock_oem_note),
+                    severity = BannerSeverity.INFO,
+                    modifier = Modifier.padding(top = spacing.sm),
+                )
+
                 OutlinedButton(
-                    onClick = onApplyStatic,
-                    modifier = Modifier.fillMaxWidth(),
+                    onClick = {
+                        val target = if (wallpaper.target == WallpaperTarget.LIVE) {
+                            WallpaperTarget.BOTH
+                        } else {
+                            wallpaper.target
+                        }
+                        onApplyStatic(target)
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = spacing.md),
                 ) {
                     Icon(Icons.Filled.Wallpaper, contentDescription = null)
                     Text(
@@ -430,7 +477,10 @@ private fun WallpaperLoading(modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun WallpaperError(messageRes: Int, modifier: Modifier = Modifier) {
+private fun WallpaperError(
+    messageRes: Int,
+    modifier: Modifier = Modifier,
+) {
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -438,6 +488,9 @@ private fun WallpaperError(messageRes: Int, modifier: Modifier = Modifier) {
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text(text = stringResource(messageRes), style = MaterialTheme.typography.bodyLarge)
+        Text(
+            text = stringResource(messageRes),
+            style = MaterialTheme.typography.bodyLarge,
+        )
     }
 }

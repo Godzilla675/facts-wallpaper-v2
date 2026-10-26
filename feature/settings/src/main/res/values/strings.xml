@@ -85,8 +85,8 @@
     <string name="advanced_suffix_title">Suffix for %1$s</string>
     <string name="advanced_suffix_body">Leave blank to use the built-in prompt only. Suffixes are stored on this device.</string>
     <string name="advanced_suffix_saved">Prompt suffix saved.</string>
-    <string name="advanced_diagnostics_title">Diagnostics</string>
-    <string name="advanced_diagnostics_helper">Recent request metadata helps explain failures. Prompts and keys are never logged.</string>
+    <string name="advanced_diagnostics_title">Diagnostics &amp; Prompt Inspector</string>
+    <string name="advanced_diagnostics_helper">Tap any logged request to inspect prompt details, latency and response snippets.</string>
     <string name="advanced_diagnostics_enable">Keep AI request log</string>
     <string name="advanced_diagnostics_enable_helper">Stores redacted request summaries and usage metadata.</string>
     <string name="advanced_double_tap">Double-tap to advance</string>
@@ -97,6 +97,15 @@
     <string name="advanced_logs_cleared">Request log cleared.</string>
     <string name="advanced_log_line">%1$s &#183; %2$s</string>
     <string name="advanced_log_meta">%1$d ms &#183; %2$d in / %3$d out &#183; %4$s</string>
+    <string name="advanced_log_details_title">AI Request Details</string>
+    <string name="advanced_log_prompt">Request summary</string>
+    <string name="advanced_log_response">Response snippet</string>
+    <string name="advanced_log_error">Error message</string>
+    <string name="advanced_log_close">Close</string>
+
+    <string name="advanced_ledger_title">Token Ledger</string>
+    <string name="advanced_ledger_helper">Cumulative tokens and estimated USD costs tracked locally.</string>
+
     <string name="advanced_storage_title">Storage</string>
     <string name="advanced_storage_helper">Storage used by this app on your device.</string>
     <string name="advanced_storage_pdfs">PDFs</string>
@@ -107,18 +116,34 @@
     <string name="advanced_storage_refresh">Refresh</string>
     <string name="advanced_storage_clear_cards">Clear cards</string>
     <string name="advanced_storage_clear_diagrams">Clear diagram cache</string>
+    <string name="advanced_storage_compact">Compact database</string>
     <string name="advanced_storage_note">Clearing caches never removes PDFs, lessons, facts or collections.</string>
     <string name="advanced_cache_cleared">Cache cleared.</string>
     <string name="advanced_cache_failed">Could not clear this cache.</string>
-    <string name="advanced_data_title">Data and privacy</string>
-    <string name="advanced_data_helper">Your library stays local. Backup and database encryption are explicit, opt-in actions.</string>
-    <string name="advanced_backup">Backup</string>
-    <string name="advanced_restore">Restore</string>
-    <string name="advanced_backup_not_yet">Encrypted backup and export arrive with the backup phase.</string>
-    <string name="advanced_restore_not_yet">Backup restore arrives with the backup phase.</string>
+    <string name="advanced_database_compacted">Database compacted successfully.</string>
+    <string name="advanced_database_compact_failed">Failed to compact database.</string>
+
+    <string name="advanced_data_title">Data &amp; Backup</string>
+    <string name="advanced_data_helper">Encrypted local archive (.fwbk) protected with AES-256 and your passphrase.</string>
+    <string name="advanced_backup">Create Backup</string>
+    <string name="advanced_restore">Restore Backup</string>
+    <string name="advanced_backup_title">Create Encrypted Backup</string>
+    <string name="advanced_backup_passphrase_label">Passphrase (min 8 characters)</string>
+    <string name="advanced_backup_include_assets">Include pre-rendered cards &amp; diagrams</string>
+    <string name="advanced_backup_include_pdfs">Include original PDF files</string>
+    <string name="advanced_backup_action">Export .fwbk</string>
+    <string name="advanced_backup_success">Backup created: %1$s</string>
+    <string name="advanced_backup_failed">Backup failed: %1$s</string>
+    <string name="advanced_restore_title">Restore Encrypted Backup</string>
+    <string name="advanced_restore_warning">Restoring replaces all current study data, collections and settings. Ensure you have backed up any unsaved facts.</string>
+    <string name="advanced_restore_passphrase_label">Backup Passphrase</string>
+    <string name="advanced_restore_action">Confirm &amp; Restore</string>
+    <string name="advanced_restore_success">Restored %1$d documents and %2$d facts successfully.</string>
+    <string name="advanced_restore_failed">Restore failed: %1$s</string>
+
     <string name="advanced_sqlcipher">Encrypted database</string>
     <string name="advanced_sqlcipher_helper">SQLCipher protects your library with a key held by the Android Keystore.</string>
-    <string name="advanced_sqlcipher_state">Not configured</string>
+    <string name="advanced_sqlcipher_state">Standard SQLite (SQLCipher key sealed by Keystore in P3)</string>
     <string name="advanced_sqlcipher_not_yet">SQLCipher database encryption arrives with the security phase.</string>
     <string name="advanced_number_range">%1$d to %2$d</string>
     <string name="advanced_save">Save</string>

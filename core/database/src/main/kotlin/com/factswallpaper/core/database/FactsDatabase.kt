@@ -67,6 +67,11 @@ abstract class FactsDatabase : RoomDatabase() {
     abstract fun wallpaperStateDao(): WallpaperStateDao
     abstract fun diagnosticsAndUsageDao(): DiagnosticsAndUsageDao
 
+    open fun compact() {
+        openHelper.writableDatabase.execSQL("PRAGMA wal_checkpoint(FULL);")
+        openHelper.writableDatabase.execSQL("VACUUM;")
+    }
+
     companion object {
         const val NAME = "facts_wallpaper.db"
         const val VERSION = 1

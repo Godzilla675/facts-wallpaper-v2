@@ -1,116 +1,264 @@
 package com.factswallpaper.core.wallpaper
 
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.Rect
 import android.graphics.Typeface
-import android.os.Handler
-import android.os.Looper
+import android.os.Build
 import android.service.wallpaper.WallpaperService
 import android.view.SurfaceHolder
+import androidx.core.content.ContextCompat
+import com.factswallpaper.core.data.repository.WallpaperRepository
+import com.factswallpaper.core.render.CardPreRenderScheduler
+import com.factswallpaper.core.render.RenderSizeStore
+import com.factswallpaper.core.render.cache.CardRenderCache
+import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
+import kotlin.math.max
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
- * Entry point for the live wallpaper.
+ * Android Live Wallpaper Service for Facts Wallpaper (spec §8.1).
  *
- * Phase P1 ships the real Android wallpaper service so the picker entry and
- * activation flow work end to end. Card rendering, rotation scheduling and the
- * pre-render pipeline are owned by the wallpaper phase and will draw on this
- * engine surface through the shared renderer.
+ * NON-NEGOTIABLE INVARIANT (Invariant 6):
+ * This service NEVER invokes network calls, AI clients, PDF parsers, or WebView instances.
+ * It reads exclusively pre-rendered PNG bitmaps from CardRenderCache (with a lightweight
+ * Canvas text fallback if the cache is empty).
  */
+@AndroidEntryPoint
 class FactsLiveWallpaperService : WallpaperService() {
 
-    override fun onCreateEngine(): Engine = FactsEngine()
+    @Inject lateinit var rotationController: WallpaperRotationController
+    @Inject lateinit var renderCache: CardRenderCache
+    @Inject lateinit var renderSizeStore: RenderSizeStore
+    @Inject lateinit var wallpaperRepository: WallpaperRepository
+    @Inject lateinit var preRenderScheduler: CardPreRenderScheduler
 
-    private inner class FactsEngine : Engine() {
+    override fun onCreateEngine(): Engine = FactsWallpaperEngine()
 
-        private val handler = Handler(Looper.getMainLooper())
-        private val backgroundPaint = Paint().apply {
-            color = Color.rgb(9, 10, 12)
-            style = Paint.Style.FILL
+    inner class FactsWallpaperEngine : Engine() {
+        private val engineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+        private var isVisibleState = false
+        private var unlockReceiverRegistered = false
+        private var stateObserverJob: Job? = null
+
+        private val unlockReceiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                if (intent?.action == Intent.ACTION_USER_PRESENT) {
+                    engineScope.launch {
+                        if (rotationController.onDeviceUnlocked()) {
+                            drawCurrentCard()
+                        }
+                    }
+                }
+            }
         }
-        private val accentPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.rgb(196, 161, 96)
-            style = Paint.Style.FILL
+
+        override fun onCreate(surfaceHolder: SurfaceHolder?) {
+            super.onCreate(surfaceHolder)
+            registerUnlockReceiver()
+            startObservingWallpaperState()
         }
-        private val titlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.rgb(238, 236, 230)
-            textAlign = Paint.Align.CENTER
-            typeface = Typeface.create("serif", Typeface.NORMAL)
+
+        override fun onSurfaceCreated(holder: SurfaceHolder?) {
+            super.onSurfaceCreated(holder)
+            drawCurrentCard()
         }
-        private val captionPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.rgb(155, 158, 165)
-            textAlign = Paint.Align.CENTER
-            typeface = Typeface.create("sans-serif", Typeface.NORMAL)
+
+        override fun onSurfaceChanged(holder: SurfaceHolder?, format: Int, width: Int, height: Int) {
+            super.onSurfaceChanged(holder, format, width, height)
+            if (width > 0 && height > 0) {
+                renderSizeStore.saveReportedSize(width, height)
+                preRenderScheduler.enqueue()
+            }
+            drawCurrentCard()
         }
-        private var visible = true
 
         override fun onVisibilityChanged(visible: Boolean) {
-            this.visible = visible
+            super.onVisibilityChanged(visible)
+            isVisibleState = visible
             if (visible) {
-                draw()
-            } else {
-                handler.removeCallbacksAndMessages(null)
+                engineScope.launch {
+                    rotationController.onVisibilityChanged(true)
+                    drawCurrentCard()
+                }
             }
         }
 
-        override fun onSurfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
-            super.onSurfaceChanged(holder, format, width, height)
-            draw()
-        }
-
-        override fun onSurfaceCreated(holder: SurfaceHolder) {
-            super.onSurfaceCreated(holder)
-            draw()
-        }
-
-        override fun onSurfaceDestroyed(holder: SurfaceHolder) {
+        override fun onSurfaceDestroyed(holder: SurfaceHolder?) {
             super.onSurfaceDestroyed(holder)
-            handler.removeCallbacksAndMessages(null)
         }
 
-        private fun draw() {
-            if (!visible) return
-            val holder = surfaceHolder
-            val canvas: Canvas = holder.lockCanvas() ?: return
-            try {
-                drawBackground(canvas)
-            } finally {
-                holder.unlockCanvasAndPost(canvas)
+        override fun onDestroy() {
+            unregisterUnlockReceiver()
+            stateObserverJob?.cancel()
+            engineScope.cancel()
+            super.onDestroy()
+        }
+
+        private fun registerUnlockReceiver() {
+            if (!unlockReceiverRegistered) {
+                try {
+                    val filter = IntentFilter(Intent.ACTION_USER_PRESENT)
+                    ContextCompat.registerReceiver(
+                        this@FactsLiveWallpaperService,
+                        unlockReceiver,
+                        filter,
+                        ContextCompat.RECEIVER_NOT_EXPORTED,
+                    )
+                    unlockReceiverRegistered = true
+                } catch (_: Throwable) {
+                    // Ignore registration errors on platforms without intent dispatch
+                }
             }
         }
 
-        private fun drawBackground(canvas: Canvas) {
-            val width = canvas.width.toFloat().coerceAtLeast(1f)
-            val height = canvas.height.toFloat().coerceAtLeast(1f)
-            canvas.drawRect(0f, 0f, width, height, backgroundPaint)
-            canvas.drawCircle(
-                width * 0.78f,
-                height * 0.18f,
-                width * 0.36f,
-                accentPaint.apply { alpha = 26 },
+        private fun unregisterUnlockReceiver() {
+            if (unlockReceiverRegistered) {
+                try {
+                    unregisterReceiver(unlockReceiver)
+                } catch (_: Throwable) {}
+                unlockReceiverRegistered = false
+            }
+        }
+
+        private fun startObservingWallpaperState() {
+            stateObserverJob?.cancel()
+            stateObserverJob = engineScope.launch {
+                wallpaperRepository.observeState().collectLatest {
+                    if (isVisibleState) {
+                        drawCurrentCard()
+                    }
+                }
+            }
+        }
+
+        private fun drawCurrentCard() {
+            engineScope.launch {
+                val pngPath = rotationController.getCurrentOrFallbackPngPath()
+                val bitmap = if (pngPath != null) {
+                    withContext(Dispatchers.IO) {
+                        runCatching { BitmapFactory.decodeFile(pngPath) }.getOrNull()
+                    }
+                } else {
+                    null
+                }
+
+                drawBitmapOrFallback(bitmap)
+            }
+        }
+
+        private fun drawBitmapOrFallback(bitmap: Bitmap?) {
+            val holder = surfaceHolder ?: return
+            var canvas: Canvas? = null
+            try {
+                canvas = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    runCatching { holder.lockHardwareCanvas() }.getOrNull() ?: holder.lockCanvas()
+                } else {
+                    holder.lockCanvas()
+                }
+                if (canvas != null) {
+                    if (bitmap != null && !bitmap.isRecycled) {
+                        drawBitmapFitted(canvas, bitmap)
+                    } else {
+                        drawFallbackTypography(canvas)
+                    }
+                }
+            } catch (_: Throwable) {
+                // Protect wallpaper service against canvas lock exceptions
+            } finally {
+                if (canvas != null) {
+                    runCatching { holder.unlockCanvasAndPost(canvas) }
+                }
+            }
+        }
+
+        private fun drawBitmapFitted(canvas: Canvas, bitmap: Bitmap) {
+            val canvasWidth = canvas.width
+            val canvasHeight = canvas.height
+            val bitmapWidth = bitmap.width
+            val bitmapHeight = bitmap.height
+
+            if (canvasWidth <= 0 || canvasHeight <= 0 || bitmapWidth <= 0 || bitmapHeight <= 0) return
+
+            val scale = max(
+                canvasWidth.toFloat() / bitmapWidth.toFloat(),
+                canvasHeight.toFloat() / bitmapHeight.toFloat(),
             )
-            canvas.drawCircle(
-                width * 0.16f,
-                height * 0.86f,
-                width * 0.30f,
-                accentPaint.apply { alpha = 18 },
-            )
-            accentPaint.alpha = 255
-            canvas.drawCircle(width / 2f, height * 0.40f, width * 0.012f, accentPaint)
-            titlePaint.textSize = width * 0.085f
-            captionPaint.textSize = width * 0.036f
-            canvas.drawText(
-                getString(R.string.facts_wallpaper_service_title),
-                width / 2f,
-                height * 0.50f,
-                titlePaint,
-            )
-            canvas.drawText(
-                getString(R.string.facts_wallpaper_service_caption),
-                width / 2f,
-                height * 0.55f,
-                captionPaint,
-            )
+            val scaledWidth = (bitmapWidth * scale).toInt()
+            val scaledHeight = (bitmapHeight * scale).toInt()
+            val left = (canvasWidth - scaledWidth) / 2
+            val top = (canvasHeight - scaledHeight) / 2
+
+            val srcRect = Rect(0, 0, bitmapWidth, bitmapHeight)
+            val destRect = Rect(left, top, left + scaledWidth, top + scaledHeight)
+            canvas.drawColor(Color.BLACK)
+            canvas.drawBitmap(bitmap, srcRect, destRect, null)
+        }
+
+        private fun drawFallbackTypography(canvas: Canvas) {
+            val width = canvas.width
+            val height = canvas.height
+            if (width <= 0 || height <= 0) return
+
+            // Scholar's Slate deep background
+            canvas.drawColor(Color.rgb(15, 20, 25))
+
+            val clockSafeTop = height * 0.26f
+            val bottomSafe = height * 0.92f
+
+            // Accent bar
+            val accentPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.rgb(196, 161, 96) // Warm gold
+                style = Paint.Style.FILL
+            }
+            val barWidth = width * 0.16f
+            val barHeight = 6f
+            val barLeft = (width - barWidth) / 2f
+            canvas.drawRect(barLeft, clockSafeTop, barLeft + barWidth, clockSafeTop + barHeight, accentPaint)
+
+            // Title: "Facts Wallpaper"
+            val titlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.rgb(240, 238, 233)
+                textAlign = Paint.Align.CENTER
+                textSize = (width * 0.065f).coerceIn(24f, 72f)
+                typeface = Typeface.create(Typeface.SERIF, Typeface.BOLD)
+            }
+            val titleY = clockSafeTop + (width * 0.12f)
+            canvas.drawText("Facts Wallpaper", width / 2f, titleY, titlePaint)
+
+            // Subtitle: "Import a PDF to start studying"
+            val subtitlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.rgb(160, 165, 175)
+                textAlign = Paint.Align.CENTER
+                textSize = (width * 0.040f).coerceIn(16f, 36f)
+                typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL)
+            }
+            val subtitleY = titleY + (width * 0.08f)
+            canvas.drawText("Import a PDF to start studying", width / 2f, subtitleY, subtitlePaint)
+
+            // Gesture-safe bottom hint
+            val hintPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.rgb(100, 105, 115)
+                textAlign = Paint.Align.CENTER
+                textSize = (width * 0.032f).coerceIn(12f, 24f)
+                typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL)
+            }
+            canvas.drawText("Open Facts Wallpaper to configure rotation", width / 2f, bottomSafe - 24f, hintPaint)
         }
     }
 }

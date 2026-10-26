@@ -15,6 +15,7 @@ import kotlinx.coroutines.withContext
 @Singleton
 class DiskStorageRepository @Inject constructor(
     @ApplicationContext private val context: Context,
+    private val database: FactsDatabase,
     private val renderCacheDao: RenderCacheDao,
     private val dispatchers: FactsDispatchers,
 ) : StorageRepository {
@@ -42,6 +43,15 @@ class DiskStorageRepository @Inject constructor(
         try {
             renderCacheDao.deleteAllDiagramAssets()
             File(context.filesDir, DIAGRAM_CACHE_DIR).deleteRecursively()
+            AppResult.Success(Unit)
+        } catch (t: Throwable) {
+            AppResult.Failure(AppError.Storage(t))
+        }
+    }
+
+    override suspend fun compactDatabase(): AppResult<Unit> = withContext(dispatchers.io) {
+        try {
+            database.compact()
             AppResult.Success(Unit)
         } catch (t: Throwable) {
             AppResult.Failure(AppError.Storage(t))

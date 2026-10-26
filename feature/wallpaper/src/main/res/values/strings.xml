@@ -24,7 +24,7 @@
     <string name="wallpaper_interval_label">Interval</string>
     <string name="wallpaper_minutes">%1$d min</string>
     <string name="wallpaper_order_title">Rotation order</string>
-    <string name="wallpaper_order_helper">Sequential follows the pool order. Random shuffles each cycle in the wallpaper engine phase.</string>
+    <string name="wallpaper_order_helper">Sequential follows the pool order. Random shuffles without back-to-back repeats.</string>
     <string name="wallpaper_order_sequential">Sequential</string>
     <string name="wallpaper_order_random">Random</string>
     <string name="wallpaper_look_title">Card look</string>
@@ -32,7 +32,7 @@
     <string name="wallpaper_theme_label">Wallpaper theme</string>
     <string name="wallpaper_source_label">Source reference</string>
     <string name="wallpaper_template_label">Template</string>
-    <string name="wallpaper_templates_empty">Card templates arrive with the rendering phase. The built-in layout is used for now.</string>
+    <string name="wallpaper_templates_empty">No templates available. Built-in layout will be used.</string>
     <string name="wallpaper_theme_light">Light</string>
     <string name="wallpaper_theme_dark">Dark</string>
     <string name="wallpaper_theme_amoled">AMOLED</string>
@@ -42,9 +42,16 @@
     <string name="wallpaper_source_page">Page only</string>
     <string name="wallpaper_source_hidden">Hidden</string>
     <string name="wallpaper_static_title">Static wallpaper</string>
-    <string name="wallpaper_static_helper">Home and lock screen snapshots are rendered by the wallpaper engine phase.</string>
+    <string name="wallpaper_static_helper">Export current card snapshot directly to system home and/or lock screen.</string>
     <string name="wallpaper_apply_static">Apply static wallpaper</string>
-    <string name="wallpaper_static_not_yet">Static wallpaper rendering arrives with the wallpaper engine phase.</string>
+    <string name="wallpaper_static_applied">Static wallpaper updated successfully.</string>
+    <string name="wallpaper_static_failed">Could not apply static wallpaper. Pre-render a card first.</string>
+    <string name="wallpaper_target_label">Static destination</string>
+    <string name="wallpaper_target_home">Home screen</string>
+    <string name="wallpaper_target_lock">Lock screen</string>
+    <string name="wallpaper_target_both">Home &amp; Lock</string>
+    <string name="wallpaper_lock_oem_note">Lock screen live wallpaper support depends on OEM. Static Lock export ensures your cards always show on the lock screen.</string>
+    <string name="wallpaper_static_unlock_disabled">Unlock trigger requires Live Wallpaper mode. Using Interval or Manual for static exports.</string>
     <string name="wallpaper_saved">Wallpaper settings saved.</string>
     <string name="wallpaper_template_saved">Active template updated.</string>
     <string name="wallpaper_pool_empty">Add active facts to the pool first.</string>
