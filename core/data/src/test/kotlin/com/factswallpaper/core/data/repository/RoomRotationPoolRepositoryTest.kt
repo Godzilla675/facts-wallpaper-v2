@@ -11,8 +11,10 @@ import com.factswallpaper.core.database.entity.FactItemEntity
 import com.factswallpaper.core.database.entity.FolderFactCrossRef
 import com.factswallpaper.core.database.entity.LessonEntity
 import com.factswallpaper.core.database.entity.PdfDocumentEntity
+import com.factswallpaper.core.model.RotationOrder
 import com.factswallpaper.core.database.entity.UserFolderEntity
 import com.google.common.truth.Truth.assertThat
+import java.security.MessageDigest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -241,4 +243,27 @@ class RoomRotationPoolRepositoryTest {
         assertThat(summary.collectionCount).isEqualTo(1)
         assertThat(summary.folderCount).isEqualTo(1)
     }
+
+    @Test
+    fun `random order is a stable hash permutation of the resolved pool`() = runBlocking<Unit> {
+        seed()
+        val factDao = database.factDao()
+        factDao.upsert(fact("f5", "doc-1", createdAt = 5_000L))
+        factDao.upsert(fact("f6", "doc-1", createdAt = 6_000L))
+        wallpaperRepository.updateState { it.copy(rotationOrder = RotationOrder.RANDOM) }
+
+        val first = poolIds()
+        val second = poolIds()
+        val expected = listOf("f1", "f5", "f6")
+            .sortedWith(compareBy({ sha256Hex(it) }, { it }))
+
+        assertThat(first).containsExactly("f1", "f5", "f6")
+        assertThat(first).isEqualTo(expected)
+        assertThat(second).isEqualTo(first)
+    }
+
+    private fun sha256Hex(value: String): String =
+        MessageDigest.getInstance("SHA-256")
+            .digest(value.toByteArray(Charsets.UTF_8))
+            .joinToString(separator = "") { byte -> "%02x".format(byte) }
 }

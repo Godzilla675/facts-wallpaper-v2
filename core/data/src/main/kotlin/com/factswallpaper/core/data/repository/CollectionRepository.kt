@@ -10,6 +10,17 @@ interface CollectionRepository {
     fun observeFolders(): Flow<List<UserFolder>>
     suspend fun createCollection(name: String, description: String = ""): Collection
     suspend fun createFolder(name: String): UserFolder
+    suspend fun renameCollection(collectionId: String, name: String, description: String = "")
+    suspend fun renameFolder(folderId: String, name: String)
+    suspend fun createSuggestedCollection(
+        name: String,
+        description: String,
+        factIds: List<String>,
+    ): Collection
+    fun observeCollectionFactIds(collectionId: String): Flow<List<String>>
+    fun observeFolderFactIds(folderId: String): Flow<List<String>>
+    suspend fun setCollectionFacts(collectionId: String, factIds: List<String>)
+    suspend fun setFolderFacts(folderId: String, factIds: List<String>)
     suspend fun setCollectionInRotation(collectionId: String, included: Boolean)
     suspend fun setCollectionAccepted(collectionId: String, accepted: Boolean)
     suspend fun deleteCollection(collectionId: String): AppResult<Unit>

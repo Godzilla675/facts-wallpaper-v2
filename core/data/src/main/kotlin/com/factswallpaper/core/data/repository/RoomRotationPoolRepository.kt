@@ -5,7 +5,9 @@ import com.factswallpaper.core.database.dao.CollectionDao
 import com.factswallpaper.core.database.dao.FactDao
 import com.factswallpaper.core.database.dao.PdfDocumentDao
 import com.factswallpaper.core.model.Fact
+import com.factswallpaper.core.model.RotationOrder
 import com.factswallpaper.core.model.RotationPoolSummary
+import java.security.MessageDigest
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.flow.Flow
@@ -43,7 +45,17 @@ class RoomRotationPoolRepository @Inject constructor(
         if (wallpaperState.onlyFavoritesInPool) {
             pool = pool.filter { it.favorite }
         }
-        pool.map { it.toDomain() }.toList()
+        val ordered = pool.map { it.toDomain() }.toList()
+        if (wallpaperState.rotationOrder == RotationOrder.RANDOM) {
+            // Stable SHA-256 permutation: every fact appears exactly once per cycle and the
+            // order never flickers while other flows re-emit. The wallpaper controller owns
+            // advancing/wrapping the index (P5).
+            ordered.sortedWith(
+                compareBy<Fact>({ sha256Hex(it.id) }, { it.id }),
+            )
+        } else {
+            ordered
+        }
     }
 
     override fun observePoolSummary(): Flow<RotationPoolSummary> = combine(
@@ -73,4 +85,9 @@ class RoomRotationPoolRepository @Inject constructor(
             includedFolderCount = includedFolders.size,
         )
     }
+
+    private fun sha256Hex(value: String): String =
+        MessageDigest.getInstance("SHA-256")
+            .digest(value.toByteArray(Charsets.UTF_8))
+            .joinToString(separator = "") { byte -> "%02x".format(byte) }
 }

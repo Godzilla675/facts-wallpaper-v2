@@ -5,3 +5,7 @@ plugins {
 android {
     namespace = "com.factswallpaper.feature.collections"
 }
+
+dependencies {
+    implementation(project(":core:render"))
+}

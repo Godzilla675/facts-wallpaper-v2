@@ -31,6 +31,9 @@ abstract class RenderCacheDao {
         markLastKnownGoodRow(cacheKey)
     }
 
+    @Query("DELETE FROM render_cache WHERE cacheKey = :cacheKey")
+    abstract suspend fun deleteByKey(cacheKey: String)
+
     @Query("DELETE FROM render_cache")
     abstract suspend fun deleteAll()
 

@@ -71,6 +71,81 @@ class RoomCollectionRepository @Inject constructor(
         return entity.toDomain()
     }
 
+    override suspend fun renameCollection(collectionId: String, name: String, description: String) {
+        val trimmed = name.trim()
+        require(trimmed.isNotEmpty()) { "Collection name must not be blank" }
+        withContext(dispatchers.io) {
+            collectionDao.renameCollection(collectionId, trimmed, description.trim())
+        }
+    }
+
+    override suspend fun renameFolder(folderId: String, name: String) {
+        val trimmed = name.trim()
+        require(trimmed.isNotEmpty()) { "Folder name must not be blank" }
+        withContext(dispatchers.io) { collectionDao.renameFolder(folderId, trimmed) }
+    }
+
+    override suspend fun createSuggestedCollection(
+        name: String,
+        description: String,
+        factIds: List<String>,
+    ): Collection {
+        val trimmed = name.trim()
+        require(trimmed.isNotEmpty()) { "Collection name must not be blank" }
+        val entity = CollectionEntity(
+            id = UUID.randomUUID().toString(),
+            name = trimmed,
+            description = description.trim(),
+            source = CollectionSource.AI_SUGGESTED.name,
+            accepted = false,
+            includeInRotation = false,
+            createdAtEpochMs = System.currentTimeMillis(),
+        )
+        withContext(dispatchers.io) {
+            collectionDao.upsertCollection(entity)
+            collectionDao.addFactsToCollection(
+                factIds.mapIndexed { index, factId ->
+                    CollectionFactCrossRef(collectionId = entity.id, factId = factId, sortOrder = index)
+                },
+            )
+        }
+        return entity.toDomain(factCount = factIds.size)
+    }
+
+    override fun observeCollectionFactIds(collectionId: String): Flow<List<String>> =
+        collectionDao.observeFactIdsForCollection(collectionId)
+
+    override fun observeFolderFactIds(folderId: String): Flow<List<String>> =
+        collectionDao.observeFactIdsForFolder(folderId)
+
+    override suspend fun setCollectionFacts(collectionId: String, factIds: List<String>) {
+        withContext(dispatchers.io) {
+            collectionDao.clearCollectionFacts(collectionId)
+            if (factIds.isNotEmpty()) {
+                collectionDao.addFactsToCollection(
+                    factIds.mapIndexed { index, factId ->
+                        CollectionFactCrossRef(
+                            collectionId = collectionId,
+                            factId = factId,
+                            sortOrder = index,
+                        )
+                    },
+                )
+            }
+        }
+    }
+
+    override suspend fun setFolderFacts(folderId: String, factIds: List<String>) {
+        withContext(dispatchers.io) {
+            collectionDao.clearFolderFacts(folderId)
+            if (factIds.isNotEmpty()) {
+                collectionDao.addFactsToFolder(
+                    factIds.map { FolderFactCrossRef(folderId = folderId, factId = it) },
+                )
+            }
+        }
+    }
+
     override suspend fun setCollectionInRotation(collectionId: String, included: Boolean) {
         withContext(dispatchers.io) { collectionDao.setCollectionInRotation(collectionId, included) }
     }

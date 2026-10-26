@@ -5,8 +5,14 @@ import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import com.factswallpaper.core.pdf.PdfBoxRuntime
 import com.factswallpaper.core.pdf.PdfNotifications
+import com.factswallpaper.core.render.CardPreRenderScheduler
+import com.factswallpaper.core.render.template.CardTemplateSeeder
 import dagger.hilt.android.HiltAndroidApp
 import javax.inject.Inject
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
 @HiltAndroidApp
 class FactsWallpaperApplication : Application(), Configuration.Provider {
@@ -20,6 +26,14 @@ class FactsWallpaperApplication : Application(), Configuration.Provider {
     @Inject
     lateinit var pdfNotifications: PdfNotifications
 
+    @Inject
+    lateinit var templateSeeder: CardTemplateSeeder
+
+    @Inject
+    lateinit var preRenderScheduler: CardPreRenderScheduler
+
+    private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder()
             .setWorkerFactory(workerFactory)
@@ -29,5 +43,9 @@ class FactsWallpaperApplication : Application(), Configuration.Provider {
         super.onCreate()
         pdfBoxRuntime.initialize()
         pdfNotifications.ensureChannel()
+        applicationScope.launch {
+            runCatching { templateSeeder.ensureSeeded() }
+            runCatching { preRenderScheduler.enqueue() }
+        }
     }
 }

@@ -1,11 +1,13 @@
 package com.factswallpaper.feature.collections
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -13,14 +15,17 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Checklist
 import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Sell
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -50,8 +55,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.factswallpaper.core.designsystem.theme.LocalSpacing
 import com.factswallpaper.core.model.Collection
 import com.factswallpaper.core.model.CollectionSource
+import com.factswallpaper.core.model.FactStatusFilter
 import com.factswallpaper.core.model.UserFolder
 import com.factswallpaper.core.ui.UiMessageEffect
+import com.factswallpaper.core.ui.component.BannerSeverity
+import com.factswallpaper.core.ui.component.InlineBanner
 import com.factswallpaper.core.ui.component.MetricPill
 import com.factswallpaper.core.ui.component.SectionGroupCard
 
@@ -59,6 +67,7 @@ import com.factswallpaper.core.ui.component.SectionGroupCard
 @Composable
 fun CollectionsScreen(
     onOpenTag: (String) -> Unit,
+    onOpenFacts: (FactStatusFilter) -> Unit,
     modifier: Modifier = Modifier,
     viewModel: CollectionsViewModel = hiltViewModel(),
 ) {
@@ -67,6 +76,8 @@ fun CollectionsScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     var creatingCollection by remember { mutableStateOf(false) }
     var creatingFolder by remember { mutableStateOf(false) }
+    var renamingCollection by remember { mutableStateOf<Collection?>(null) }
+    var renamingFolder by remember { mutableStateOf<UserFolder?>(null) }
     var deletingCollection by remember { mutableStateOf<Collection?>(null) }
     var deletingFolder by remember { mutableStateOf<UserFolder?>(null) }
     UiMessageEffect(message, snackbarHostState, viewModel::onMessageShown)
@@ -106,10 +117,27 @@ fun CollectionsScreen(
                 onNewFolder = { creatingFolder = true },
                 onGenerateAiCollections = viewModel::generateAiCollections,
                 onOpenTag = onOpenTag,
+                onOpenFacts = onOpenFacts,
                 onCollectionRotationChange = viewModel::setCollectionInRotation,
                 onFolderRotationChange = viewModel::setFolderInRotation,
                 onAcceptCollection = viewModel::acceptCollection,
                 onDismissCollection = viewModel::dismissCollection,
+                onRenameCollection = { renamingCollection = it },
+                onRenameFolder = { renamingFolder = it },
+                onManageCollectionFacts = { collection ->
+                    viewModel.openMembership(
+                        MembershipTargetType.COLLECTION,
+                        collection.id,
+                        collection.name,
+                    )
+                },
+                onManageFolderFacts = { folder ->
+                    viewModel.openMembership(
+                        MembershipTargetType.FOLDER,
+                        folder.id,
+                        folder.name,
+                    )
+                },
                 onDeleteCollection = { deletingCollection = it },
                 onDeleteFolder = { deletingFolder = it },
                 modifier = Modifier.padding(padding),
@@ -145,6 +173,36 @@ fun CollectionsScreen(
         )
     }
 
+    renamingCollection?.let { collection ->
+        CreateDialog(
+            title = stringResource(R.string.collections_rename_collection),
+            nameLabel = stringResource(R.string.collections_name_label),
+            descriptionLabel = null,
+            showDescription = false,
+            initialName = collection.name,
+            onDismiss = { renamingCollection = null },
+            onConfirm = { name, _ ->
+                viewModel.renameCollection(collection, name)
+                renamingCollection = null
+            },
+        )
+    }
+
+    renamingFolder?.let { folder ->
+        CreateDialog(
+            title = stringResource(R.string.collections_rename_folder),
+            nameLabel = stringResource(R.string.collections_folder_name_label),
+            descriptionLabel = null,
+            showDescription = false,
+            initialName = folder.name,
+            onDismiss = { renamingFolder = null },
+            onConfirm = { name, _ ->
+                viewModel.renameFolder(folder, name)
+                renamingFolder = null
+            },
+        )
+    }
+
     deletingCollection?.let { collection ->
         ConfirmDeleteDialog(
             title = stringResource(R.string.collections_delete_title),
@@ -168,6 +226,15 @@ fun CollectionsScreen(
             },
         )
     }
+
+    (state as? CollectionsUiState.Content)?.membership?.let { editor ->
+        MembershipDialog(
+            state = editor,
+            onToggle = viewModel::toggleMembershipFact,
+            onDismiss = viewModel::closeMembership,
+            onSave = viewModel::saveMembership,
+        )
+    }
 }
 
 @Composable
@@ -177,10 +244,15 @@ private fun CollectionsContent(
     onNewFolder: () -> Unit,
     onGenerateAiCollections: () -> Unit,
     onOpenTag: (String) -> Unit,
+    onOpenFacts: (FactStatusFilter) -> Unit,
     onCollectionRotationChange: (String, Boolean) -> Unit,
     onFolderRotationChange: (String, Boolean) -> Unit,
     onAcceptCollection: (String) -> Unit,
     onDismissCollection: (String) -> Unit,
+    onRenameCollection: (Collection) -> Unit,
+    onRenameFolder: (UserFolder) -> Unit,
+    onManageCollectionFacts: (Collection) -> Unit,
+    onManageFolderFacts: (UserFolder) -> Unit,
     onDeleteCollection: (Collection) -> Unit,
     onDeleteFolder: (UserFolder) -> Unit,
     modifier: Modifier = Modifier,
@@ -206,6 +278,12 @@ private fun CollectionsContent(
                     state.poolSummary.folderCount,
                 ),
             ) {
+                if (state.poolSummary.factCount == 0) {
+                    InlineBanner(
+                        message = stringResource(R.string.collections_pool_empty),
+                        severity = BannerSeverity.WARNING,
+                    )
+                }
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(spacing.sm)) {
                     item {
                         MetricPill(
@@ -214,6 +292,9 @@ private fun CollectionsContent(
                                 state.counts.total,
                             ),
                             label = stringResource(R.string.collections_smart_all_label),
+                            modifier = Modifier.clickable {
+                                onOpenFacts(FactStatusFilter.ALL)
+                            },
                         )
                     }
                     item {
@@ -223,6 +304,9 @@ private fun CollectionsContent(
                                 state.counts.active,
                             ),
                             label = stringResource(R.string.collections_smart_active),
+                            modifier = Modifier.clickable {
+                                onOpenFacts(FactStatusFilter.ACTIVE)
+                            },
                         )
                     }
                     item {
@@ -232,6 +316,9 @@ private fun CollectionsContent(
                                 state.counts.favorites,
                             ),
                             label = stringResource(R.string.collections_smart_favorites),
+                            modifier = Modifier.clickable {
+                                onOpenFacts(FactStatusFilter.FAVORITES)
+                            },
                         )
                     }
                     item {
@@ -241,6 +328,9 @@ private fun CollectionsContent(
                                 state.counts.formulas,
                             ),
                             label = stringResource(R.string.collections_smart_formulas),
+                            modifier = Modifier.clickable {
+                                onOpenFacts(FactStatusFilter.FORMULAS)
+                            },
                         )
                     }
                     item {
@@ -250,6 +340,9 @@ private fun CollectionsContent(
                                 state.counts.diagrams,
                             ),
                             label = stringResource(R.string.collections_smart_diagrams),
+                            modifier = Modifier.clickable {
+                                onOpenFacts(FactStatusFilter.DIAGRAMS)
+                            },
                         )
                     }
                 }
@@ -295,6 +388,8 @@ private fun CollectionsContent(
                     onRotationChange = { included ->
                         onCollectionRotationChange(collection.id, included)
                     },
+                    onRename = { onRenameCollection(collection) },
+                    onManageFacts = { onManageCollectionFacts(collection) },
                     onDelete = { onDeleteCollection(collection) },
                 )
             }
@@ -320,6 +415,8 @@ private fun CollectionsContent(
                     onRotationChange = { included ->
                         onFolderRotationChange(folder.id, included)
                     },
+                    onRename = { onRenameFolder(folder) },
+                    onManageFacts = { onManageFolderFacts(folder) },
                     onDelete = { onDeleteFolder(folder) },
                 )
             }
@@ -392,6 +489,8 @@ private fun CollectionsContent(
 private fun CollectionRow(
     collection: Collection,
     onRotationChange: (Boolean) -> Unit,
+    onRename: () -> Unit,
+    onManageFacts: () -> Unit,
     onDelete: () -> Unit,
 ) {
     val spacing = LocalSpacing.current
@@ -421,6 +520,24 @@ private fun CollectionRow(
                 }
                 if (collection.source == CollectionSource.AI_SUGGESTED) {
                     MetricPill(value = stringResource(R.string.collections_ai_badge))
+                }
+                IconButton(onClick = onRename) {
+                    Icon(
+                        imageVector = Icons.Filled.Edit,
+                        contentDescription = stringResource(
+                            R.string.collections_rename_description,
+                            collection.name,
+                        ),
+                    )
+                }
+                IconButton(onClick = onManageFacts) {
+                    Icon(
+                        imageVector = Icons.Filled.Checklist,
+                        contentDescription = stringResource(
+                            R.string.collections_manage_facts_description,
+                            collection.name,
+                        ),
+                    )
                 }
                 IconButton(onClick = onDelete) {
                     Icon(
@@ -472,6 +589,8 @@ private fun CollectionRow(
 private fun FolderRow(
     folder: UserFolder,
     onRotationChange: (Boolean) -> Unit,
+    onRename: () -> Unit,
+    onManageFacts: () -> Unit,
     onDelete: () -> Unit,
 ) {
     val spacing = LocalSpacing.current
@@ -508,6 +627,24 @@ private fun FolderRow(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+            IconButton(onClick = onRename) {
+                Icon(
+                    imageVector = Icons.Filled.Edit,
+                    contentDescription = stringResource(
+                        R.string.collections_rename_description,
+                        folder.name,
+                    ),
+                )
+            }
+            IconButton(onClick = onManageFacts) {
+                Icon(
+                    imageVector = Icons.Filled.Checklist,
+                    contentDescription = stringResource(
+                        R.string.collections_manage_facts_description,
+                        folder.name,
+                    ),
+                )
+            }
             IconButton(onClick = onDelete) {
                 Icon(
                     imageVector = Icons.Filled.Delete,
@@ -541,6 +678,126 @@ private fun FolderRow(
             )
         }
     }
+}
+
+@Composable
+private fun MembershipDialog(
+    state: MembershipEditorState,
+    onToggle: (String) -> Unit,
+    onDismiss: () -> Unit,
+    onSave: () -> Unit,
+) {
+    val spacing = LocalSpacing.current
+    var query by remember { mutableStateOf("") }
+    val filtered = state.facts.filter { fact ->
+        query.isBlank() ||
+            fact.text.contains(query, ignoreCase = true) ||
+            fact.tags.any { it.contains(query, ignoreCase = true) }
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.collections_members_title, state.targetName)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(spacing.sm)) {
+                if (state.loading) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center,
+                    ) {
+                        CircularProgressIndicator()
+                    }
+                } else {
+                    TextFieldSmall(
+                        value = query,
+                        onValueChange = { query = it },
+                        label = stringResource(R.string.collections_members_search),
+                    )
+                    Text(
+                        text = stringResource(
+                            R.string.collections_members_selected,
+                            state.selectedFactIds.size,
+                        ),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    if (filtered.isEmpty()) {
+                        Text(
+                            text = stringResource(R.string.collections_members_empty),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 340.dp),
+                            verticalArrangement = Arrangement.spacedBy(2.dp),
+                        ) {
+                            items(filtered, key = { it.id }) { fact ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { onToggle(fact.id) },
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Checkbox(
+                                        checked = fact.id in state.selectedFactIds,
+                                        onCheckedChange = { onToggle(fact.id) },
+                                    )
+                                    Text(
+                                        text = fact.text,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.padding(start = spacing.xs),
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+                state.errorRes?.let { errorRes ->
+                    Text(
+                        text = stringResource(errorRes),
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = onSave,
+                enabled = !state.loading && !state.saving,
+            ) {
+                if (state.saving) {
+                    CircularProgressIndicator(modifier = Modifier.padding(4.dp))
+                } else {
+                    Text(stringResource(R.string.collections_members_save))
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.collections_cancel))
+            }
+        },
+    )
+}
+
+@Composable
+private fun TextFieldSmall(
+    value: String,
+    onValueChange: (String) -> Unit,
+    label: String,
+) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        label = { Text(label) },
+        singleLine = true,
+        modifier = Modifier.fillMaxWidth(),
+    )
 }
 
 @Composable
@@ -642,8 +899,9 @@ private fun CreateDialog(
     showDescription: Boolean,
     onDismiss: () -> Unit,
     onConfirm: (String, String) -> Unit,
+    initialName: String = "",
 ) {
-    var name by remember { mutableStateOf("") }
+    var name by remember(initialName) { mutableStateOf(initialName) }
     var description by remember { mutableStateOf("") }
     val spacing = LocalSpacing.current
     AlertDialog(

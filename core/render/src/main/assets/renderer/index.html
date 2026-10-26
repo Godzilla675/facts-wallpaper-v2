@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>Facts Wallpaper Offline Renderer</title>
+    <link rel="stylesheet" href="katex/katex.min.css">
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            min-height: 100%;
+            background: transparent;
+            overflow: hidden;
+            -webkit-text-size-adjust: 100%;
+        }
+        #stage {
+            display: inline-block;
+            box-sizing: border-box;
+            max-width: 100%;
+            padding: 8px;
+            overflow: hidden;
+            color: #E2E8F0;
+            font-family: -apple-system, "Roboto", "Segoe UI", sans-serif;
+        }
+        #stage svg {
+            display: block;
+            max-width: 100%;
+            height: auto;
+        }
+        #stage .katex-display {
+            margin: 0;
+        }
+        #stage img {
+            max-width: 100%;
+            height: auto;
+        }
+        #stage table {
+            border-collapse: collapse;
+        }
+    </style>
+</head>
+<body>
+<div id="stage"></div>
+<script src="katex/katex.min.js"></script>
+<script src="mermaid/mermaid.min.js"></script>
+<script src="render.js"></script>
+</body>
+</html>
