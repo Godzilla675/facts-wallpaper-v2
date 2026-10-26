@@ -212,6 +212,6 @@ class AdvancedSettingsViewModel @Inject constructor(
     }
 
     fun sqlCipherInfo() {
-        showMessage(R.string.advanced_sqlcipher_not_yet)
+        showMessage(R.string.advanced_sqlcipher_info)
     }
 }

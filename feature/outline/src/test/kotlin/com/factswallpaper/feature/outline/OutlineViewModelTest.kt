@@ -395,6 +395,11 @@ private class FakeStructuredAiService : StructuredAiService {
         manualProfileId: String?,
     ): TemplateGenerationResult = throw UnsupportedOperationException()
 
+    override suspend fun suggestCollections(
+        facts: List<com.factswallpaper.core.ai.FactSummaryInput>,
+        manualProfileId: String?,
+    ): List<com.factswallpaper.core.ai.SuggestedCollectionItem> = emptyList()
+
     override suspend fun regenerateFact(
         originalText: String,
         pageContent: String?,

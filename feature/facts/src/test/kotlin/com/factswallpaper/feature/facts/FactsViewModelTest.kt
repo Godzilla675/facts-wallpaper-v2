@@ -30,6 +30,7 @@ import com.factswallpaper.core.model.FactStatusFilter
 import com.factswallpaper.core.model.FactTag
 import com.factswallpaper.core.model.PdfProcessingRoute
 import com.factswallpaper.core.model.SmartViewCounts
+import com.factswallpaper.core.render.CardPreRenderScheduler
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -79,6 +80,7 @@ class FactsViewModelTest {
             structuredAiService = fakeAiService,
             networkMonitor = fakeNetworkMonitor,
             workManager = workManager,
+            preRenderScheduler = CardPreRenderScheduler(context),
         )
     }
 
@@ -268,6 +270,11 @@ private class FakeStructuredAiService : StructuredAiService {
         description: String,
         manualProfileId: String?,
     ): TemplateGenerationResult = throw UnsupportedOperationException()
+
+    override suspend fun suggestCollections(
+        facts: List<com.factswallpaper.core.ai.FactSummaryInput>,
+        manualProfileId: String?,
+    ): List<com.factswallpaper.core.ai.SuggestedCollectionItem> = emptyList()
 
     override suspend fun regenerateFact(
         originalText: String,

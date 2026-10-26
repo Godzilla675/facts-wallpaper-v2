@@ -19,6 +19,7 @@ import com.factswallpaper.core.model.FactFilter
 import com.factswallpaper.core.model.FactStatusFilter
 import com.factswallpaper.core.model.FactTag
 import com.factswallpaper.core.model.SourceReferenceMode
+import com.factswallpaper.core.render.CardPreRenderScheduler
 import com.factswallpaper.core.ui.FeatureViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
@@ -63,6 +64,13 @@ sealed interface FactsUiState {
 }
 
 @OptIn(ExperimentalCoroutinesApi::class)
+private data class FactDataTuple(
+    val facts: List<Fact>,
+    val documents: List<Document>,
+    val tags: List<FactTag>,
+    val filter: FactFilter,
+)
+
 @HiltViewModel
 class FactsViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
@@ -72,6 +80,7 @@ class FactsViewModel @Inject constructor(
     private val structuredAiService: StructuredAiService,
     private val networkMonitor: NetworkMonitor,
     private val workManager: WorkManager,
+    private val preRenderScheduler: CardPreRenderScheduler,
 ) : FeatureViewModel() {
 
     private val initialDocumentId: String? = savedStateHandle["documentId"]
@@ -99,70 +108,50 @@ class FactsViewModel @Inject constructor(
             if (docId == null) {
                 flowOf(FactsWorkUi.Idle)
             } else {
-                workManager.getWorkInfosForUniqueWorkFlow(FactsWork.uniqueName(docId)).map { infos ->
-                    val info = infos.firstOrNull() ?: return@map FactsWorkUi.Idle
-                    when (info.state) {
-                        WorkInfo.State.RUNNING, WorkInfo.State.ENQUEUED -> {
-                            val progress = info.progress
-                            FactsWorkUi.Running(
-                                completedLessons = progress.getInt(FactsWork.KEY_COMPLETED, 0),
-                                totalLessons = progress.getInt(FactsWork.KEY_TOTAL, 0),
-                                factsCreated = progress.getInt(FactsWork.KEY_FACTS_CREATED, 0),
-                                currentLesson = progress.getString(FactsWork.KEY_CURRENT_LESSON),
+                workManager.getWorkInfosForUniqueWorkFlow(FactsWork.uniqueName(docId))
+                    .map { infos ->
+                        val info = infos.firstOrNull() ?: return@map FactsWorkUi.Idle
+                        when (info.state) {
+                            WorkInfo.State.RUNNING -> FactsWorkUi.Running(
+                                completedLessons = info.progress.getInt(FactsWork.KEY_COMPLETED, 0),
+                                totalLessons = info.progress.getInt(FactsWork.KEY_TOTAL, 0),
+                                factsCreated = info.progress.getInt(FactsWork.KEY_FACTS_CREATED, 0),
+                                currentLesson = info.progress.getString(FactsWork.KEY_CURRENT_LESSON),
                             )
+                            WorkInfo.State.FAILED -> FactsWorkUi.Failed(
+                                info.outputData.getString(FactsWork.KEY_MESSAGE),
+                            )
+                            WorkInfo.State.SUCCEEDED -> FactsWorkUi.Succeeded(
+                                info.outputData.getString(FactsWork.KEY_MESSAGE),
+                            )
+                            else -> FactsWorkUi.Idle
                         }
-                        WorkInfo.State.FAILED -> {
-                            FactsWorkUi.Failed(info.outputData.getString(FactsWork.KEY_MESSAGE))
-                        }
-                        WorkInfo.State.SUCCEEDED -> {
-                            FactsWorkUi.Succeeded(info.outputData.getString(FactsWork.KEY_MESSAGE))
-                        }
-                        else -> FactsWorkUi.Idle
                     }
-                }
             }
         }
 
-    private data class FactsData(
-        val facts: List<Fact>,
-        val documents: List<Document>,
-        val tags: List<FactTag>,
-        val filter: FactFilter,
-    )
-
-    private data class FactsStatus(
-        val online: Boolean,
-        val regenId: String?,
-        val work: FactsWorkUi,
-    )
-
-    private val factsDataFlow = combine(
-        filter.flatMapLatest { current -> factRepository.observeFacts(current) },
-        documentRepository.observeDocuments(),
-        factRepository.observeTags(),
-        filter,
-    ) { facts, documents, tags, currentFilter ->
-        FactsData(facts, documents, tags, currentFilter)
-    }
-
-    private val factsStatusFlow = combine(
+    val uiState = combine(
+        combine(
+            filter.flatMapLatest { factRepository.observeFacts(it) },
+            documentRepository.observeDocuments(),
+            factRepository.observeTags(),
+            filter,
+        ) { facts, documents, tags, currentFilter ->
+            FactDataTuple(facts, documents, tags, currentFilter)
+        },
         networkMonitor.observeOnline(),
         regeneratingFactId,
         workUi,
-    ) { online, regenId, work ->
-        FactsStatus(online, regenId, work)
-    }
-
-    val uiState = combine(factsDataFlow, factsStatusFlow) { data, status ->
+    ) { data, online, regenId, work ->
         FactsUiState.Content(
             facts = data.facts,
             documents = data.documents,
             tags = data.tags,
             filter = data.filter,
-            isOnline = status.online,
-            isRegenerating = status.regenId != null,
-            regeneratingFactId = status.regenId,
-            generationWork = status.work,
+            isOnline = online,
+            isRegenerating = regenId != null,
+            regeneratingFactId = regenId,
+            generationWork = work,
         )
     }
         .map<FactsUiState.Content, FactsUiState> { it }
@@ -204,12 +193,14 @@ class FactsViewModel @Inject constructor(
     fun toggleActive(factId: String, active: Boolean) {
         viewModelScope.launch {
             factRepository.setActive(factId, active)
+            preRenderScheduler.enqueue()
         }
     }
 
     fun toggleFavorite(factId: String, favorite: Boolean) {
         viewModelScope.launch {
             factRepository.setFavorite(factId, favorite)
+            preRenderScheduler.enqueue()
         }
     }
 
@@ -245,6 +236,7 @@ class FactsViewModel @Inject constructor(
                     updatedAtEpochMs = System.currentTimeMillis(),
                 ),
             )
+            preRenderScheduler.enqueue()
             showMessage(R.string.facts_saved)
         }
     }
@@ -298,6 +290,7 @@ class FactsViewModel @Inject constructor(
                         updatedAtEpochMs = System.currentTimeMillis(),
                     ),
                 )
+                preRenderScheduler.enqueue()
                 showMessage(R.string.facts_regenerated)
             } catch (e: Throwable) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
@@ -312,9 +305,5 @@ class FactsViewModel @Inject constructor(
         val docId = filter.value.documentId ?: return
         workManager.cancelUniqueWork(FactsWork.uniqueName(docId))
         showMessage(R.string.facts_work_cancelled)
-    }
-
-    fun templateNotYet() {
-        showMessage(R.string.facts_templates_not_yet)
     }
 }

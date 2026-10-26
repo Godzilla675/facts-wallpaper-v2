@@ -8,6 +8,8 @@ android {
 
 dependencies {
     implementation(project(":core:render"))
+    implementation(project(":core:ai"))
+    implementation(libs.kotlinx.serialization.json)
     implementation(libs.androidx.work.runtime.ktx)
     testImplementation(libs.kotlinx.serialization.json)
 }

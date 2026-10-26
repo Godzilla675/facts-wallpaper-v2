@@ -14,6 +14,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CallMerge
 import androidx.compose.material.icons.filled.CallSplit
 import androidx.compose.material.icons.filled.DoneAll
@@ -124,6 +125,7 @@ fun OutlineScreen(
                 onReDetect = viewModel::reDetectOutline,
                 onCancelWork = viewModel::cancelWork,
                 onGenerateFacts = viewModel::generateFacts,
+                onOpenFacts = { onOpenFacts(value.document.id) },
                 modifier = Modifier.padding(padding),
             )
         }
@@ -208,6 +210,7 @@ private fun OutlineContent(
     onReDetect: () -> Unit,
     onCancelWork: () -> Unit,
     onGenerateFacts: () -> Unit,
+    onOpenFacts: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val spacing = LocalSpacing.current
@@ -222,7 +225,11 @@ private fun OutlineContent(
         verticalArrangement = Arrangement.spacedBy(spacing.md),
     ) {
         item {
-            DocumentHeader(document = state.document, lessonCount = state.lessons.size)
+            DocumentHeader(
+                document = state.document,
+                lessonCount = state.lessons.size,
+                onOpenFacts = onOpenFacts,
+            )
         }
         if (!state.online) {
             item {
@@ -401,10 +408,12 @@ private fun OutlineContent(
         }
     }
 }
+
 @Composable
 private fun DocumentHeader(
     document: Document,
     lessonCount: Int,
+    onOpenFacts: () -> Unit,
 ) {
     val spacing = LocalSpacing.current
     SectionGroupCard(
@@ -429,6 +438,20 @@ private fun DocumentHeader(
             )
             if (!document.includedInRotation) {
                 MetricPill(value = stringResource(R.string.outline_not_in_rotation))
+            }
+        }
+        if (document.factCount > 0) {
+            Button(
+                onClick = onOpenFacts,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = spacing.sm),
+            ) {
+                Icon(Icons.Filled.AutoAwesome, contentDescription = null)
+                Text(
+                    text = stringResource(R.string.outline_view_facts, document.factCount),
+                    modifier = Modifier.padding(start = spacing.xs),
+                )
             }
         }
         if (document.scannedPageCount > 0) {
@@ -744,5 +767,5 @@ private fun densityLabel(density: FactDensity): String = stringResource(
         FactDensity.CONCISE -> R.string.outline_density_concise
         FactDensity.BALANCED -> R.string.outline_density_balanced
         FactDensity.DEEP -> R.string.outline_density_deep
-    }
+    },
 )

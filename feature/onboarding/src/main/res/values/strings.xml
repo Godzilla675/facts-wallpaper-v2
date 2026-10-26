@@ -18,11 +18,13 @@
     <string name="onboarding_api_key_placeholder">Paste your key</string>
     <string name="onboarding_api_key_show">Show API key</string>
     <string name="onboarding_api_key_hide">Hide API key</string>
-    <string name="onboarding_api_key_helper">Keys will be sealed in the Android Keystore. Key storage ships with the AI phase.</string>
+    <string name="onboarding_api_key_helper">Keys are sealed inside the Android Keystore on this device.</string>
     <string name="onboarding_save_key">Save key</string>
     <string name="onboarding_test_connection">Test connection</string>
-    <string name="onboarding_key_not_yet">Secure key storage arrives with the AI phase.</string>
-    <string name="onboarding_test_not_yet">Connection testing arrives with the AI phase.</string>
+    <string name="onboarding_key_saved">API key saved securely to Android Keystore.</string>
+    <string name="onboarding_key_empty">Enter an API key first.</string>
+    <string name="onboarding_test_success">Connection verified successfully!</string>
+    <string name="onboarding_test_failed">Connection failed. Check your API key or network.</string>
     <string name="onboarding_skip_provider">Set up a provider later</string>
     <string name="onboarding_step3_title">Bring your first PDF</string>
     <string name="onboarding_step3_body">Import a textbook or lecture notes. The library can hold your whole study shelf, and only selected facts join the wallpaper rotation.</string>
@@ -36,7 +38,7 @@
     <string name="onboarding_theme_amoled">AMOLED</string>
     <string name="onboarding_theme_dynamic">Dynamic</string>
     <string name="onboarding_template_label">Default card template</string>
-    <string name="onboarding_template_empty">Card templates arrive with the rendering phase. You can choose one later in Template Gallery.</string>
+    <string name="onboarding_template_empty">No custom templates installed yet. The built-in Minimal Text card is active.</string>
     <string name="onboarding_step5_title">Activate your wallpaper</string>
     <string name="onboarding_step5_body">Launch the Android live wallpaper picker and choose Facts Wallpaper. You can change the schedule, template and rotation order at any time.</string>
     <string name="onboarding_launch_wallpaper">Launch live wallpaper picker</string>

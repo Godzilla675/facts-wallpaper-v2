@@ -61,7 +61,6 @@
     <string name="facts_work_succeeded">Fact generation finished.</string>
     <string name="facts_work_failed">Fact generation failed.</string>
     <string name="facts_work_cancelled">Fact generation cancelled.</string>
-    <string name="facts_templates_not_yet">Card preview arrives with the rendering phase.</string>
     <string name="facts_load_error">Could not load your facts.</string>
 
     <string name="facts_status_all">All</string>

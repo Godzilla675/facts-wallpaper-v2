@@ -8,6 +8,11 @@ import com.factswallpaper.core.render.template.CardTemplateCodec
 import com.factswallpaper.core.render.template.CardTemplateSpec
 import com.factswallpaper.core.render.template.TemplateAlignment
 import com.factswallpaper.core.render.template.TemplateFontFamily
+import com.factswallpaper.core.ai.StructuredAiService
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonObject
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -27,7 +32,7 @@ data class GeneratedTemplate(
  * AI implementation can replace the binding without touching the gallery or customizer.
  */
 interface TemplateAiGenerator {
-    fun generate(prompt: String): GeneratedTemplate
+    suspend fun generate(prompt: String): GeneratedTemplate
 }
 
 /**
@@ -41,7 +46,7 @@ interface TemplateAiGenerator {
 @Singleton
 class LocalTemplateAiGenerator @Inject constructor() : TemplateAiGenerator {
 
-    override fun generate(prompt: String): GeneratedTemplate {
+    override suspend fun generate(prompt: String): GeneratedTemplate {
         val normalized = prompt.trim()
         require(normalized.isNotEmpty()) { "Prompt must not be blank" }
         val lower = normalized.lowercase()
@@ -277,10 +282,59 @@ class LocalTemplateAiGenerator @Inject constructor() : TemplateAiGenerator {
     }
 }
 
+/**
+ * Real AI implementation of [TemplateAiGenerator] using [StructuredAiService] (spec F13, §6.6).
+ * Generates a [CardTemplateSpec] via AiTask.TEMPLATE_GENERATION and validates it with [CardTemplateCodec].
+ */
+@Singleton
+class DefaultTemplateAiGenerator @Inject constructor(
+    private val structuredAiService: StructuredAiService,
+) : TemplateAiGenerator {
+
+    override suspend fun generate(prompt: String): GeneratedTemplate {
+        val normalized = prompt.trim()
+        require(normalized.isNotEmpty()) { "Prompt must not be blank" }
+
+        val result = structuredAiService.generateTemplate(normalized)
+        val rawJson = result.templateJson
+
+        val parsedElement = runCatching {
+            Json.parseToJsonElement(rawJson).jsonObject
+        }.getOrNull()
+
+        val jsonToDecode = if (parsedElement != null && !parsedElement.containsKey("id")) {
+            val mutable = parsedElement.toMutableMap()
+            mutable["id"] = JsonPrimitive("custom_${UUID.randomUUID()}")
+            if (!mutable.containsKey("archetype")) {
+                mutable["archetype"] = JsonPrimitive(CardTemplateType.TEXT.name)
+            }
+            JsonObject(mutable).toString()
+        } else {
+            rawJson
+        }
+
+        val decoded = CardTemplateCodec.decode(jsonToDecode)
+            ?: throw IllegalStateException("AI returned invalid template JSON: unable to decode CardTemplateSpec")
+
+        val finalSpec = if (decoded.id.isBlank()) {
+            decoded.copy(id = "custom_${UUID.randomUUID()}")
+        } else {
+            decoded
+        }
+
+        val errors = CardTemplateCodec.validate(finalSpec)
+        if (errors.isNotEmpty()) {
+            throw IllegalStateException("Generated template failed validation: ${errors.joinToString("; ")}")
+        }
+
+        return GeneratedTemplate(name = finalSpec.name, spec = finalSpec)
+    }
+}
+
 @Module
 @InstallIn(SingletonComponent::class)
 abstract class TemplatesModule {
 
     @Binds
-    abstract fun bindTemplateAiGenerator(generator: LocalTemplateAiGenerator): TemplateAiGenerator
+    abstract fun bindTemplateAiGenerator(generator: DefaultTemplateAiGenerator): TemplateAiGenerator
 }

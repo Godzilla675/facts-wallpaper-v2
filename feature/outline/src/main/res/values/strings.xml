@@ -18,6 +18,7 @@
     <string name="outline_empty_body">Add a lesson range manually, or re-detect the outline with AI.</string>
     <string name="outline_redetect">Re-detect outline</string>
     <string name="outline_generate_facts">Generate facts</string>
+    <string name="outline_view_facts">View extracted facts (%1$d)</string>
     <string name="outline_estimate_title">Fact &amp; cost estimate</string>
     <string name="outline_estimate_helper">The selected lessons and density bound what the fact engine will produce.</string>
     <string name="outline_estimate_facts">%1$d&#8211;%2$d facts</string>

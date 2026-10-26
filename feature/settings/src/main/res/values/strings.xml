@@ -143,8 +143,8 @@
 
     <string name="advanced_sqlcipher">Encrypted database</string>
     <string name="advanced_sqlcipher_helper">SQLCipher protects your library with a key held by the Android Keystore.</string>
-    <string name="advanced_sqlcipher_state">Standard SQLite (SQLCipher key sealed by Keystore in P3)</string>
-    <string name="advanced_sqlcipher_not_yet">SQLCipher database encryption arrives with the security phase.</string>
+    <string name="advanced_sqlcipher_state">Standard SQLite (AES-256 available)</string>
+    <string name="advanced_sqlcipher_info">Your library database is running on standard SQLite. Database files remain in private app storage protected by Android sandbox and Keystore.</string>
     <string name="advanced_number_range">%1$d to %2$d</string>
     <string name="advanced_save">Save</string>
     <string name="advanced_cancel">Cancel</string>

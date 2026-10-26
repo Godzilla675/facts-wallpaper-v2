@@ -6,6 +6,7 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import com.factswallpaper.core.ai.StructuredAiService
+import com.factswallpaper.core.common.CardPreRenderNotifier
 import com.factswallpaper.core.data.repository.DocumentRepository
 import com.factswallpaper.core.data.repository.DocumentTextRepository
 import com.factswallpaper.core.data.repository.FactRepository
@@ -54,6 +55,7 @@ class FactsGenerationWorker @AssistedInject constructor(
     private val lessonRepository: LessonRepository,
     private val factRepository: FactRepository,
     private val structuredAiService: StructuredAiService,
+    private val preRenderNotifier: CardPreRenderNotifier,
 ) : CoroutineWorker(appContext, params) {
 
     override suspend fun doWork(): Result {
@@ -188,6 +190,7 @@ class FactsGenerationWorker @AssistedInject constructor(
             )
         }
         documentRepository.updateExtractionStatus(documentId, ExtractionStatus.FACTS_READY)
+        preRenderNotifier.enqueue()
         return Result.success(
             workDataOf(
                 FactsWork.KEY_FACTS_CREATED to created,

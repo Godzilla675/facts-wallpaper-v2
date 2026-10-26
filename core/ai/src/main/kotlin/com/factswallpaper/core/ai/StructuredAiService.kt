@@ -3,6 +3,7 @@ package com.factswallpaper.core.ai
 import com.factswallpaper.core.model.AiTask
 import com.factswallpaper.core.model.FactDensity
 import com.factswallpaper.core.model.ProviderProfile
+import kotlinx.serialization.Serializable
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.math.max
@@ -66,6 +67,20 @@ data class DiagramGenerationResult(
     val diagram: DiagramEnvelope,
     val profile: ProviderProfile,
     val actualCostUsd: Double,
+)
+
+@Serializable
+data class SuggestedCollectionItem(
+    val name: String,
+    val description: String,
+    val factIds: List<String>,
+)
+
+data class FactSummaryInput(
+    val id: String,
+    val text: String,
+    val tags: List<String> = emptyList(),
+    val lessonTitle: String? = null,
 )
 
 data class TemplateGenerationResult(
@@ -136,6 +151,11 @@ interface StructuredAiService {
         description: String,
         manualProfileId: String? = null,
     ): TemplateGenerationResult
+
+    suspend fun suggestCollections(
+        facts: List<FactSummaryInput>,
+        manualProfileId: String? = null,
+    ): List<SuggestedCollectionItem>
 
     suspend fun regenerateFact(
         originalText: String,
@@ -641,6 +661,45 @@ class DefaultStructuredAiService @Inject constructor(
         return facts.firstOrNull() ?: throw AiException(
             AiErrorKind.CONTENT,
             "AI returned no facts in regeneration.",
+        )
+    }
+
+    override suspend fun suggestCollections(
+        facts: List<FactSummaryInput>,
+        manualProfileId: String?,
+    ): List<SuggestedCollectionItem> {
+        if (facts.size < 2) return emptyList()
+        val validFactIds = facts.map { it.id }.toSet()
+        val request = AiRequest(
+            task = AiTask.FACTS,
+            systemPrompt = AiPrompts.CollectionsSystemPrompt,
+            userPrompt = AiPrompts.collectionsUserPrompt(facts),
+            jsonSchema = AiSchemas.CollectionsJsonSchema,
+            temperature = 0.3,
+            maxOutputTokens = 2048,
+        )
+        val outcome = callService.execute(
+            request = request,
+            documentId = null,
+            manualProfileId = manualProfileId,
+        )
+        var validation = validator.validateCollections(outcome.response.text, validFactIds)
+        if (!validation.isValid) {
+            val repaired = runCatching {
+                repairService.repair(
+                    profile = outcome.profile,
+                    canonicalSchema = AiSchemas.CollectionsJsonSchema,
+                    malformed = outcome.response.text,
+                    maxOutputTokens = 2048,
+                )
+            }.getOrNull()
+            if (repaired != null) {
+                validation = validator.validateCollections(repaired.response.text, validFactIds)
+            }
+        }
+        return validation.value ?: throw AiException(
+            AiErrorKind.CONTENT,
+            "Could not parse suggested collections: ${validation.errors.joinToString("; ")}",
         )
     }
 

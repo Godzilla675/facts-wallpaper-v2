@@ -44,7 +44,7 @@
     <string name="collections_collection_scope">Only facts in included collections join the pool.</string>
     <string name="collections_folder_scope">Only facts in included folders join the pool.</string>
     <string name="collections_ai_title">Group facts automatically</string>
-    <string name="collections_ai_body">Scan your active facts for shared tags and suggest themed collections. Suggestions stay out of the wallpaper pool until you accept them and enable rotation.</string>
+    <string name="collections_ai_body">Use AI to analyze your active facts and group them into cohesive thematic collections. Suggestions stay out of the wallpaper pool until you accept them and enable rotation.</string>
     <string name="collections_ai_action">Generate suggestions</string>
     <string name="collections_ai_badge">AI</string>
     <string name="collections_suggestion_fact_count">%1$d facts suggested</string>
@@ -64,7 +64,9 @@
     <string name="collections_deleted">Deleted.</string>
     <string name="collections_delete_failed">Could not delete this item.</string>
     <string name="collections_generated">%1$d suggested collections created.</string>
-    <string name="collections_no_suggestions">No tag groups with at least two facts were found yet.</string>
+    <string name="collections_no_suggestions">No new collection themes were found among your active facts.</string>
     <string name="collections_generate_failed">Could not generate suggestions.</string>
     <string name="collections_load_error">Could not load your collections.</string>
+    <string name="collections_ai_no_provider">No AI provider configured. Set up an API key in Settings first.</string>
+    <string name="collections_not_enough_facts">Add at least two active facts before generating AI collections.</string>
 </resources>

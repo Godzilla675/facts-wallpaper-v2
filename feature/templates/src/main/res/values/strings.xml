@@ -59,7 +59,8 @@
     <string name="templates_toggle_formula_frame">Frame formula stage</string>
 
     <string name="templates_ai_title">Generate a template</string>
-    <string name="templates_ai_body">Describe the look you want. The local generator maps your words to palette, typography and layout, then opens the customizer for a final review.</string>
+    <string name="templates_ai_body">Describe the look you want. AI generates a custom template spec matching your aesthetic, validated by the template engine, and opens the editor for final adjustments.</string>
+    <string name="templates_ai_no_provider">No AI provider configured. Set up an API key in Settings first.</string>
     <string name="templates_ai_prompt_label">Describe your aesthetic</string>
     <string name="templates_ai_prompt_example">Warm vintage parchment card with large serif text and a compact page number</string>
     <string name="templates_ai_generate">Generate</string>

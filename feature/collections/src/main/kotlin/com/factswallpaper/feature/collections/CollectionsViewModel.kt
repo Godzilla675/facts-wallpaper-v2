@@ -2,6 +2,10 @@ package com.factswallpaper.feature.collections
 
 import androidx.annotation.StringRes
 import androidx.lifecycle.viewModelScope
+import com.factswallpaper.core.ai.AiErrorKind
+import com.factswallpaper.core.ai.AiException
+import com.factswallpaper.core.ai.FactSummaryInput
+import com.factswallpaper.core.ai.StructuredAiService
 import com.factswallpaper.core.common.AppResult
 import com.factswallpaper.core.data.repository.CollectionRepository
 import com.factswallpaper.core.data.repository.FactRepository
@@ -70,6 +74,7 @@ class CollectionsViewModel @Inject constructor(
     private val factRepository: FactRepository,
     rotationPoolRepository: RotationPoolRepository,
     private val preRenderScheduler: CardPreRenderScheduler,
+    private val structuredAiService: StructuredAiService,
 ) : FeatureViewModel() {
 
     private val membership = MutableStateFlow<MembershipEditorState?>(null)
@@ -267,27 +272,31 @@ class CollectionsViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val facts = factRepository.observeFacts(FactFilter(status = FactStatusFilter.ACTIVE)).first()
+                if (facts.size < 2) {
+                    showMessage(R.string.collections_not_enough_facts)
+                    return@launch
+                }
                 val content = uiState.value as? CollectionsUiState.Content
                 val existingNames = content?.collections.orEmpty().map { it.name.lowercase() }.toSet()
-                val groups = facts.asSequence()
-                    .filter { it.tags.isNotEmpty() }
-                    .flatMap { fact -> fact.tags.asSequence().map { it.trim().lowercase() to fact.id } }
-                    .filter { it.first.isNotBlank() }
-                    .groupBy({ it.first }, { it.second })
-                    .mapValues { (_, ids) -> ids.distinct() }
-                    .filter { (_, ids) -> ids.size >= 2 }
-                    .entries
-                    .sortedByDescending { it.value.size }
-                    .take(5)
 
+                val summaries = facts.map { fact ->
+                    FactSummaryInput(
+                        id = fact.id,
+                        text = fact.text,
+                        tags = fact.tags,
+                        lessonTitle = fact.sourceLessonTitle,
+                    )
+                }
+
+                val suggestions = structuredAiService.suggestCollections(summaries)
                 var created = 0
-                for (group in groups) {
-                    val name = "${group.key.replaceFirstChar { it.uppercase() }} concepts"
+                for (item in suggestions) {
+                    val name = item.name.trim()
                     if (name.lowercase() in existingNames) continue
                     collectionRepository.createSuggestedCollection(
                         name = name,
-                        description = "Grouped locally from facts tagged \"${group.key}\".",
-                        factIds = group.value,
+                        description = item.description,
+                        factIds = item.factIds,
                     )
                     created++
                 }
@@ -295,6 +304,12 @@ class CollectionsViewModel @Inject constructor(
                     showMessage(R.string.collections_no_suggestions)
                 } else {
                     showMessage(R.string.collections_generated, created)
+                }
+            } catch (e: AiException) {
+                if (e.kind == AiErrorKind.INVALID_REQUEST || e.kind == AiErrorKind.AUTHENTICATION) {
+                    showMessage(R.string.collections_ai_no_provider)
+                } else {
+                    showMessage(R.string.collections_generate_failed)
                 }
             } catch (_: Throwable) {
                 showMessage(R.string.collections_generate_failed)

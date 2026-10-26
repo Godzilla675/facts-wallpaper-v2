@@ -13,9 +13,13 @@ import android.graphics.Rect
 import android.graphics.Typeface
 import android.os.Build
 import android.service.wallpaper.WallpaperService
+import android.text.Layout
+import android.text.StaticLayout
+import android.text.TextPaint
 import android.view.SurfaceHolder
 import androidx.core.content.ContextCompat
 import com.factswallpaper.core.data.repository.WallpaperRepository
+import com.factswallpaper.core.model.Fact
 import com.factswallpaper.core.render.CardPreRenderScheduler
 import com.factswallpaper.core.render.RenderSizeStore
 import com.factswallpaper.core.render.cache.CardRenderCache
@@ -158,11 +162,17 @@ class FactsLiveWallpaperService : WallpaperService() {
                     null
                 }
 
-                drawBitmapOrFallback(bitmap)
+                val currentFact = if (bitmap == null) {
+                    rotationController.getCurrentFact()
+                } else {
+                    null
+                }
+
+                drawBitmapOrFallback(bitmap, currentFact)
             }
         }
 
-        private fun drawBitmapOrFallback(bitmap: Bitmap?) {
+        private fun drawBitmapOrFallback(bitmap: Bitmap?, currentFact: Fact?) {
             val holder = surfaceHolder ?: return
             var canvas: Canvas? = null
             try {
@@ -174,6 +184,8 @@ class FactsLiveWallpaperService : WallpaperService() {
                 if (canvas != null) {
                     if (bitmap != null && !bitmap.isRecycled) {
                         drawBitmapFitted(canvas, bitmap)
+                    } else if (currentFact != null) {
+                        drawFactTextFallback(canvas, currentFact)
                     } else {
                         drawFallbackTypography(canvas)
                     }
@@ -208,6 +220,74 @@ class FactsLiveWallpaperService : WallpaperService() {
             val destRect = Rect(left, top, left + scaledWidth, top + scaledHeight)
             canvas.drawColor(Color.BLACK)
             canvas.drawBitmap(bitmap, srcRect, destRect, null)
+        }
+
+        private fun drawFactTextFallback(canvas: Canvas, fact: Fact) {
+            val width = canvas.width
+            val height = canvas.height
+            if (width <= 0 || height <= 0) return
+
+            // Scholar's Slate deep background
+            canvas.drawColor(Color.rgb(15, 20, 25))
+
+            val clockSafeTop = height * 0.26f
+            val bottomSafe = height * 0.92f
+            val horizontalPadding = width * 0.08f
+            val contentWidth = (width - (2 * horizontalPadding)).toInt().coerceAtLeast(100)
+
+            // Accent category / source lesson tag
+            val headerText = fact.tags.firstOrNull()?.uppercase()
+                ?: fact.sourceLessonTitle?.uppercase()?.take(28)
+                ?: "FACT"
+            val headerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.rgb(196, 161, 96) // Warm gold
+                textSize = (width * 0.034f).coerceIn(12f, 22f)
+                typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+                letterSpacing = 0.06f
+            }
+            var currentY = clockSafeTop + (width * 0.04f)
+            canvas.drawText(headerText, horizontalPadding, currentY, headerPaint)
+            currentY += width * 0.05f
+
+            // Fact body text wrapped with StaticLayout
+            val bodyText = fact.text
+            val bodyPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.rgb(240, 238, 233)
+                textSize = (width * 0.046f).coerceIn(16f, 32f)
+                typeface = Typeface.create(Typeface.SERIF, Typeface.NORMAL)
+            }
+            val bodyLayout = StaticLayout.Builder.obtain(
+                bodyText,
+                0,
+                bodyText.length,
+                bodyPaint,
+                contentWidth,
+            ).setAlignment(Layout.Alignment.ALIGN_NORMAL)
+                .setIncludePad(false)
+                .setMaxLines(10)
+                .build()
+
+            canvas.save()
+            canvas.translate(horizontalPadding, currentY)
+            bodyLayout.draw(canvas)
+            canvas.restore()
+
+            // Source reference at bottom safe area
+            val sourceText = buildString {
+                if (fact.sourceBookTitle.isNotBlank()) append(fact.sourceBookTitle)
+                if (fact.sourcePage != null) {
+                    if (isNotEmpty()) append(" · ")
+                    append("p. ${fact.sourcePage}")
+                }
+            }
+            if (sourceText.isNotBlank()) {
+                val sourcePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = Color.rgb(140, 146, 158)
+                    textSize = (width * 0.032f).coerceIn(11f, 20f)
+                    typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL)
+                }
+                canvas.drawText(sourceText, horizontalPadding, bottomSafe - (width * 0.02f), sourcePaint)
+            }
         }
 
         private fun drawFallbackTypography(canvas: Canvas) {

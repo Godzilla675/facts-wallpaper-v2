@@ -8,4 +8,6 @@ android {
 
 dependencies {
     implementation(project(":core:wallpaper"))
+    implementation(project(":core:security"))
+    implementation(project(":core:ai"))
 }

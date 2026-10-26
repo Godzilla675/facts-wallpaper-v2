@@ -2,14 +2,16 @@ package com.factswallpaper.core.data.repository
 
 import com.factswallpaper.core.ai.PageText
 import com.factswallpaper.core.common.FactsDispatchers
-import com.factswallpaper.core.database.dao.PdfDocumentDao
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.withContext
 
+/**
+ * Consolidates DocumentTextRepository to project directly from the single source of truth [DocumentRepository].
+ */
 @Singleton
 class RoomDocumentTextRepository @Inject constructor(
-    private val documentDao: PdfDocumentDao,
+    private val documentRepository: DocumentRepository,
     private val dispatchers: FactsDispatchers,
 ) : DocumentTextRepository {
 
@@ -18,7 +20,7 @@ class RoomDocumentTextRepository @Inject constructor(
         startPage: Int,
         endPage: Int,
     ): List<PageText> = withContext(dispatchers.io) {
-        documentDao.getChunksForPageRange(documentId, startPage, endPage)
+        documentRepository.getChunks(documentId, startPage, endPage)
             .asSequence()
             .filter { it.status == "COMPLETED" && it.extractedText.isNotBlank() }
             .map { PageText(pageNumber = it.pageNumber, text = it.extractedText) }
@@ -26,6 +28,6 @@ class RoomDocumentTextRepository @Inject constructor(
     }
 
     override suspend fun getPageCount(documentId: String): Int = withContext(dispatchers.io) {
-        documentDao.getById(documentId)?.pageCount ?: 0
+        documentRepository.getDocument(documentId)?.pageCount ?: 0
     }
 }

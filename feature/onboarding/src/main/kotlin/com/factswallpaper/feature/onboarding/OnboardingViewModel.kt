@@ -2,6 +2,8 @@ package com.factswallpaper.feature.onboarding
 
 import androidx.annotation.StringRes
 import androidx.lifecycle.viewModelScope
+import com.factswallpaper.core.ai.ProviderDiagnosticsService
+import com.factswallpaper.core.ai.ProviderPresets
 import com.factswallpaper.core.data.repository.ProviderProfileRepository
 import com.factswallpaper.core.data.repository.TemplateRepository
 import com.factswallpaper.core.data.repository.WallpaperRepository
@@ -9,8 +11,10 @@ import com.factswallpaper.core.datastore.SettingsRepository
 import com.factswallpaper.core.model.CardTemplate
 import com.factswallpaper.core.model.ProviderType
 import com.factswallpaper.core.model.ThemeMode
+import com.factswallpaper.core.security.ApiKeyStore
 import com.factswallpaper.core.ui.FeatureViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
+import java.util.UUID
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -52,7 +56,9 @@ class OnboardingViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val templateRepository: TemplateRepository,
     private val wallpaperRepository: WallpaperRepository,
-    providerProfileRepository: ProviderProfileRepository,
+    private val providerProfileRepository: ProviderProfileRepository,
+    private val apiKeyStore: ApiKeyStore,
+    private val providerDiagnosticsService: ProviderDiagnosticsService,
 ) : FeatureViewModel() {
 
     private val draft = MutableStateFlow(Draft())
@@ -93,11 +99,53 @@ class OnboardingViewModel @Inject constructor(
     }
 
     fun saveApiKey() {
-        showMessage(R.string.onboarding_key_not_yet)
+        val key = draft.value.apiKey.trim()
+        if (key.isBlank()) {
+            showMessage(R.string.onboarding_key_empty)
+            return
+        }
+        viewModelScope.launch {
+            val preset = draft.value.selectedPreset
+            val existingProfiles = providerProfileRepository.getProfiles()
+            var targetProfile = existingProfiles.firstOrNull { it.providerType == preset }
+            if (targetProfile == null) {
+                val presetProfile = ProviderPresets.all.firstOrNull { it.providerType == preset }
+                    ?: ProviderPresets.all.first()
+                val newProfile = presetProfile.copy(id = "profile_${UUID.randomUUID()}")
+                providerProfileRepository.saveProfile(newProfile)
+                targetProfile = newProfile
+            }
+            apiKeyStore.setApiKey(targetProfile.id, key)
+            providerProfileRepository.setDefaultProfile(targetProfile.id)
+            showMessage(R.string.onboarding_key_saved)
+        }
     }
 
     fun testConnection() {
-        showMessage(R.string.onboarding_test_not_yet)
+        val key = draft.value.apiKey.trim()
+        if (key.isBlank()) {
+            showMessage(R.string.onboarding_key_empty)
+            return
+        }
+        viewModelScope.launch {
+            val preset = draft.value.selectedPreset
+            val existingProfiles = providerProfileRepository.getProfiles()
+            var targetProfile = existingProfiles.firstOrNull { it.providerType == preset }
+            if (targetProfile == null) {
+                val presetProfile = ProviderPresets.all.firstOrNull { it.providerType == preset }
+                    ?: ProviderPresets.all.first()
+                val newProfile = presetProfile.copy(id = "profile_${UUID.randomUUID()}")
+                providerProfileRepository.saveProfile(newProfile)
+                targetProfile = newProfile
+            }
+            apiKeyStore.setApiKey(targetProfile.id, key)
+            val result = providerDiagnosticsService.testConnection(targetProfile)
+            if (result.success) {
+                showMessage(R.string.onboarding_test_success)
+            } else {
+                showMessage(R.string.onboarding_test_failed)
+            }
+        }
     }
 
     fun nextStep() {
@@ -126,6 +174,21 @@ class OnboardingViewModel @Inject constructor(
         viewModelScope.launch {
             runCatching {
                 settingsRepository.setOnboardingCompleted(true)
+                val key = draft.value.apiKey.trim()
+                if (key.isNotBlank()) {
+                    val preset = draft.value.selectedPreset
+                    val existingProfiles = providerProfileRepository.getProfiles()
+                    var targetProfile = existingProfiles.firstOrNull { it.providerType == preset }
+                    if (targetProfile == null) {
+                        val presetProfile = ProviderPresets.all.firstOrNull { it.providerType == preset }
+                            ?: ProviderPresets.all.first()
+                        val newProfile = presetProfile.copy(id = "profile_${UUID.randomUUID()}")
+                        providerProfileRepository.saveProfile(newProfile)
+                        targetProfile = newProfile
+                    }
+                    apiKeyStore.setApiKey(targetProfile.id, key)
+                    providerProfileRepository.setDefaultProfile(targetProfile.id)
+                }
                 val selected = draft.value.selectedTemplateId
                 if (!selected.isNullOrBlank()) {
                     templateRepository.setDefaultTemplate(selected)

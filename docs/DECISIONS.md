@@ -106,20 +106,43 @@ No screen pretends these features work.
 - Json binding: Reused the singleton Json provided by :core:datastore rather than binding a duplicate in :core:ai.
 
 ### Security (F23)
-- ApiKeyStore backed by AndroidKeystoreSecretCipher using Android Keystore AES/GCM/NoPadding (256-bit key alias acts_wallpaper_api_key_v1). Fresh 12-byte IV per encryption with authenticated tag.
-- SharedPreferences store only SHA-256 hashed profile IDs (pi_key_ + base64url(sha256(profileId))). Keys are never stored in plaintext or Room.
+- ApiKeyStore backed by AndroidKeystoreSecretCipher using Android Keystore AES/GCM/NoPadding (256-bit key alias \facts_wallpaper_api_key_v1). Fresh 12-byte IV per encryption with authenticated tag.
+- SharedPreferences store only SHA-256 hashed profile IDs (api_key_ + base64url(sha256(profileId))). Keys are never stored in plaintext or Room.
 - LogRedactor scrubs known credential prefixes and registered keys from all loggable output.
 
 ### AI Wire Contracts & Routing (Section 6 & 11)
 - Ktor HTTP client with OkHttp engine, configurable timeouts, and full multi-format wire support: Gemini (generateContent API with contents, generationConfig, schema specification), OpenAI (chat completions & response format), Anthropic (messages API), and OpenAI-compatible providers (OpenRouter, DeepSeek, Qwen, Azure, custom).
 - Schema adapter handles dialect translations across providers (Gemini OpenAPI subset, OpenAI json_schema, Anthropic prompt-based tool schemas).
-- Reasoning models (e.g. o1, o3, deepseek-reasoner, 
-1): system prompts mapped to user messages where required; temperature suppressed; reasoning tokens parsed and billed.
+- Reasoning models (e.g. o1, o3, deepseek-reasoner, r1): system prompts mapped to user messages where required; temperature suppressed; reasoning tokens parsed and billed.
 - AiRetryPolicy: exponential backoff (2s, 4s, 8s) for 429/5xx, honoring Retry-After. 400/401/403 are non-retryable.
 - Semantic TextChunker segments document text respecting page/paragraph/sentence boundaries with configurable token targets and overlap.
 - Fact deduplication uses normalized token overlap / Jaccard similarity threshold (0.75) against existing facts in the lesson/document.
-- Token cost ledger persisted to Room i_usage_logs table via AiCostEstimator with per-model pricing catalog.
+- Token cost ledger persisted to Room ai_usage_logs table via AiCostEstimator with per-model pricing catalog.
 
 ### Durable Generation Jobs (WorkManager)
 - OutlineGenerationWorker and FactsGenerationWorker implemented as @HiltWorker durable jobs with progress tracking and retry support.
 - Registered via HiltWorkerFactory in FactsWallpaperApplication.
+
+## Phase P6a — Cross-Phase Integration
+
+### Real AI Template Generation (`:feature:templates`)
+- Replaced the parallel-development `LocalTemplateAiGenerator` binding with `DefaultTemplateAiGenerator` backed by `StructuredAiService.generateTemplate` (using `AiTask.TEMPLATE_GENERATION` and JSON schema constrained generation).
+- Output is validated using `CardTemplateCodec.validate(...)`. Unconfigured or failing providers raise `AiException`, which `TemplatesViewModel` traps and displays as a user-facing error dialog/snackbar without fallback to fake output.
+
+### Formula Verification Tier-2 Binding (`:core:render`)
+- Implemented `StructuredAiFormulaVerifier` in `:core:render:verify`, bound into `@IntoSet FormulaAiVerifier` within `RenderModule`.
+- Verifies LaTeX formulas via `StructuredAiService.verifyFormula`. If network or provider credentials fail, it returns `null` so formula verification status remains `PENDING` rather than falsely passing or failing.
+
+### AI-Suggested Collections (`:feature:collections`)
+- Added `suggestCollections` API to `StructuredAiService` using structured JSON schema output and routed to `AiTask.FACTS`.
+- `CollectionsViewModel.generateAiCollections()` sends active fact summaries to the AI provider, which clusters them into thematic collections. The ViewModel persists accepted collections with real references to the grouped facts.
+
+### Invariant-6-Safe Live Wallpaper Canvas Text Fallback (`:core:wallpaper`)
+- In `FactsLiveWallpaperService`, when the bitmap render cache does not yet contain a pre-rendered card for the current active fact, the engine retrieves the current `Fact` directly via `WallpaperRotationController.getCurrentFact()`.
+- Renders the actual fact title, body, and source reference using Android `StaticLayout` directly onto the Canvas with clock and navigation bar insets honored, satisfying the spec fallback requirement without violating Invariant 6 (no network/AI/PDF/WebView). The generic branded message is reserved strictly for when zero facts exist in the database.
+
+### End-to-End Pipeline & Cache Pre-Render Bridging
+- Created `CardPreRenderNotifier` in `:core:common`, implemented by `CardPreRenderScheduler` in `:core:render`, and injected into `FactsGenerationWorker` and `FactsViewModel`. Generating facts automatically triggers background card pre-rendering for the rotation pool.
+- `RoomDocumentTextRepository` in `:core:data` now delegates directly to `DocumentRepository.getChunks` and compiled text to eliminate duplication between P2 and P3 text access.
+- `OutlineScreen` header now provides an active navigation button to open the `FactsScreen` whenever facts have been extracted for the document.
+- Stubs and "not yet available" placeholder strings across onboarding and advanced settings have been replaced with real functional bindings and explanatory copy.

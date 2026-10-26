@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
+import com.factswallpaper.core.common.CardPreRenderNotifier
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -16,9 +17,9 @@ import javax.inject.Singleton
 @Singleton
 class CardPreRenderScheduler @Inject constructor(
     @ApplicationContext private val context: Context,
-) {
+) : CardPreRenderNotifier {
 
-    fun enqueue() {
+    override fun enqueue() {
         runCatching {
             val request = OneTimeWorkRequestBuilder<CardPreRenderWorker>().build()
             WorkManager.getInstance(context).enqueueUniqueWork(

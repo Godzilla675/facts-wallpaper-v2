@@ -1,19 +1,20 @@
 package com.factswallpaper.core.render
 
+import com.factswallpaper.core.common.CardPreRenderNotifier
 import com.factswallpaper.core.render.diagram.AndroidWebViewDiagramRenderer
 import com.factswallpaper.core.render.diagram.OfflineWebViewDiagramRenderer
 import com.factswallpaper.core.render.verify.FormulaAiVerifier
+import com.factswallpaper.core.render.verify.StructuredAiFormulaVerifier
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
+import dagger.multibindings.IntoSet
 import dagger.multibindings.Multibinds
 import javax.inject.Singleton
 
 /**
- * Declares the optional Tier-2 verifier set. `:core:ai` (P3) contributes bindings via
- * `@IntoSet`; declaring it as a multibinding here keeps the render module self-contained
- * and injectable even before any AI provider exists.
+ * Declares render bindings, pre-render notifier, and Tier-2 AI formula/diagram verifiers.
  */
 @Module
 @InstallIn(SingletonComponent::class)
@@ -23,8 +24,20 @@ abstract class RenderModule {
     abstract fun formulaAiVerifiers(): Set<FormulaAiVerifier>
 
     @Binds
+    @IntoSet
+    abstract fun bindStructuredAiFormulaVerifier(
+        verifier: StructuredAiFormulaVerifier,
+    ): FormulaAiVerifier
+
+    @Binds
     @Singleton
     abstract fun bindOfflineWebViewDiagramRenderer(
         renderer: AndroidWebViewDiagramRenderer,
     ): OfflineWebViewDiagramRenderer
+
+    @Binds
+    @Singleton
+    abstract fun bindCardPreRenderNotifier(
+        scheduler: CardPreRenderScheduler,
+    ): CardPreRenderNotifier
 }

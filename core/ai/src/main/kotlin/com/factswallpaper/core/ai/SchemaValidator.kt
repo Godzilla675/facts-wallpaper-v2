@@ -4,6 +4,9 @@ import com.factswallpaper.core.model.CardTemplateType
 import com.factswallpaper.core.model.DiagramKind
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 
 data class OutlineDraft(
     val title: String,
@@ -248,10 +251,34 @@ class SchemaValidator {
 
     fun validateTemplate(raw: String): ValidationResult<String> {
         val element = runCatching { json.parseToJsonElement(extractJson(raw)) }.getOrNull()
-        return if (element is kotlinx.serialization.json.JsonObject) {
+        return if (element is JsonObject) {
             ValidationResult(element.toString())
         } else {
             ValidationResult(null, listOf("Template response is not a JSON object"))
+        }
+    }
+
+    fun validateCollections(raw: String, validFactIds: Set<String>): ValidationResult<List<SuggestedCollectionItem>> {
+        val element = runCatching { json.parseToJsonElement(extractJson(raw)) }.getOrNull()
+        val root = element as? JsonObject
+            ?: return ValidationResult(null, listOf("Collections response is not a JSON object"))
+        val collectionsArray = root["collections"] as? JsonArray
+            ?: return ValidationResult(null, listOf("Missing 'collections' array"))
+        val items = collectionsArray.mapNotNull { itemElement ->
+            val obj = itemElement as? JsonObject ?: return@mapNotNull null
+            val name = (obj["name"] as? JsonPrimitive)?.content?.trim()
+            val description = (obj["description"] as? JsonPrimitive)?.content?.trim() ?: ""
+            val factIds = (obj["factIds"] as? JsonArray)?.mapNotNull {
+                (it as? JsonPrimitive)?.content?.trim()
+            }?.filter { it in validFactIds }?.distinct() ?: emptyList()
+            if (!name.isNullOrBlank() && factIds.size >= 2) {
+                SuggestedCollectionItem(name = name, description = description, factIds = factIds)
+            } else null
+        }
+        return if (items.isEmpty()) {
+            ValidationResult(null, listOf("No valid collections with at least 2 facts were found"))
+        } else {
+            ValidationResult(items)
         }
     }
 }

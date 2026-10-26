@@ -112,24 +112,67 @@ object AiSchemas {
     val TemplateJsonSchema: String = """
         {
           "type": "object",
-          "required": ["name", "backgroundColor", "slots"],
+          "required": ["id", "name", "archetype"],
           "properties": {
+            "id": { "type": "string" },
             "name": { "type": "string" },
-            "backgroundColor": { "type": "string" },
-            "textColor": { "type": "string" },
-            "accentColor": { "type": "string" },
-            "fontFamily": { "type": "string" },
-            "slots": {
+            "archetype": {
+              "type": "string",
+              "enum": ["TEXT", "QUOTE", "BULLET", "DEFINITION", "QA", "FORMULA", "DIAGRAM", "TIMELINE"]
+            },
+            "backgroundStyle": {
+              "type": "string",
+              "enum": ["SOLID", "SUBTLE_GRADIENT", "AMOLED_PURE_BLACK"]
+            },
+            "lightBackgroundHex": { "type": "string" },
+            "darkBackgroundHex": { "type": "string" },
+            "amoledBackgroundHex": { "type": "string" },
+            "cardSurfaceLightHex": { "type": "string" },
+            "cardSurfaceDarkHex": { "type": "string" },
+            "cardSurfaceAmoledHex": { "type": "string" },
+            "accentHexLight": { "type": "string" },
+            "accentHexDark": { "type": "string" },
+            "borderWidthDp": { "type": "integer" },
+            "cornerRadiusDp": { "type": "integer" },
+            "horizontalPaddingDp": { "type": "integer" },
+            "verticalPaddingDp": { "type": "integer" },
+            "topSafeMarginFraction": { "type": "number" },
+            "bottomSafeMarginFraction": { "type": "number" },
+            "titleFontFamily": { "type": "string", "enum": ["SERIF", "SANS", "MONOSPACE"] },
+            "bodyFontFamily": { "type": "string", "enum": ["SERIF", "SANS", "MONOSPACE"] },
+            "bodyFontScale": { "type": "number" },
+            "textAlignment": { "type": "string", "enum": ["START", "CENTER"] },
+            "showCategoryPill": { "type": "boolean" },
+            "showQuoteMark": { "type": "boolean" },
+            "splitHeaderBand": { "type": "boolean" },
+            "formulaStageFramed": { "type": "boolean" },
+            "diagramHeightFraction": { "type": "number" },
+            "defaultSourceRefMode": {
+              "type": "string",
+              "enum": ["FULL", "COMPACT", "PAGE_ONLY", "HIDDEN"]
+            }
+          },
+          "additionalProperties": false
+        }
+    """.trimIndent()
+
+    val CollectionsJsonSchema: String = """
+        {
+          "type": "object",
+          "required": ["collections"],
+          "properties": {
+            "collections": {
               "type": "array",
               "items": {
                 "type": "object",
-                "required": ["id", "content"],
+                "required": ["name", "description", "factIds"],
                 "properties": {
-                  "id": { "type": "string" },
-                  "content": { "type": "string" },
-                  "fontSizeSp": { "type": "number" },
-                  "fontWeight": { "type": "integer" },
-                  "alignment": { "type": "string" }
+                  "name": { "type": "string" },
+                  "description": { "type": "string" },
+                  "factIds": {
+                    "type": "array",
+                    "items": { "type": "string" }
+                  }
                 },
                 "additionalProperties": false
               }
@@ -173,7 +216,13 @@ Set "valid": true only if it will render cleanly in KaTeX / Mermaid.js / TikZJax
     const val DiagramSystemPrompt: String = """Generate a clean, compact, high-contrast academic diagram for a mobile study card (aspect ratio ~16:10).
 Prefer "MERMAID" (flowchart TD/LR, sequenceDiagram, stateDiagram-v2) or standalone inline "SVG" (with viewBox="0 0 600 380", transparent background, and legible stroke/text colors). Use "TIKZ" (\begin{tikzpicture}...\end{tikzpicture}) only for physics/chemistry/math vector diagrams. Never include <script>, external images, or external fonts."""
 
-    const val TemplateSystemPrompt: String = """You are a mobile typography and card layout designer. Given the user's style description, output a valid CardTemplateSpec JSON object defining colors, typography, padding, border, and slot arrangement for a mobile study wallpaper card. Ensure high text contrast (WCAG AA+) and clock-safe top spacing."""
+    const val TemplateSystemPrompt: String = """You are a mobile typography and card layout designer. Given the user's style description, output a valid CardTemplateSpec JSON object defining colors (#RRGGBB hex format), typography, padding, border, and safe margins for a mobile study wallpaper card. Keep topSafeMarginFraction between 0.20 and 0.30 to clear the lock-screen clock. Respond ONLY with valid JSON matching the schema."""
+
+    const val CollectionsSystemPrompt: String = """You are an academic learning curator. Analyze the provided study facts and organize them into 2 to 5 thematic study collections.
+Rules:
+1. Every collection must have a concise, descriptive title, a 1-sentence description explaining the conceptual theme, and an array of fact IDs belonging to that theme (at least 2 facts per collection).
+2. Only include fact IDs that exist in the input list. Do not invent IDs.
+3. Respond ONLY with valid JSON matching the schema."""
 
     fun outlineUserPrompt(pages: List<PageText>, suffix: String? = null): String =
         outlineUserPromptFromText(TextChunker.formatPages(pages), suffix)
@@ -248,6 +297,17 @@ Prefer "MERMAID" (flowchart TD/LR, sequenceDiagram, stateDiagram-v2) or standalo
 
     fun templateUserPrompt(description: String): String =
         "Style description:\n$description\n\nReturn a valid CardTemplateSpec JSON object."
+
+    fun collectionsUserPrompt(facts: List<FactSummaryInput>): String = buildString {
+        appendLine("Study facts:")
+        facts.forEach { fact ->
+            val tags = if (fact.tags.isNotEmpty()) " [tags: ${fact.tags.joinToString(", ")}]" else ""
+            val lesson = fact.lessonTitle?.let { " (lesson: $it)" } ?: ""
+            appendLine("- [ID: ${fact.id}]$lesson$tags: ${fact.text.take(160)}")
+        }
+        appendLine()
+        appendLine("Group these facts into 2 to 5 thematic collections.")
+    }
 
     fun schemaInstruction(schema: String): String =
         "\n\nRespond ONLY with a single JSON object that strictly matches this JSON Schema. " +

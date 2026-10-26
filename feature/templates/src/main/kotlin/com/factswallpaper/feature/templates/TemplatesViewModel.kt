@@ -244,6 +244,15 @@ class TemplatesViewModel @Inject constructor(
                     )
                 }
                 showMessage(R.string.templates_ai_ready)
+            } catch (e: com.factswallpaper.core.ai.AiException) {
+                val err = if (e.kind == com.factswallpaper.core.ai.AiErrorKind.INVALID_REQUEST || e.kind == com.factswallpaper.core.ai.AiErrorKind.AUTHENTICATION) {
+                    R.string.templates_ai_no_provider
+                } else {
+                    R.string.templates_ai_failed
+                }
+                overlay.update {
+                    it.copy(ai = it.ai.copy(generating = false, errorRes = err))
+                }
             } catch (_: Throwable) {
                 overlay.update {
                     it.copy(ai = it.ai.copy(generating = false, errorRes = R.string.templates_ai_failed))

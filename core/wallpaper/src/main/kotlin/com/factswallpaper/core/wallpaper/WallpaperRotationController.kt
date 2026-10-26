@@ -4,6 +4,7 @@ import android.content.Context
 import com.factswallpaper.core.common.FactsDispatchers
 import com.factswallpaper.core.data.repository.RotationPoolRepository
 import com.factswallpaper.core.data.repository.WallpaperRepository
+import com.factswallpaper.core.model.Fact
 import com.factswallpaper.core.model.WallpaperScheduleMode
 import com.factswallpaper.core.model.WallpaperState
 import com.factswallpaper.core.model.WallpaperTarget
@@ -94,5 +95,16 @@ class WallpaperRotationController @Inject constructor(
         }
 
         null
+    }
+
+    suspend fun getCurrentFact(): Fact? = withContext(dispatchers.io) {
+        val state = wallpaperRepository.getState()
+        val pool = rotationPoolRepository.observePool().first()
+        val currentId = state.currentFactId
+        if (currentId != null) {
+            val fact = pool.firstOrNull { it.id == currentId }
+            if (fact != null) return@withContext fact
+        }
+        pool.firstOrNull()
     }
 }

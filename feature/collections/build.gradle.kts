@@ -8,4 +8,5 @@ android {
 
 dependencies {
     implementation(project(":core:render"))
+    implementation(project(":core:ai"))
 }

@@ -7,6 +7,7 @@ import com.factswallpaper.core.render.template.CardTemplateCodec
 import com.factswallpaper.core.render.template.TemplateAlignment
 import com.factswallpaper.core.render.template.TemplateFontFamily
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertThrows
 import org.junit.Test
 
@@ -55,7 +56,7 @@ class TemplateDraftMapperTest {
     }
 
     @Test
-    fun `local ai generator maps palette typography and archetype keywords`() {
+    fun `local ai generator maps palette typography and archetype keywords`() = runTest {
         val generated = LocalTemplateAiGenerator().generate(
             "neon centered monospace formula card with gradient and page only source",
         )
@@ -72,7 +73,7 @@ class TemplateDraftMapperTest {
     }
 
     @Test
-    fun `local ai generator honours quoted names and produces unique ids`() {
+    fun `local ai generator honours quoted names and produces unique ids`() = runTest {
         val first = LocalTemplateAiGenerator().generate("create a \"Parchment Notes\" template")
         val second = LocalTemplateAiGenerator().generate("create a \"Parchment Notes\" template")
 
@@ -81,9 +82,11 @@ class TemplateDraftMapperTest {
     }
 
     @Test
-    fun `local ai generator rejects blank prompts instead of inventing a template`() {
+    fun `local ai generator rejects blank prompts instead of inventing a template`() = runTest {
         assertThrows(IllegalArgumentException::class.java) {
-            LocalTemplateAiGenerator().generate("   ")
+            kotlinx.coroutines.runBlocking {
+                LocalTemplateAiGenerator().generate("   ")
+            }
         }
     }
 }
