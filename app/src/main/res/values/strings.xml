@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Facts Wallpaper</string>
+    <string name="app_loading">Preparing your library</string>
+    <string name="live_wallpaper_unavailable">Android could not open the live wallpaper picker on this device. Open it from your launcher settings instead.</string>
+</resources>

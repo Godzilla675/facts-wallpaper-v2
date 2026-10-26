@@ -1,0 +1,738 @@
+package com.factswallpaper.feature.collections
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.CreateNewFolder
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Sell
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.factswallpaper.core.designsystem.theme.LocalSpacing
+import com.factswallpaper.core.model.Collection
+import com.factswallpaper.core.model.CollectionSource
+import com.factswallpaper.core.model.UserFolder
+import com.factswallpaper.core.ui.UiMessageEffect
+import com.factswallpaper.core.ui.component.MetricPill
+import com.factswallpaper.core.ui.component.SectionGroupCard
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun CollectionsScreen(
+    onOpenTag: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    viewModel: CollectionsViewModel = hiltViewModel(),
+) {
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val message by viewModel.message.collectAsStateWithLifecycle()
+    val snackbarHostState = remember { SnackbarHostState() }
+    var creatingCollection by remember { mutableStateOf(false) }
+    var creatingFolder by remember { mutableStateOf(false) }
+    var deletingCollection by remember { mutableStateOf<Collection?>(null) }
+    var deletingFolder by remember { mutableStateOf<UserFolder?>(null) }
+    UiMessageEffect(message, snackbarHostState, viewModel::onMessageShown)
+
+    Scaffold(
+        modifier = modifier.fillMaxSize(),
+        topBar = {
+            TopAppBar(
+                title = { Text(stringResource(R.string.collections_title)) },
+                actions = {
+                    IconButton(onClick = { creatingCollection = true }) {
+                        Icon(
+                            imageVector = Icons.Filled.Add,
+                            contentDescription = stringResource(R.string.collections_new_collection),
+                        )
+                    }
+                    IconButton(onClick = { creatingFolder = true }) {
+                        Icon(
+                            imageVector = Icons.Filled.CreateNewFolder,
+                            contentDescription = stringResource(R.string.collections_new_folder),
+                        )
+                    }
+                },
+            )
+        },
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+    ) { padding ->
+        when (val value = state) {
+            CollectionsUiState.Loading -> CollectionsLoading(Modifier.padding(padding))
+            is CollectionsUiState.Error -> CollectionsError(
+                messageRes = value.messageRes,
+                modifier = Modifier.padding(padding),
+            )
+            is CollectionsUiState.Content -> CollectionsContent(
+                state = value,
+                onNewCollection = { creatingCollection = true },
+                onNewFolder = { creatingFolder = true },
+                onGenerateAiCollections = viewModel::generateAiCollections,
+                onOpenTag = onOpenTag,
+                onCollectionRotationChange = viewModel::setCollectionInRotation,
+                onFolderRotationChange = viewModel::setFolderInRotation,
+                onAcceptCollection = viewModel::acceptCollection,
+                onDismissCollection = viewModel::dismissCollection,
+                onDeleteCollection = { deletingCollection = it },
+                onDeleteFolder = { deletingFolder = it },
+                modifier = Modifier.padding(padding),
+            )
+        }
+    }
+
+    if (creatingCollection) {
+        CreateDialog(
+            title = stringResource(R.string.collections_new_collection),
+            nameLabel = stringResource(R.string.collections_name_label),
+            descriptionLabel = stringResource(R.string.collections_description_label),
+            showDescription = true,
+            onDismiss = { creatingCollection = false },
+            onConfirm = { name, description ->
+                viewModel.createCollection(name, description)
+                creatingCollection = false
+            },
+        )
+    }
+
+    if (creatingFolder) {
+        CreateDialog(
+            title = stringResource(R.string.collections_new_folder),
+            nameLabel = stringResource(R.string.collections_folder_name_label),
+            descriptionLabel = null,
+            showDescription = false,
+            onDismiss = { creatingFolder = false },
+            onConfirm = { name, _ ->
+                viewModel.createFolder(name)
+                creatingFolder = false
+            },
+        )
+    }
+
+    deletingCollection?.let { collection ->
+        ConfirmDeleteDialog(
+            title = stringResource(R.string.collections_delete_title),
+            body = stringResource(R.string.collections_delete_body, collection.name),
+            onDismiss = { deletingCollection = null },
+            onConfirm = {
+                viewModel.deleteCollection(collection.id)
+                deletingCollection = null
+            },
+        )
+    }
+
+    deletingFolder?.let { folder ->
+        ConfirmDeleteDialog(
+            title = stringResource(R.string.collections_delete_title),
+            body = stringResource(R.string.collections_delete_body, folder.name),
+            onDismiss = { deletingFolder = null },
+            onConfirm = {
+                viewModel.deleteFolder(folder.id)
+                deletingFolder = null
+            },
+        )
+    }
+}
+
+@Composable
+private fun CollectionsContent(
+    state: CollectionsUiState.Content,
+    onNewCollection: () -> Unit,
+    onNewFolder: () -> Unit,
+    onGenerateAiCollections: () -> Unit,
+    onOpenTag: (String) -> Unit,
+    onCollectionRotationChange: (String, Boolean) -> Unit,
+    onFolderRotationChange: (String, Boolean) -> Unit,
+    onAcceptCollection: (String) -> Unit,
+    onDismissCollection: (String) -> Unit,
+    onDeleteCollection: (Collection) -> Unit,
+    onDeleteFolder: (UserFolder) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val spacing = LocalSpacing.current
+    LazyColumn(
+        modifier = modifier.fillMaxSize(),
+        contentPadding = PaddingValues(
+            start = spacing.lg,
+            end = spacing.lg,
+            top = spacing.md,
+            bottom = spacing.xl,
+        ),
+        verticalArrangement = Arrangement.spacedBy(spacing.md),
+    ) {
+        item {
+            SectionGroupCard(
+                title = stringResource(R.string.collections_pool_title),
+                subtitle = stringResource(
+                    R.string.collections_pool_summary,
+                    state.poolSummary.factCount,
+                    state.poolSummary.collectionCount,
+                    state.poolSummary.folderCount,
+                ),
+            ) {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(spacing.sm)) {
+                    item {
+                        MetricPill(
+                            value = stringResource(
+                                R.string.collections_smart_total,
+                                state.counts.total,
+                            ),
+                            label = stringResource(R.string.collections_smart_all_label),
+                        )
+                    }
+                    item {
+                        MetricPill(
+                            value = stringResource(
+                                R.string.collections_smart_count,
+                                state.counts.active,
+                            ),
+                            label = stringResource(R.string.collections_smart_active),
+                        )
+                    }
+                    item {
+                        MetricPill(
+                            value = stringResource(
+                                R.string.collections_smart_count,
+                                state.counts.favorites,
+                            ),
+                            label = stringResource(R.string.collections_smart_favorites),
+                        )
+                    }
+                    item {
+                        MetricPill(
+                            value = stringResource(
+                                R.string.collections_smart_count,
+                                state.counts.formulas,
+                            ),
+                            label = stringResource(R.string.collections_smart_formulas),
+                        )
+                    }
+                    item {
+                        MetricPill(
+                            value = stringResource(
+                                R.string.collections_smart_count,
+                                state.counts.diagrams,
+                            ),
+                            label = stringResource(R.string.collections_smart_diagrams),
+                        )
+                    }
+                }
+            }
+        }
+
+        if (state.suggestions.isNotEmpty()) {
+            item {
+                SectionGroupCard(
+                    title = stringResource(R.string.collections_suggestions_title),
+                    subtitle = stringResource(R.string.collections_suggestions_helper),
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(spacing.sm)) {
+                        state.suggestions.forEach { collection ->
+                            SuggestionCard(
+                                collection = collection,
+                                onAccept = { onAcceptCollection(collection.id) },
+                                onDismiss = { onDismissCollection(collection.id) },
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        item {
+            SectionHeader(
+                title = stringResource(R.string.collections_section_collections),
+                actionLabel = stringResource(R.string.collections_new_collection),
+                onAction = onNewCollection,
+            )
+        }
+        if (state.activeCollections.isEmpty()) {
+            item {
+                EmptySection(
+                    message = stringResource(R.string.collections_empty_collections),
+                )
+            }
+        } else {
+            items(state.activeCollections, key = { it.id }) { collection ->
+                CollectionRow(
+                    collection = collection,
+                    onRotationChange = { included ->
+                        onCollectionRotationChange(collection.id, included)
+                    },
+                    onDelete = { onDeleteCollection(collection) },
+                )
+            }
+        }
+
+        item {
+            SectionHeader(
+                title = stringResource(R.string.collections_section_folders),
+                actionLabel = stringResource(R.string.collections_new_folder),
+                onAction = onNewFolder,
+            )
+        }
+        if (state.folders.isEmpty()) {
+            item {
+                EmptySection(
+                    message = stringResource(R.string.collections_empty_folders),
+                )
+            }
+        } else {
+            items(state.folders, key = { it.id }) { folder ->
+                FolderRow(
+                    folder = folder,
+                    onRotationChange = { included ->
+                        onFolderRotationChange(folder.id, included)
+                    },
+                    onDelete = { onDeleteFolder(folder) },
+                )
+            }
+        }
+
+        item {
+            SectionGroupCard(
+                title = stringResource(R.string.collections_tags_title),
+                subtitle = stringResource(R.string.collections_tags_helper),
+            ) {
+                if (state.tags.isEmpty()) {
+                    Text(
+                        text = stringResource(R.string.collections_tags_empty),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else {
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(spacing.sm)) {
+                        items(state.tags, key = { it.tag }) { tag ->
+                            OutlinedButton(onClick = { onOpenTag(tag.tag) }) {
+                                Icon(Icons.Filled.Sell, contentDescription = null)
+                                Text(
+                                    text = stringResource(
+                                        R.string.collections_tag_with_count,
+                                        tag.tag,
+                                        tag.factCount,
+                                    ),
+                                    modifier = Modifier.padding(start = 4.dp),
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                ),
+            ) {
+                Column(
+                    modifier = Modifier.padding(spacing.lg),
+                    verticalArrangement = Arrangement.spacedBy(spacing.sm),
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Filled.AutoAwesome, contentDescription = null)
+                        Text(
+                            text = stringResource(R.string.collections_ai_title),
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.padding(start = spacing.sm),
+                        )
+                    }
+                    Text(
+                        text = stringResource(R.string.collections_ai_body),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Button(onClick = onGenerateAiCollections) {
+                        Text(stringResource(R.string.collections_ai_action))
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CollectionRow(
+    collection: Collection,
+    onRotationChange: (Boolean) -> Unit,
+    onDelete: () -> Unit,
+) {
+    val spacing = LocalSpacing.current
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        ),
+    ) {
+        Column(modifier = Modifier.padding(spacing.lg)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = collection.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        text = stringResource(
+                            R.string.collections_fact_count,
+                            collection.factCount,
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                if (collection.source == CollectionSource.AI_SUGGESTED) {
+                    MetricPill(value = stringResource(R.string.collections_ai_badge))
+                }
+                IconButton(onClick = onDelete) {
+                    Icon(
+                        imageVector = Icons.Filled.Delete,
+                        contentDescription = stringResource(
+                            R.string.collections_delete_description,
+                            collection.name,
+                        ),
+                    )
+                }
+            }
+            if (collection.description.isNotBlank()) {
+                Text(
+                    text = collection.description,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = spacing.xs),
+                )
+            }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = spacing.sm),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = stringResource(R.string.collections_include_in_rotation),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Text(
+                        text = stringResource(R.string.collections_collection_scope),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(
+                    checked = collection.includeInRotation,
+                    onCheckedChange = onRotationChange,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun FolderRow(
+    folder: UserFolder,
+    onRotationChange: (Boolean) -> Unit,
+    onDelete: () -> Unit,
+) {
+    val spacing = LocalSpacing.current
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        ),
+    ) {
+        Row(
+            modifier = Modifier.padding(
+                start = spacing.lg,
+                top = spacing.lg,
+                bottom = spacing.md,
+                end = spacing.sm,
+            ),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(Icons.Filled.Folder, contentDescription = null)
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = spacing.sm),
+            ) {
+                Text(
+                    text = folder.name,
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = stringResource(R.string.collections_fact_count, folder.factCount),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            IconButton(onClick = onDelete) {
+                Icon(
+                    imageVector = Icons.Filled.Delete,
+                    contentDescription = stringResource(
+                        R.string.collections_delete_description,
+                        folder.name,
+                    ),
+                )
+            }
+        }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = spacing.lg, end = spacing.lg, bottom = spacing.md),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.collections_include_in_rotation),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Text(
+                    text = stringResource(R.string.collections_folder_scope),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Switch(
+                checked = folder.includeInRotation,
+                onCheckedChange = onRotationChange,
+            )
+        }
+    }
+}
+
+@Composable
+private fun SuggestionCard(
+    collection: Collection,
+    onAccept: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val spacing = LocalSpacing.current
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f),
+        ),
+    ) {
+        Column(
+            modifier = Modifier.padding(spacing.md),
+            verticalArrangement = Arrangement.spacedBy(spacing.xs),
+        ) {
+            Text(
+                text = collection.name,
+                style = MaterialTheme.typography.titleSmall,
+            )
+            if (collection.description.isNotBlank()) {
+                Text(
+                    text = collection.description,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+            Text(
+                text = stringResource(
+                    R.string.collections_suggestion_fact_count,
+                    collection.factCount,
+                ),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(spacing.sm)) {
+                Button(onClick = onAccept) {
+                    Text(stringResource(R.string.collections_accept))
+                }
+                OutlinedButton(onClick = onDismiss) {
+                    Text(stringResource(R.string.collections_dismiss))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SectionHeader(
+    title: String,
+    actionLabel: String,
+    onAction: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleMedium,
+        )
+        TextButton(onClick = onAction) {
+            Icon(Icons.Filled.Add, contentDescription = null)
+            Text(
+                text = actionLabel,
+                modifier = Modifier.padding(start = 4.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun EmptySection(message: String) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        ),
+    ) {
+        Text(
+            text = message,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(16.dp),
+        )
+    }
+}
+
+@Composable
+private fun CreateDialog(
+    title: String,
+    nameLabel: String,
+    descriptionLabel: String?,
+    showDescription: Boolean,
+    onDismiss: () -> Unit,
+    onConfirm: (String, String) -> Unit,
+) {
+    var name by remember { mutableStateOf("") }
+    var description by remember { mutableStateOf("") }
+    val spacing = LocalSpacing.current
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(spacing.sm)) {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text(nameLabel) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                if (showDescription && descriptionLabel != null) {
+                    OutlinedTextField(
+                        value = description,
+                        onValueChange = { description = it },
+                        label = { Text(descriptionLabel) },
+                        minLines = 2,
+                        maxLines = 4,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onConfirm(name, description) },
+                enabled = name.isNotBlank(),
+            ) {
+                Text(stringResource(R.string.collections_create))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.collections_cancel))
+            }
+        },
+    )
+}
+
+@Composable
+private fun ConfirmDeleteDialog(
+    title: String,
+    body: String,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = { Text(body) },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text(
+                    text = stringResource(R.string.collections_delete),
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.collections_cancel))
+            }
+        },
+    )
+}
+
+@Composable
+private fun CollectionsLoading(modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        CircularProgressIndicator()
+    }
+}
+
+@Composable
+private fun CollectionsError(messageRes: Int, modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(text = stringResource(messageRes), style = MaterialTheme.typography.bodyLarge)
+    }
+}

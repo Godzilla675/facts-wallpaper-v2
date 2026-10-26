@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="facts_wallpaper_service_name">Facts Wallpaper</string>
+    <string name="facts_wallpaper_service_description">Study facts, formulas and diagrams on your lock screen.</string>
+    <string name="facts_wallpaper_service_title">Facts Wallpaper</string>
+    <string name="facts_wallpaper_service_caption">Your facts will appear here</string>
+</resources>

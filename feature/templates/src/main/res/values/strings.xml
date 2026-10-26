@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="templates_title">Template gallery</string>
+    <string name="templates_back">Back</string>
+    <string name="templates_helper">Templates control how a fact is laid out on your wallpaper. Choose a default, then preview it with a real fact.</string>
+    <string name="templates_set_default">Set default</string>
+    <string name="templates_default_label">Default template</string>
+    <string name="templates_delete">Delete template</string>
+    <string name="templates_create">Create template</string>
+    <string name="templates_generate_ai">Generate template with AI</string>
+    <string name="templates_empty_title">No templates yet</string>
+    <string name="templates_empty_body">Built-in and custom card templates arrive with the rendering phase. Your wallpaper keeps using its built-in layout until then.</string>
+    <string name="templates_default_saved">Default template updated.</string>
+    <string name="templates_deleted">Template deleted.</string>
+    <string name="templates_delete_failed">Could not delete this template.</string>
+    <string name="templates_create_not_yet">Custom template editing arrives with the rendering phase.</string>
+    <string name="templates_generate_not_yet">AI template generation arrives with the rendering phase.</string>
+    <string name="templates_load_error">Could not load your templates.</string>
+
+    <string name="preview_title">Card preview</string>
+    <string name="preview_back">Back</string>
+    <string name="preview_apply">Apply</string>
+    <string name="preview_apply_not_yet">Applying cards to the home or lock screen arrives with the wallpaper engine phase.</string>
+    <string name="preview_default_template">Default card</string>
+    <string name="preview_previous">Previous fact</string>
+    <string name="preview_next">Next fact</string>
+    <string name="preview_next_fact">Show next fact</string>
+    <string name="preview_fact_counter">Fact %1$d of %2$d</string>
+    <string name="preview_empty_title">No facts in the pool</string>
+    <string name="preview_empty_body">Add active facts to your wallpaper pool before previewing cards.</string>
+    <string name="preview_open_facts">Open facts</string>
+    <string name="preview_template_section">Card template</string>
+    <string name="preview_template_helper">Switching a template updates the active wallpaper template.</string>
+    <string name="preview_templates_empty">Card templates arrive with the rendering phase. The built-in layout is used for now.</string>
+    <string name="preview_template_selected">Active template updated.</string>
+    <string name="preview_theme_section">Wallpaper theme</string>
+    <string name="preview_theme_helper">Wallpaper colors are independent from the app theme.</string>
+    <string name="preview_source_section">Source reference</string>
+    <string name="preview_source_helper">Choose how much provenance appears on each card.</string>
+    <string name="preview_theme_light">Light</string>
+    <string name="preview_theme_dark">Dark</string>
+    <string name="preview_theme_amoled">AMOLED</string>
+    <string name="preview_theme_dynamic">Dynamic</string>
+    <string name="preview_source_full">Full</string>
+    <string name="preview_source_compact">Compact</string>
+    <string name="preview_source_page">Page only</string>
+    <string name="preview_source_hidden">Hidden</string>
+    <string name="preview_load_error">Could not load this card preview.</string>
+</resources>

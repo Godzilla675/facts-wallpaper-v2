@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="facts_title">Facts</string>
+    <string name="facts_open_templates">Open template gallery</string>
+    <string name="facts_search_placeholder">Search facts, tags or lessons</string>
+    <string name="facts_clear_search">Clear search</string>
+    <string name="facts_all_documents">All documents</string>
+    <string name="facts_lesson_filter_active">Showing facts for the lesson you opened.</string>
+    <string name="facts_clear_lesson_filter">Show all lessons</string>
+    <string name="facts_count">%1$d facts</string>
+    <string name="facts_count_in_document">%1$d facts in %2$s</string>
+    <string name="facts_clear_filters">Clear filters</string>
+    <string name="facts_tag_chip">%1$s (%2$d)</string>
+    <string name="facts_no_matches_title">No matching facts</string>
+    <string name="facts_no_matches_body">Nothing matches the current search and filters. Clear them to see every fact again.</string>
+    <string name="facts_empty_title">No facts yet</string>
+    <string name="facts_empty_body">Import a PDF, review its outline and generate facts. They will appear here and can join your wallpaper rotation.</string>
+    <string name="facts_open_library">Open library</string>
+    <string name="facts_edit_title">Edit fact</string>
+    <string name="facts_edit_text_label">Fact text</string>
+    <string name="facts_edit_latex_label">LaTeX</string>
+    <string name="facts_edit_latex_helper">Optional. Formulas render from this source.</string>
+    <string name="facts_edit_tags_label">Tags</string>
+    <string name="facts_edit_tags_helper">Separate tags with commas.</string>
+    <string name="facts_edit_template_label">Card template</string>
+    <string name="facts_save">Save</string>
+    <string name="facts_cancel">Cancel</string>
+    <string name="facts_saved">Fact updated.</string>
+    <string name="facts_text_required">Fact text cannot be empty.</string>
+    <string name="facts_regenerate_not_yet">AI regeneration arrives with the AI fact phase.</string>
+    <string name="facts_templates_not_yet">Card preview arrives with the rendering phase.</string>
+    <string name="facts_load_error">Could not load your facts.</string>
+
+    <string name="facts_status_all">All</string>
+    <string name="facts_status_active">Active</string>
+    <string name="facts_status_ignored">Ignored</string>
+    <string name="facts_status_favorites">Favorites</string>
+    <string name="facts_status_formulas">Formulas</string>
+    <string name="facts_status_diagrams">Diagrams</string>
+
+    <string name="facts_template_text">Text</string>
+    <string name="facts_template_quote">Quote</string>
+    <string name="facts_template_bullet">Bullet</string>
+    <string name="facts_template_definition">Definition</string>
+    <string name="facts_template_qa">Q&amp;A</string>
+    <string name="facts_template_formula">Formula</string>
+    <string name="facts_template_diagram">Diagram</string>
+    <string name="facts_template_timeline">Timeline</string>
+</resources>
