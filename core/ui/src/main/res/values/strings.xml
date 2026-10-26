@@ -49,6 +49,15 @@
     <string name="document_delete">Delete</string>
     <string name="document_delete_description">Delete %1$s</string>
     <string name="document_ocr_progress">OCR page %1$d of %2$d</string>
+    <string name="document_ocr_active">OCR page %1$d of %2$d &#183; %3$d saved</string>
+    <string name="document_ocr_paused">OCR paused at page %1$d of %2$d</string>
+    <string name="document_ocr_saved_pages">Pages %1$d&#8211;%2$d saved</string>
+    <string name="document_ocr_no_saved_pages">No pages saved yet</string>
+    <string name="document_ocr_pause">Pause</string>
+    <string name="document_ocr_resume">Resume from page %1$d</string>
+    <string name="document_retry">Retry</string>
+    <string name="document_status_processing">Processing&#8230;</string>
+    <string name="document_status_ocr_done">OCR complete &#183; %1$d pages</string>
     <string name="document_status_error">Processing error</string>
     <string name="document_status_ready">Ready</string>
 

@@ -9,6 +9,7 @@ import com.factswallpaper.core.database.dao.FactDao
 import com.factswallpaper.core.database.dao.LessonDao
 import com.factswallpaper.core.database.dao.PdfDocumentDao
 import com.factswallpaper.core.model.Document
+import com.factswallpaper.core.model.DocumentChunk
 import com.factswallpaper.core.model.DocumentSettings
 import com.factswallpaper.core.model.ExtractionStatus
 import com.factswallpaper.core.model.PdfProcessingRoute
@@ -65,11 +66,17 @@ class RoomDocumentRepository @Inject constructor(
     override suspend fun findByHash(fileHash: String): Document? =
         documentDao.findByHash(fileHash)?.toDomain()
 
+    override suspend fun getLocalFilePath(documentId: String): String? =
+        documentDao.getLocalFilePath(documentId)
+
     override fun observeSettings(documentId: String): Flow<DocumentSettings?> =
         documentDao.observeSettings(documentId).map { it?.toDomain() }
 
     override suspend fun getSettings(documentId: String): DocumentSettings? =
         documentDao.getSettings(documentId)?.toDomain()
+
+    override fun observeAllSettings(): Flow<List<DocumentSettings>> =
+        documentDao.observeAllSettings().map { settings -> settings.map { it.toDomain() } }
 
     override suspend fun saveDocument(document: Document) {
         withContext(dispatchers.io) { documentDao.upsert(document.toEntity()) }
@@ -78,6 +85,15 @@ class RoomDocumentRepository @Inject constructor(
     override suspend fun saveDocumentWithSettings(document: Document, settings: DocumentSettings) {
         withContext(dispatchers.io) {
             documentDao.insertDocumentWithSettings(document.toEntity(), settings.toEntity())
+        }
+    }
+
+    override suspend fun replaceDocumentWithSettings(
+        document: Document,
+        settings: DocumentSettings,
+    ) {
+        withContext(dispatchers.io) {
+            documentDao.replaceDocumentWithSettings(document.toEntity(), settings.toEntity())
         }
     }
 
@@ -130,6 +146,68 @@ class RoomDocumentRepository @Inject constructor(
         documentDao.observeRouteCounts().map { counts ->
             counts.associate { it.processingRoute to it.count }
         }
+
+    override fun observeChunks(documentId: String): Flow<List<DocumentChunk>> =
+        documentDao.observeChunks(documentId).map { chunks -> chunks.map { it.toDomain() } }
+
+    override suspend fun getChunks(
+        documentId: String,
+        startPage: Int,
+        endPage: Int,
+    ): List<DocumentChunk> = withContext(dispatchers.io) {
+        documentDao.getChunksForPageRange(documentId, startPage, endPage).map { it.toDomain() }
+    }
+
+    override suspend fun upsertChunk(chunk: DocumentChunk) {
+        withContext(dispatchers.io) { documentDao.upsertChunk(chunk.toEntity()) }
+    }
+
+    override suspend fun clearChunks(documentId: String) {
+        withContext(dispatchers.io) { documentDao.deleteChunks(documentId) }
+    }
+
+    override suspend fun markOcrPageStarted(documentId: String, page: Int) {
+        withContext(dispatchers.io) {
+            documentDao.markOcrPageStarted(
+                id = documentId,
+                page = page,
+                status = ExtractionStatus.OCR_IN_PROGRESS.name,
+                updatedAtEpochMs = System.currentTimeMillis(),
+            )
+        }
+    }
+
+    override suspend fun commitOcrPage(
+        documentId: String,
+        page: Int,
+        text: String,
+        confidence: Float?,
+    ) {
+        withContext(dispatchers.io) {
+            documentDao.commitOcrPage(
+                documentId = documentId,
+                pageNumber = page,
+                text = text,
+                confidence = confidence,
+                nowEpochMs = System.currentTimeMillis(),
+            )
+        }
+    }
+
+    override suspend fun updateCompiledText(
+        documentId: String,
+        compiledTextPath: String,
+        status: ExtractionStatus,
+    ) {
+        withContext(dispatchers.io) {
+            documentDao.updateCompiledText(
+                id = documentId,
+                path = compiledTextPath,
+                status = status.name,
+                updatedAtEpochMs = System.currentTimeMillis(),
+            )
+        }
+    }
 
     private fun deleteQuietly(path: String?) {
         if (path.isNullOrBlank()) return

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="pdf_default_title">Imported PDF</string>
+
+    <string name="pdf_channel_name">PDF processing</string>
+    <string name="pdf_channel_description">Page-by-page local OCR progress and controls</string>
+    <string name="pdf_notification_title">Facts Wallpaper PDF processing</string>
+    <string name="pdf_notification_preparing">Preparing local OCR for %1$s</string>
+    <string name="pdf_notification_ocr_progress">OCR page %1$d of %2$d &#183; %3$d saved</string>
+    <string name="pdf_notification_pause">Pause</string>
+    <string name="pdf_notification_cancel">Cancel</string>
+
+    <string name="pdf_error_override_required">This scan exceeds the OCR page limit. Re-import it with the override enabled.</string>
+    <string name="pdf_error_ocr_failed">Local OCR failed. Your saved pages were kept; resume to continue.</string>
+    <string name="pdf_error_processing_failed">PDF processing failed. Retry to continue.</string>
+</resources>

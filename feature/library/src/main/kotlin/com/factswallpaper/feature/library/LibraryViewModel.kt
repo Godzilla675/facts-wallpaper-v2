@@ -6,7 +6,9 @@ import com.factswallpaper.core.common.AppResult
 import com.factswallpaper.core.data.repository.DocumentRepository
 import com.factswallpaper.core.data.repository.RotationPoolRepository
 import com.factswallpaper.core.model.Document
+import com.factswallpaper.core.model.DocumentSettings
 import com.factswallpaper.core.model.RotationPoolSummary
+import com.factswallpaper.core.pdf.DocumentProcessingScheduler
 import com.factswallpaper.core.ui.FeatureViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
@@ -15,7 +17,6 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 sealed interface LibraryUiState {
@@ -24,6 +25,7 @@ sealed interface LibraryUiState {
     data class Empty(val query: String) : LibraryUiState
     data class Content(
         val documents: List<Document>,
+        val settings: Map<String, DocumentSettings>,
         val poolSummary: RotationPoolSummary,
         val query: String,
     ) : LibraryUiState
@@ -33,21 +35,24 @@ sealed interface LibraryUiState {
 class LibraryViewModel @Inject constructor(
     private val documentRepository: DocumentRepository,
     rotationPoolRepository: RotationPoolRepository,
+    private val scheduler: DocumentProcessingScheduler,
 ) : FeatureViewModel() {
 
     private val query = MutableStateFlow("")
 
     val uiState = combine(
         documentRepository.observeDocuments(),
+        documentRepository.observeAllSettings(),
         rotationPoolRepository.observePoolSummary(),
         query,
-    ) { documents, summary, search ->
+    ) { documents, settings, summary, search ->
         val filtered = filterDocuments(documents, search)
         if (filtered.isEmpty()) {
             LibraryUiState.Empty(query = search)
         } else {
             LibraryUiState.Content(
                 documents = filtered,
+                settings = settings.associateBy { it.documentId },
                 poolSummary = summary,
                 query = search,
             )
@@ -70,7 +75,8 @@ class LibraryViewModel @Inject constructor(
 
     fun deleteDocument(document: Document) {
         viewModelScope.launch {
-            when (val result = documentRepository.deleteDocument(document.id)) {
+            scheduler.cancel(document.id)
+            when (documentRepository.deleteDocument(document.id)) {
                 is AppResult.Success -> showMessage(R.string.library_delete_success)
                 is AppResult.Failure -> showMessage(R.string.library_delete_failed)
             }
@@ -82,6 +88,23 @@ class LibraryViewModel @Inject constructor(
             documentRepository.setIncludedInRotation(documentId, included)
             showMessage(R.string.library_rotation_saved)
         }
+    }
+
+    fun pauseOcr(documentId: String) {
+        viewModelScope.launch {
+            scheduler.pause(documentId)
+            showMessage(R.string.library_ocr_paused)
+        }
+    }
+
+    fun resumeOcr(documentId: String) {
+        scheduler.resume(documentId)
+        showMessage(R.string.library_ocr_resumed)
+    }
+
+    fun retryProcessing(documentId: String) {
+        scheduler.resume(documentId)
+        showMessage(R.string.library_retry_started)
     }
 
     private fun filterDocuments(documents: List<Document>, query: String): List<Document> {

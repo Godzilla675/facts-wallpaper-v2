@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="ocr_language_eng">English</string>
+    <string name="ocr_language_fra">French</string>
+    <string name="ocr_language_deu">German</string>
+    <string name="ocr_language_spa">Spanish</string>
+    <string name="ocr_language_tur">Turkish</string>
+    <string name="ocr_language_por">Portuguese</string>
+    <string name="ocr_language_ita">Italian</string>
+    <string name="ocr_language_nld">Dutch</string>
+    <string name="ocr_language_zho">Chinese</string>
+    <string name="ocr_language_jpn">Japanese</string>
+    <string name="ocr_language_kor">Korean</string>
+    <string name="ocr_language_hin">Hindi</string>
+    <string name="ocr_language_ara">Arabic</string>
+    <string name="ocr_language_rus">Russian</string>
+    <string name="ocr_language_ukr">Ukrainian</string>
+</resources>

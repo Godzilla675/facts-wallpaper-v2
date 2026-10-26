@@ -21,6 +21,9 @@ abstract class PdfDocumentDao {
     @Query("SELECT * FROM pdf_documents WHERE id = :id")
     abstract suspend fun getById(id: String): PdfDocumentEntity?
 
+    @Query("SELECT localFilePath FROM pdf_documents WHERE id = :id")
+    abstract suspend fun getLocalFilePath(id: String): String?
+
     @Query("SELECT * FROM pdf_documents WHERE fileHash = :fileHash LIMIT 1")
     abstract suspend fun findByHash(fileHash: String): PdfDocumentEntity?
 
@@ -43,6 +46,21 @@ abstract class PdfDocumentDao {
     ) {
         upsert(document)
         upsertSettings(settings)
+    }
+
+    /**
+     * Re-import & replace: the new PDF metadata/settings replace the old row in
+     * the same transaction that drops stale page chunks, so a failure can never
+     * leave old OCR text attached to a new file.
+     */
+    @Transaction
+    open suspend fun replaceDocumentWithSettings(
+        document: PdfDocumentEntity,
+        settings: DocumentSettingsEntity,
+    ) {
+        upsert(document)
+        upsertSettings(settings)
+        deleteChunks(document.id)
     }
 
     @Query("DELETE FROM pdf_documents WHERE id = :id")
@@ -82,11 +100,25 @@ abstract class PdfDocumentDao {
     )
     abstract suspend fun markOcrPageCompleted(id: String, page: Int, updatedAtEpochMs: Long)
 
+    @Query(
+        "UPDATE pdf_documents SET compiledOcrTextPath = :path, extractionStatus = :status, " +
+            "lastErrorMessage = NULL, updatedAtEpochMs = :updatedAtEpochMs WHERE id = :id"
+    )
+    abstract suspend fun updateCompiledText(
+        id: String,
+        path: String,
+        status: String,
+        updatedAtEpochMs: Long,
+    )
+
     @Query("SELECT * FROM document_settings WHERE documentId = :documentId")
     abstract suspend fun getSettings(documentId: String): DocumentSettingsEntity?
 
     @Query("SELECT * FROM document_settings WHERE documentId = :documentId")
     abstract fun observeSettings(documentId: String): Flow<DocumentSettingsEntity?>
+
+    @Query("SELECT * FROM document_settings")
+    abstract fun observeAllSettings(): Flow<List<DocumentSettingsEntity>>
 
     @Upsert
     abstract suspend fun upsertSettings(settings: DocumentSettingsEntity)

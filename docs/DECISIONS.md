@@ -1,6 +1,7 @@
-# Facts Wallpaper v2 — Phase P1 decisions
+# Facts Wallpaper v2 — Phase P1 & P2 decisions
 
-This document records the choices made while delivering Phase P1 (Foundation) of
+This document records the choices made while delivering Phase P1 (Foundation) and
+Phase P2 (PDF Import, Inspection, Extraction & OCR) of
 `Facts Wallpaper Complete Feature Specification.md`. The specification remains the
 authority; where this document and the spec disagree, the spec wins.
 
@@ -24,6 +25,48 @@ Phase P1 establishes a compiling, tested, installable foundation:
 - Focused JVM/Robolectric unit tests for filters, converters, database behavior,
   preference mapping, mappers, rotation-pool semantics, formatters, start routing,
   and route serialization.
+
+Phase P2 delivers `:core:pdf`, `:core:ocr`, durable WorkManager jobs, and the
+complete `:feature:library` + `import_pdf` workflow:
+
+- `:core:pdf`:
+  - Multi-source import (`DefaultPdfImportRepository`, `PdfFileStore`,
+    `HttpPdfUrlDownloader`, `PdfUrlPolicy`): SAF picker (`ACTION_OPEN_DOCUMENT`),
+    share/view intents, and strict HTTPS-only URL download with redirect scheme
+    verification, MIME/magic-byte (`%PDF-`) checks, and a 100 MB streaming cap.
+  - Single-pass copy into app-private staging storage with SHA-256 hashing
+    (`PdfHashing`, `DuplicateHashDetector`) and duplicate policy handling
+    (`OPEN_EXISTING`, `REPLACE_EXISTING`, `IMPORT_AS_COPY`, `ASK`).
+  - Local PDF inspection (`PdfBoxAnalyzer`, `PdfBoxDocumentReader`) using
+    `com.tom-roush:pdfbox-android:2.0.27.0` with per-page `PDFTextStripper`
+    character counting, password-protected PDF detection, and deterministic
+    processing-route classification & cost estimation (`PdfRouteClassifier`,
+    `PdfCostEstimator`, `PdfPageRange`, `PageRangeInput`).
+  - Local text extraction (`PdfTextExtractionProcessor`), direct-PDF sub-PDF
+    building (`PdfDirectPdfProcessor`, `PdfSubPdfBuilder`), and `PdfRenderer`
+    page rasterization (`PdfRendererPageRenderer`, 2.5x scale capped at 2560 px
+    longest edge, white opaque background).
+- `:core:ocr`:
+  - Bundled ML Kit Text Recognition v2 (`MlKitOcrEngine` for Latin, Chinese,
+    Devanagari, Japanese, Korean) and downloadable checksum-verified Tesseract 5
+    LSTM (`TesseractOcrEngine` via `cz.adaptech.tesseract4android:tesseract4android:4.7.0`
+    and `DefaultOcrModelManager` for `ara`, `rus`, `ukr` from `tessdata_fast`
+    pinned commit `65727574dfcd264acbb0c3e07860e4e9e9b22185`).
+  - Page-by-page checkpointed OCR (`DefaultOcrPipeline`, `OcrCheckpointResolver`,
+    `DefaultOcrTextFileCompiler`) storing `ocrLastStartedPage` before rasterizing
+    and atomically committing `ocrLastCompletedPage` + `DocumentChunk` in Room,
+    restarting any interrupted page from scratch while skipping completed pages
+    and preserving >= 40-char digital text pages unless `forceFullLocalOcr` is set.
+  - Deterministic `.txt` compilation (`filesDir/ocr_text/{docId}.txt`) with
+    stable `# Document` / `# Pages` / `# OCR Model` headers and
+    `--- [PAGE N] ---` delimiters.
+- Durable WorkManager jobs (`PdfProcessingWorker`, `DocumentProcessingScheduler`,
+  `PdfNotifications`, `OcrControlReceiver`) using `@HiltWorker` and foreground
+  `dataSync` notifications with Pause/Cancel actions.
+- `:feature:library` (`LibraryScreen`, `LibraryViewModel`, `ImportPdfScreen`,
+  `ImportPdfViewModel`) wired end-to-end with live progress, duplicate dialog,
+  20-page OCR override gate, language pack download manager, pause/resume/retry
+  controls, rotation toggle, and cascade delete.
 
 The build gate is:
 
@@ -49,6 +92,9 @@ The build gate is:
 | Navigation Compose | 2.9.6 |
 | Room | 2.8.4 |
 | DataStore | 1.1.7 |
+| PDFBox-Android | 2.0.27.0 |
+| ML Kit Text Recognition | 16.0.1 (Latin + Chinese/Devanagari/Japanese/Korean 16.0.1) |
+| Tesseract4Android | 4.7.0 |
 | compileSdk / targetSdk / minSdk | 36 / 36 / 33 |
 | JVM target | 17 |
 
@@ -150,8 +196,8 @@ banner, collections summary, wallpaper settings, and (later) the renderer:
   parameterized for localization.
 - Later-phase actions remain enabled where the spec expects an action. Instead
   of silently doing nothing, they show a precise "not yet available in this
-  phase" snackbar (download/analyze, SQLCipher enable, backup export/import,
-  AI suggestions and generation, static wallpaper apply, template creation).
+  phase" snackbar (SQLCipher enable, backup export/import, AI suggestions and
+  generation, static wallpaper apply, template creation).
 
 ## Live wallpaper
 
@@ -163,30 +209,10 @@ fallback to the chooser, and shows a Toast if no picker is available.
 
 ## Deliberately empty modules
 
-`:core:security`, `:core:pdf`, `:core:ocr`, `:core:ai`, `:core:render`, and
-`:core:backup` exist and are wired into the app but contain no fake
-implementations. Their features (API-key storage, PDF parsing, OCR engines, AI
-client/routing, card rendering, backup/export) land in later phases. No screen
-pretends these features work.
-
-## Known gaps and honest limitations
-
-- Import screens validate input and preserve the selected URI, but PDF
-  download/copy/hash inspection and analysis are not implemented yet; the
-  actions report that they are next-phase work.
-- No built-in templates, lessons, facts, collections, or provider profiles are
-  seeded. First runs correctly show empty states; templates appear after later
-  phases seed them or the user creates custom ones.
-- `Document.lessonCount` and `Lesson.factCount` are denormalized counters and
-  can go stale; this phase does not install SQL triggers. Counters fetched by
-  dedicated aggregate queries (collections, tags, pool) are live.
-- The rotation pool is evaluated in memory from Room flows. At large libraries
-  this should become a paginated/limited query; P1 favors correctness and
-  testability.
-- Static wallpaper apply, share/export, backups, encrypted databases, and the
-  AI pipeline are visible as explicit next-phase actions only.
-- Instrumented/Compose UI tests and screenshot tests are not part of P1; the
-  current suite is focused JVM/Robolectric coverage.
+`:core:security`, `:core:ai`, `:core:render`, and `:core:backup` exist and are
+wired into the app but contain no fake implementations. Their features (API-key
+storage, AI client/routing, card rendering, backup/export) land in later phases.
+No screen pretends these features work.
 
 ## Testing notes
 
@@ -203,6 +229,15 @@ pretends these features work.
 - `:core:data`: tag CSV parsing, every domain/entity mapper round-trip, unknown
   enum fallbacks, and rotation-pool integration against an in-memory Room
   database (documents, lessons, favorites, collections, folders, summaries).
+- `:core:pdf`: SHA-256 hashing & `DuplicateHashDetector`, page-range parsing &
+  clamping, deterministic route classification & token/cost estimation, URL
+  validation & `HttpPdfUrlDownloader` streaming limits, and PDFBox synthetic
+  PDF inspection/extraction/sub-PDF building.
+- `:core:ocr`: checkpoint/resume resolution, language catalog & SHA-256
+  manifest verification, deterministic `.txt` rendering, and `DefaultOcrPipeline`
+  checkpointed execution/interrupted-page restart/digital-text preservation.
+- `:feature:library`: `LibraryViewModel` search/delete/pause/resume and
+  `ImportPdfUiState` route/override/language readiness rules.
 - `:core:ui`: source-reference formatting and metric/byte/token/cost/percent
   formatting, including locale-stable output.
 - `:app`: onboarding-vs-library start routing and all 11 type-safe routes,

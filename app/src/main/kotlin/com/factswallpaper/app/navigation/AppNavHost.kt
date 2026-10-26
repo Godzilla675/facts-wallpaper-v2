@@ -71,7 +71,14 @@ fun AppNavHost(
 
         composable<AppRoute.ImportPdf> {
             DetailFrame {
-                ImportPdfScreen(onBack = { navController.popBackStack() })
+                ImportPdfScreen(
+                    onBack = { navController.popBackStack() },
+                    onOpenDocument = { documentId ->
+                        navController.navigate(AppRoute.Outline(documentId)) {
+                            launchSingleTop = true
+                        }
+                    },
+                )
             }
         }
 

@@ -47,6 +47,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.factswallpaper.core.designsystem.theme.LocalSpacing
 import com.factswallpaper.core.model.Document
+import com.factswallpaper.core.model.DocumentSettings
 import com.factswallpaper.core.model.RotationPoolSummary
 import com.factswallpaper.core.ui.UiMessageEffect
 import com.factswallpaper.core.ui.component.DocumentCard
@@ -138,6 +139,9 @@ fun LibraryScreen(
                 onOpenOutline = onOpenDocument,
                 onOpenFacts = onOpenFacts,
                 onToggleRotation = viewModel::setIncludedInRotation,
+                onPauseOcr = viewModel::pauseOcr,
+                onResumeOcr = viewModel::resumeOcr,
+                onRetry = viewModel::retryProcessing,
                 onDelete = { pendingDelete = it },
                 modifier = Modifier.padding(padding),
             )
@@ -176,6 +180,9 @@ private fun LibraryContent(
     onOpenOutline: (String) -> Unit,
     onOpenFacts: (String) -> Unit,
     onToggleRotation: (String, Boolean) -> Unit,
+    onPauseOcr: (String) -> Unit,
+    onResumeOcr: (String) -> Unit,
+    onRetry: (String) -> Unit,
     onDelete: (Document) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -216,11 +223,17 @@ private fun LibraryContent(
             )
         }
         items(state.documents, key = { it.id }) { document ->
+            val settings: DocumentSettings? = state.settings[document.id]
             DocumentCard(
                 document = document,
+                pageRangeStart = settings?.pageRangeStart ?: 1,
+                pageRangeEnd = settings?.pageRangeEnd ?: document.pageCount,
                 onOpenOutline = { onOpenOutline(document.id) },
                 onOpenFacts = { onOpenFacts(document.id) },
                 onToggleRotation = { included -> onToggleRotation(document.id, included) },
+                onPauseOcr = { onPauseOcr(document.id) },
+                onResumeOcr = { onResumeOcr(document.id) },
+                onRetry = { onRetry(document.id) },
                 onDelete = { onDelete(document) },
             )
         }

@@ -24,11 +24,12 @@ sqliteKtx = "2.4.0"
 
 # --- Networking / AI -------------------------------------------------------
 ktor = "3.6.0"
-okhttp = "5.5.1"
+okhttp = "5.1.0"
 
 # --- PDF / OCR / rendering -------------------------------------------------
 mlkitTextRecognition = "16.0.1"
 pdfboxAndroid = "2.0.27.0"
+tesseract4Android = "4.8.0"
 webkit = "1.18.0"
 zip4j = "2.11.6"
 
@@ -96,6 +97,11 @@ okhttp = { module = "com.squareup.okhttp3:okhttp", version.ref = "okhttp" }
 
 # PDF, OCR, rendering & backup
 mlkit-text-recognition = { module = "com.google.mlkit:text-recognition", version.ref = "mlkitTextRecognition" }
+mlkit-text-recognition-chinese = { module = "com.google.mlkit:text-recognition-chinese", version.ref = "mlkitTextRecognition" }
+mlkit-text-recognition-japanese = { module = "com.google.mlkit:text-recognition-japanese", version.ref = "mlkitTextRecognition" }
+mlkit-text-recognition-korean = { module = "com.google.mlkit:text-recognition-korean", version.ref = "mlkitTextRecognition" }
+mlkit-text-recognition-devanagari = { module = "com.google.mlkit:text-recognition-devanagari", version.ref = "mlkitTextRecognition" }
+tesseract4android = { module = "com.github.adaptech-cz.Tesseract4Android:tesseract4android", version.ref = "tesseract4Android" }
 pdfbox-android = { module = "com.tom-roush:pdfbox-android", version.ref = "pdfboxAndroid" }
 androidx-webkit = { module = "androidx.webkit:webkit", version.ref = "webkit" }
 zip4j = { module = "net.lingala.zip4j:zip4j", version.ref = "zip4j" }

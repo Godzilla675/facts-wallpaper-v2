@@ -2,6 +2,7 @@ package com.factswallpaper.core.data.mapper
 
 import com.factswallpaper.core.database.entity.AiRequestLogEntity
 import com.factswallpaper.core.database.entity.CollectionEntity
+import com.factswallpaper.core.database.entity.DocumentChunkEntity
 import com.factswallpaper.core.database.entity.DocumentSettingsEntity
 import com.factswallpaper.core.database.entity.FactItemEntity
 import com.factswallpaper.core.database.entity.LessonEntity
@@ -19,6 +20,7 @@ import com.factswallpaper.core.model.Collection
 import com.factswallpaper.core.model.CollectionSource
 import com.factswallpaper.core.model.DiagramKind
 import com.factswallpaper.core.model.Document
+import com.factswallpaper.core.model.DocumentChunk
 import com.factswallpaper.core.model.DocumentSettings
 import com.factswallpaper.core.model.ExtractionStatus
 import com.factswallpaper.core.model.Fact
@@ -101,6 +103,26 @@ fun Document.toEntity(): PdfDocumentEntity = PdfDocumentEntity(
     lastErrorMessage = lastErrorMessage,
     includedInRotation = includedInRotation,
     createdAtEpochMs = createdAtEpochMs,
+    updatedAtEpochMs = updatedAtEpochMs,
+)
+
+fun DocumentChunkEntity.toDomain(): DocumentChunk = DocumentChunk(
+    documentId = documentId,
+    pageNumber = pageNumber,
+    extractedText = extractedText,
+    status = status,
+    isFromOcr = isFromOcr,
+    ocrConfidence = ocrConfidence,
+    updatedAtEpochMs = updatedAtEpochMs,
+)
+
+fun DocumentChunk.toEntity(): DocumentChunkEntity = DocumentChunkEntity(
+    documentId = documentId,
+    pageNumber = pageNumber,
+    extractedText = extractedText,
+    status = status,
+    isFromOcr = isFromOcr,
+    ocrConfidence = ocrConfidence,
     updatedAtEpochMs = updatedAtEpochMs,
 )
 
