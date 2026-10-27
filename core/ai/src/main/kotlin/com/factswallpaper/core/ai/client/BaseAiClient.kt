@@ -3,6 +3,7 @@ package com.factswallpaper.core.ai.client
 import com.factswallpaper.core.ai.AiClient
 import com.factswallpaper.core.ai.AiRequest
 import com.factswallpaper.core.ai.AiResponse
+import com.factswallpaper.core.ai.SchemaAdapter
 import com.factswallpaper.core.model.ProviderProfile
 import io.ktor.client.HttpClient
 import kotlinx.serialization.json.Json
@@ -25,7 +26,14 @@ abstract class BaseAiClient(
         url: String,
         headers: Map<String, String>,
         body: String,
-    ): String = httpClient.postJson(url, headers, body)
+    ): String = httpClient.postJson(
+        url,
+        buildMap {
+            putAll(SchemaAdapter.customHeaders(profile.customHeadersJson))
+            putAll(headers)
+        },
+        body,
+    )
 
     protected fun shouldSendTemperature(request: AiRequest): Boolean =
         request.temperature != null && profile.supportsTemperature

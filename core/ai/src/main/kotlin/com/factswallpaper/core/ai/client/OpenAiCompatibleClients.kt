@@ -91,7 +91,6 @@ class OpenAiCompatibleClient(
         val headers = buildMap {
             put("Authorization", "Bearer $apiKey")
             put("Content-Type", "application/json")
-            putAll(com.factswallpaper.core.ai.SchemaAdapter.customHeaders(profile.customHeadersJson))
         }
         var omitTemperature = !shouldSendTemperature(request)
         var includeFormat = request.jsonSchema != null &&

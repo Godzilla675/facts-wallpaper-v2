@@ -167,6 +167,10 @@ class MappersTest {
             baseUrl = "https://api.example.com/v1",
             modelName = "reasoning-model",
             maxOutputTokens = 16_384,
+            temperature = 0.4,
+            topP = 0.75,
+            reasoningEffort = "high",
+            rawRequestJson = """{"stream":false}""",
         )
 
         assertThat(profile.toEntity().toDomain()).isEqualTo(profile)

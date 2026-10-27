@@ -80,7 +80,7 @@ class AnthropicClient(
         } else {
             request.systemPrompt
         }
-        return buildJsonObject {
+        val body = buildJsonObject {
             put("model", profile.modelName)
             put("max_tokens", JsonPrimitive(request.maxOutputTokens))
             put("system", systemPrompt)
@@ -171,7 +171,13 @@ class AnthropicClient(
                     },
                 )
             }
-        }.toString()
+        }
+        return RequestParameterOverrides.apply(
+            profile = profile,
+            request = request,
+            kind = RequestBodyKind.ANTHROPIC,
+            body = body,
+        ).toString()
     }
 
     private fun parse(body: String): AiResponse {

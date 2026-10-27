@@ -82,7 +82,7 @@ class GeminiClient(
         } else {
             request.systemPrompt
         }
-        return buildJsonObject {
+        val body = buildJsonObject {
             put(
                 "systemInstruction",
                 buildJsonObject {
@@ -152,7 +152,13 @@ class GeminiClient(
                     }
                 },
             )
-        }.toString()
+        }
+        return RequestParameterOverrides.apply(
+            profile = profile,
+            request = request,
+            kind = RequestBodyKind.GEMINI,
+            body = body,
+        ).toString()
     }
 
     private fun parse(body: String): AiResponse {

@@ -17,6 +17,9 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.boolean
+import kotlinx.serialization.json.double
+import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Test
 
@@ -144,6 +147,31 @@ class WireFormatTest {
     }
 
     @Test
+    fun `openai chat maps typed sampling and reasoning fields`() = runTest {
+        var captured: HttpRequestData? = null
+        val client = mockHttpClient { data ->
+            captured = data
+            respond(
+                content = """{"choices":[{"message":{"content":"{}"},"finish_reason":"stop"}]}""",
+                status = HttpStatusCode.OK,
+                headers = jsonHeaders(),
+            )
+        }
+        val profile = testProfile(type = ProviderType.OPENAI).copy(
+            temperature = 0.6,
+            topP = 0.8,
+            reasoningEffort = "high",
+        )
+
+        OpenAiClient(profile, "sk-test", client).execute(request(schema = null))
+
+        val body = json.parseToJsonElement(captured!!.body.toByteArray().decodeToString()).jsonObject
+        assertThat(body["temperature"]!!.jsonPrimitive.double).isWithin(0.001).of(0.6)
+        assertThat(body["top_p"]!!.jsonPrimitive.double).isWithin(0.001).of(0.8)
+        assertThat(body["reasoning_effort"]!!.jsonPrimitive.content).isEqualTo("high")
+    }
+
+    @Test
     fun `chat response removes think blocks before returning structured content`() = runTest {
         val client = mockHttpClient {
             respond(
@@ -203,6 +231,98 @@ class WireFormatTest {
             .startsWith("data:application/pdf;base64,")
         assertThat(response.inputTokens).isEqualTo(11)
         assertThat(response.outputTokens).isEqualTo(7)
+    }
+
+    @Test
+    fun `openai responses deep merges raw overrides after typed settings`() = runTest {
+        var captured: HttpRequestData? = null
+        val client = mockHttpClient { data ->
+            captured = data
+            respond(
+                content = """{"status":"completed","output_text":"{}"}""",
+                status = HttpStatusCode.OK,
+                headers = jsonHeaders(),
+            )
+        }
+        val profile = testProfile(type = ProviderType.OPENAI).copy(
+            temperature = 0.4,
+            topP = 0.7,
+            reasoningEffort = "low",
+            rawRequestJson = """
+                {
+                  "temperature": 0.9,
+                  "reasoning": {"effort": "high", "summary": "auto"},
+                  "metadata": {"source": {"custom": true}}
+                }
+            """.trimIndent(),
+        )
+
+        OpenAiClient(profile, "sk-test", client)
+            .execute(request(pdf = byteArrayOf(1), schema = null))
+
+        val body = json.parseToJsonElement(captured!!.body.toByteArray().decodeToString()).jsonObject
+        assertThat(body["temperature"]!!.jsonPrimitive.double).isWithin(0.001).of(0.9)
+        assertThat(body["top_p"]!!.jsonPrimitive.double).isWithin(0.001).of(0.7)
+        val reasoning = body["reasoning"]!!.jsonObject
+        assertThat(reasoning["effort"]!!.jsonPrimitive.content).isEqualTo("high")
+        assertThat(reasoning["summary"]!!.jsonPrimitive.content).isEqualTo("auto")
+        assertThat(
+            body["metadata"]!!.jsonObject["source"]!!.jsonObject["custom"]!!.jsonPrimitive.boolean,
+        ).isTrue()
+    }
+
+    @Test
+    fun `anthropic typed reasoning and extra headers reach the wire`() = runTest {
+        var captured: HttpRequestData? = null
+        val client = mockHttpClient { data ->
+            captured = data
+            respond(
+                content = """{"stop_reason":"end_turn","content":[{"type":"text","text":"{}"}]}""",
+                status = HttpStatusCode.OK,
+                headers = jsonHeaders(),
+            )
+        }
+        val profile = testProfile(type = ProviderType.ANTHROPIC).copy(
+            reasoningEffort = "medium",
+            customHeadersJson = """{"X-Tenant":"research"}""",
+        )
+
+        AnthropicClient(profile, "sk-ant-test", client)
+            .execute(request(schema = null).copy(maxOutputTokens = 8_192))
+
+        assertThat(captured!!.headers["X-Tenant"]).isEqualTo("research")
+        val body = json.parseToJsonElement(captured!!.body.toByteArray().decodeToString()).jsonObject
+        assertThat(body["output_config"]!!.jsonObject["effort"]!!.jsonPrimitive.content)
+            .isEqualTo("medium")
+        assertThat(body["thinking"]!!.jsonObject["type"]!!.jsonPrimitive.content)
+            .isEqualTo("enabled")
+    }
+
+    @Test
+    fun `gemini maps typed reasoning to thinking config and merges extra headers`() = runTest {
+        var captured: HttpRequestData? = null
+        val client = mockHttpClient { data ->
+            captured = data
+            respond(
+                content = """{"candidates":[{"content":{"parts":[{"text":"{}"}]}}]}""",
+                status = HttpStatusCode.OK,
+                headers = jsonHeaders(),
+            )
+        }
+        val profile = testProfile(type = ProviderType.GEMINI).copy(
+            reasoningEffort = "high",
+            topP = 0.6,
+            customHeadersJson = """{"X-Tenant":"research"}""",
+        )
+
+        GeminiClient(profile, "test-key", client).execute(request(schema = null))
+
+        assertThat(captured!!.headers["X-Tenant"]).isEqualTo("research")
+        val body = json.parseToJsonElement(captured!!.body.toByteArray().decodeToString()).jsonObject
+        val config = body["generationConfig"]!!.jsonObject
+        assertThat(config["topP"]!!.jsonPrimitive.double).isWithin(0.001).of(0.6)
+        assertThat(config["thinkingConfig"]!!.jsonObject["thinkingBudget"]!!.jsonPrimitive.int)
+            .isEqualTo(8192)
     }
 
     @Test

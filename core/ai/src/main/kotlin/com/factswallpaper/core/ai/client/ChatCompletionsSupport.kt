@@ -33,7 +33,7 @@ internal object ChatCompletionsSupport {
         } else {
             request.systemPrompt
         }
-        return buildJsonObject {
+        val body = buildJsonObject {
             put("model", profile.modelName)
             put(
                 "messages",
@@ -120,7 +120,13 @@ internal object ChatCompletionsSupport {
                     )
                 }
             }
-        }.toString()
+        }
+        return RequestParameterOverrides.apply(
+            profile = profile,
+            request = request,
+            kind = RequestBodyKind.OPENAI_CHAT,
+            body = body,
+        ).toString()
     }
 
     fun schemaFor(

@@ -130,7 +130,7 @@ class OpenAiClient(
         } else {
             request.systemPrompt
         }
-        return buildJsonObject {
+        val body = buildJsonObject {
             put("model", profile.modelName)
             put(
                 "input",
@@ -223,7 +223,13 @@ class OpenAiClient(
                     },
                 )
             }
-        }.toString()
+        }
+        return RequestParameterOverrides.apply(
+            profile = profile,
+            request = request,
+            kind = RequestBodyKind.OPENAI_RESPONSES,
+            body = body,
+        ).toString()
     }
 
     private fun parseResponses(body: String): AiResponse {

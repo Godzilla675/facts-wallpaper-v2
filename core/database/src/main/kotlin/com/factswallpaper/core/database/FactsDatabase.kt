@@ -75,7 +75,7 @@ abstract class FactsDatabase : RoomDatabase() {
 
     companion object {
         const val NAME = "facts_wallpaper.db"
-        const val VERSION = 2
+        const val VERSION = 3
 
         val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
@@ -85,11 +85,22 @@ abstract class FactsDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE provider_profiles ADD COLUMN temperature REAL")
+                db.execSQL("ALTER TABLE provider_profiles ADD COLUMN topP REAL")
+                db.execSQL("ALTER TABLE provider_profiles ADD COLUMN reasoningEffort TEXT")
+                db.execSQL(
+                    "ALTER TABLE provider_profiles ADD COLUMN rawRequestJson TEXT NOT NULL DEFAULT '{}'",
+                )
+            }
+        }
+
         /**
          * Registered migrations. Version 1 is the initial schema; every future
          * schema change must append a Migration here and bump [VERSION]. There is
          * deliberately no destructive fallback: local study data is precious.
          */
-        val MIGRATIONS: Array<Migration> = arrayOf(MIGRATION_1_2)
+        val MIGRATIONS: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3)
     }
 }

@@ -194,3 +194,22 @@ No screen pretends these features work.
   parameters.
 - OpenAI-compatible responses keep `reasoning` fields and `<think>` blocks out
   of structured content while including reported reasoning tokens in usage.
+
+## Phase P7.2 — Advanced Provider Parameters
+
+- Room schema version 3 adds per-profile `temperature`, `topP`,
+  `reasoningEffort`, and `rawRequestJson`; the existing `customHeadersJson`
+  field continues to hold editable extra headers. Migration 2→3 preserves
+  existing headers and supplies nullable typed settings plus an empty override
+  object.
+- Every HTTP request-body builder passes its provider-shaped body through the
+  shared override helper. Typed values are mapped to OpenAI chat/Responses,
+  Anthropic thinking/output configuration, and Gemini `thinkingConfig`; raw
+  JSON objects are recursively merged last, with arrays/scalars replaced.
+  Custom headers are applied to all HTTP provider clients, while required
+  authentication headers take precedence.
+- The provider editor exposes typed sampling/reasoning controls, editable
+  header rows, and a live-validating monospace raw JSON editor with the four
+  requested snippets. It flags credential-like values without persisting API
+  keys in a separate store; the existing secure API-key field remains the
+  supported place for credentials.

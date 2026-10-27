@@ -44,6 +44,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -51,12 +52,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.factswallpaper.core.ai.AiModelInfo
+import com.factswallpaper.core.ai.client.ProviderHeaderValue
+import com.factswallpaper.core.ai.client.ProviderHeadersJson
+import com.factswallpaper.core.ai.client.RawRequestJson
 import com.factswallpaper.core.designsystem.theme.LocalSpacing
 import com.factswallpaper.core.model.AiTask
 import com.factswallpaper.core.model.ProviderProfile
@@ -137,7 +142,20 @@ fun ProviderSettingsScreen(
                 addingProfile = false
                 editingProfile = null
             },
-            onSave = { name, type, baseUrl, model, context, outputTokens, apiKey ->
+            onSave = {
+                    name,
+                    type,
+                    baseUrl,
+                    model,
+                    context,
+                    outputTokens,
+                    temperature,
+                    topP,
+                    reasoningEffort,
+                    headers,
+                    rawRequestJson,
+                    apiKey,
+                ->
                 viewModel.saveProfile(
                     existing = editingProfile,
                     name = name,
@@ -147,6 +165,11 @@ fun ProviderSettingsScreen(
                     maxContextTokens = context,
                     maxOutputTokens = outputTokens,
                     apiKey = apiKey,
+                    temperature = temperature,
+                    topP = topP,
+                    reasoningEffort = reasoningEffort,
+                    customHeadersJson = headers,
+                    rawRequestJson = rawRequestJson,
                 )
                 addingProfile = false
                 editingProfile = null
@@ -503,6 +526,11 @@ private fun ProfileEditorDialog(
         model: String,
         context: Int,
         outputTokens: Int,
+        temperature: Double?,
+        topP: Double?,
+        reasoningEffort: String?,
+        customHeadersJson: String,
+        rawRequestJson: String,
         apiKey: String?,
     ) -> Unit,
 ) {
@@ -518,6 +546,47 @@ private fun ProfileEditorDialog(
     var maxOutputTokens by remember {
         mutableStateOf(existing?.maxOutputTokens?.toString() ?: "8192")
     }
+    var temperature by remember(existing?.id) {
+        mutableStateOf(existing?.temperature?.toString().orEmpty())
+    }
+    var topP by remember(existing?.id) { mutableStateOf(existing?.topP?.toString().orEmpty()) }
+    var effortMode by remember(existing?.id) {
+        mutableStateOf(
+            when (existing?.reasoningEffort?.lowercase()) {
+                null -> "default"
+                "none", "low", "medium", "high" -> existing.reasoningEffort?.lowercase()
+                else -> "custom"
+            },
+        )
+    }
+    var customEffort by remember(existing?.id) {
+        mutableStateOf(
+            existing?.reasoningEffort?.takeUnless {
+                it.lowercase() in setOf("none", "low", "medium", "high")
+            }.orEmpty(),
+        )
+    }
+    var editRawJson by remember(existing?.id) {
+        mutableStateOf(RawRequestJson.looksLikeSecret(existing?.rawRequestJson.orEmpty()))
+    }
+    var rawRequestJson by remember(existing?.id) {
+        mutableStateOf(existing?.rawRequestJson ?: "{}")
+    }
+    val rawJsonValidation = remember(rawRequestJson) { RawRequestJson.validate(rawRequestJson) }
+    val rawJsonHasSecret = remember(rawRequestJson) { RawRequestJson.looksLikeSecret(rawRequestJson) }
+    val initialHeaders = remember(existing?.id) {
+        ProviderHeadersJson.parse(existing?.customHeadersJson ?: "{}")
+    }
+    var headerError by remember(existing?.id) { mutableStateOf(initialHeaders.error) }
+    val headerRows = remember(existing?.id) {
+        mutableStateListOf<ProviderHeaderValue>().apply { addAll(initialHeaders.entries) }
+    }
+    val temperatureValue = temperature.toDoubleOrNull()
+    val topPValue = topP.toDoubleOrNull()
+    val typedSettingsValid =
+        (temperature.isBlank() || temperatureValue?.let { it in 0.0..2.0 } == true) &&
+            (topP.isBlank() || topPValue?.let { it in 0.0..1.0 } == true) &&
+            (effortMode != "custom" || customEffort.isNotBlank())
     var apiKey by remember { mutableStateOf("") }
 
     AlertDialog(
@@ -583,6 +652,10 @@ private fun ProfileEditorDialog(
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth(),
                 )
+                Text(
+                    text = stringResource(R.string.provider_advanced_parameters),
+                    style = MaterialTheme.typography.titleSmall,
+                )
                 OutlinedTextField(
                     value = maxOutputTokens,
                     onValueChange = { maxOutputTokens = it.filter(Char::isDigit) },
@@ -594,6 +667,181 @@ private fun ProfileEditorDialog(
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth(),
                 )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = temperature,
+                        onValueChange = { temperature = it },
+                        label = { Text(stringResource(R.string.provider_temperature)) },
+                        supportingText = {
+                            Text(stringResource(R.string.provider_temperature_helper))
+                        },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        modifier = Modifier.weight(1f),
+                        isError = temperature.isNotBlank() &&
+                            temperatureValue?.let { it in 0.0..2.0 } != true,
+                    )
+                    OutlinedTextField(
+                        value = topP,
+                        onValueChange = { topP = it },
+                        label = { Text(stringResource(R.string.provider_top_p)) },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        modifier = Modifier.weight(1f),
+                        isError = topP.isNotBlank() &&
+                            topPValue?.let { it in 0.0..1.0 } != true,
+                    )
+                }
+                Text(
+                    text = stringResource(R.string.provider_reasoning_effort),
+                    style = MaterialTheme.typography.labelMedium,
+                )
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    listOf("default", "none", "low", "medium", "high", "custom").forEach { effort ->
+                        FilterChip(
+                            selected = effortMode == effort,
+                            onClick = { effortMode = effort },
+                            label = {
+                                Text(
+                                    stringResource(
+                                        when (effort) {
+                                            "default" -> R.string.provider_effort_default
+                                            "none" -> R.string.provider_effort_none
+                                            "low" -> R.string.provider_effort_low
+                                            "medium" -> R.string.provider_effort_medium
+                                            "high" -> R.string.provider_effort_high
+                                            else -> R.string.provider_effort_custom
+                                        },
+                                    ),
+                                )
+                            },
+                        )
+                    }
+                }
+                if (effortMode == "custom") {
+                    OutlinedTextField(
+                        value = customEffort,
+                        onValueChange = { customEffort = it },
+                        label = { Text(stringResource(R.string.provider_custom_effort)) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+                Text(
+                    text = stringResource(R.string.provider_extra_headers),
+                    style = MaterialTheme.typography.labelMedium,
+                )
+                headerRows.forEachIndexed { index, header ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(
+                            value = header.key,
+                            onValueChange = {
+                                headerRows[index] = headerRows[index].copy(key = it)
+                            },
+                            label = { Text(stringResource(R.string.provider_header_name)) },
+                            singleLine = true,
+                            modifier = Modifier.weight(1f),
+                        )
+                        OutlinedTextField(
+                            value = header.value,
+                            onValueChange = {
+                                headerRows[index] = headerRows[index].copy(value = it)
+                            },
+                            label = { Text(stringResource(R.string.provider_header_value)) },
+                            singleLine = true,
+                            modifier = Modifier.weight(1f),
+                        )
+                        TextButton(onClick = { headerRows.removeAt(index) }) {
+                            Text(stringResource(R.string.provider_remove_header))
+                        }
+                    }
+                }
+                OutlinedButton(
+                    onClick = { headerRows += ProviderHeaderValue() },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(stringResource(R.string.provider_add_header))
+                }
+                headerError?.let { error ->
+                    Text(
+                        text = stringResource(R.string.provider_headers_invalid, error),
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    TextButton(
+                        onClick = {
+                            headerRows.clear()
+                            headerError = null
+                        },
+                    ) {
+                        Text(stringResource(R.string.provider_reset_headers))
+                    }
+                }
+                TextButton(onClick = { editRawJson = !editRawJson }) {
+                    Text(
+                        stringResource(
+                            if (editRawJson) {
+                                R.string.provider_hide_raw_json
+                            } else {
+                                R.string.provider_edit_raw_json
+                            },
+                        ),
+                    )
+                }
+                if (editRawJson) {
+                    OutlinedTextField(
+                        value = rawRequestJson,
+                        onValueChange = { rawRequestJson = it },
+                        label = { Text(stringResource(R.string.provider_raw_json_label)) },
+                        supportingText = {
+                            if (!rawJsonValidation.isValid) {
+                                Text(
+                                    stringResource(
+                                        R.string.provider_raw_json_error,
+                                        rawJsonValidation.position?.let { it + 1 } ?: 1,
+                                        rawJsonValidation.error.orEmpty(),
+                                    ),
+                                    color = MaterialTheme.colorScheme.error,
+                                )
+                            } else if (rawJsonHasSecret) {
+                                Text(
+                                    stringResource(R.string.provider_raw_json_secret_warning),
+                                    color = MaterialTheme.colorScheme.error,
+                                )
+                            } else {
+                                Text(stringResource(R.string.provider_raw_json_helper))
+                            }
+                        },
+                        textStyle = MaterialTheme.typography.bodyMedium.copy(
+                            fontFamily = FontFamily.Monospace,
+                        ),
+                        minLines = 5,
+                        modifier = Modifier.fillMaxWidth(),
+                        isError = !rawJsonValidation.isValid || rawJsonHasSecret,
+                    )
+                    Text(
+                        text = stringResource(R.string.provider_raw_json_presets),
+                        style = MaterialTheme.typography.labelMedium,
+                    )
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        listOf(
+                            R.string.provider_preset_reasoning to """{"reasoning_effort":"low"}""",
+                            R.string.provider_preset_thinking to
+                                """{"chat_template_kwargs":{"thinking":false}}""",
+                            R.string.provider_preset_enable_thinking to
+                                """{"chat_template_kwargs":{"enable_thinking":false}}""",
+                            R.string.provider_preset_stream to """{"stream":false}""",
+                        ).forEach { (label, preset) ->
+                            FilterChip(
+                                selected = false,
+                                onClick = {
+                                    rawRequestJson = RawRequestJson.mergePreset(rawRequestJson, preset)
+                                },
+                                label = { Text(stringResource(label)) },
+                            )
+                        }
+                    }
+                }
                 OutlinedTextField(
                     value = apiKey,
                     onValueChange = { apiKey = it },
@@ -629,10 +877,25 @@ private fun ProfileEditorDialog(
                         model,
                         context.toIntOrNull() ?: 128_000,
                         maxOutputTokens.toIntOrNull() ?: 8_192,
+                        temperatureValue,
+                        topPValue,
+                        when (effortMode) {
+                            "default" -> null
+                            "none", "low", "medium", "high" -> effortMode
+                            else -> customEffort.trim()
+                        },
+                        ProviderHeadersJson.serialize(headerRows),
+                        rawRequestJson,
                         apiKey.takeIf { it.isNotBlank() },
                     )
                 },
-                enabled = name.isNotBlank() && baseUrl.isNotBlank() && model.isNotBlank(),
+                enabled = name.isNotBlank() &&
+                    baseUrl.isNotBlank() &&
+                    model.isNotBlank() &&
+                    typedSettingsValid &&
+                    rawJsonValidation.isValid &&
+                    !rawJsonHasSecret &&
+                    headerError == null,
             ) {
                 Text(stringResource(R.string.provider_save))
             }

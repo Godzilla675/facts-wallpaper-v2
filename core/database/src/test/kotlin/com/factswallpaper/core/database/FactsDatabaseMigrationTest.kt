@@ -55,4 +55,64 @@ class FactsDatabaseMigrationTest {
             helper.close()
         }
     }
+
+    @Test
+    fun `version two profiles receive advanced request settings defaults`() {
+        val migration = FactsDatabase.MIGRATIONS.singleOrNull {
+            it.startVersion == 2 && it.endVersion == 3
+        }
+        assertThat(migration?.endVersion).isEqualTo(3)
+        if (migration == null) return
+
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val helper = FrameworkSQLiteOpenHelperFactory().create(
+            SupportSQLiteOpenHelper.Configuration.builder(context)
+                .name(null)
+                .callback(
+                    object : SupportSQLiteOpenHelper.Callback(2) {
+                        override fun onCreate(db: SupportSQLiteDatabase) {
+                            db.execSQL(
+                                """
+                                CREATE TABLE provider_profiles (
+                                    id TEXT NOT NULL PRIMARY KEY,
+                                    customHeadersJson TEXT NOT NULL DEFAULT '{}',
+                                    maxOutputTokens INTEGER NOT NULL DEFAULT 8192
+                                )
+                                """.trimIndent(),
+                            )
+                        }
+
+                        override fun onUpgrade(
+                            db: SupportSQLiteDatabase,
+                            oldVersion: Int,
+                            newVersion: Int,
+                        ) = Unit
+                    },
+                )
+                .build(),
+        )
+        try {
+            val database = helper.writableDatabase
+            database.execSQL(
+                "INSERT INTO provider_profiles (id, customHeadersJson) VALUES ('profile-2', '{\"x\":\"y\"}')",
+            )
+            migration.migrate(database)
+            database.query(
+                """
+                SELECT temperature, topP, reasoningEffort, rawRequestJson, customHeadersJson
+                FROM provider_profiles
+                WHERE id = 'profile-2'
+                """.trimIndent(),
+            ).use { cursor ->
+                assertThat(cursor.moveToFirst()).isTrue()
+                assertThat(cursor.isNull(0)).isTrue()
+                assertThat(cursor.isNull(1)).isTrue()
+                assertThat(cursor.isNull(2)).isTrue()
+                assertThat(cursor.getString(3)).isEqualTo("{}")
+                assertThat(cursor.getString(4)).isEqualTo("{\"x\":\"y\"}")
+            }
+        } finally {
+            helper.close()
+        }
+    }
 }

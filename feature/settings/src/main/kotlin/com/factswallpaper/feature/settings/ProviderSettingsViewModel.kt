@@ -4,6 +4,7 @@ import androidx.annotation.StringRes
 import androidx.lifecycle.viewModelScope
 import com.factswallpaper.core.ai.AiModelInfo
 import com.factswallpaper.core.ai.ProviderDiagnosticsService
+import com.factswallpaper.core.ai.client.RawRequestJson
 import com.factswallpaper.core.common.AppResult
 import com.factswallpaper.core.data.repository.DiagnosticsRepository
 import com.factswallpaper.core.data.repository.ProviderProfileRepository
@@ -119,9 +120,18 @@ class ProviderSettingsViewModel @Inject constructor(
         maxContextTokens: Int,
         maxOutputTokens: Int = existing?.maxOutputTokens ?: 8_192,
         apiKey: String? = null,
+        temperature: Double? = existing?.temperature,
+        topP: Double? = existing?.topP,
+        reasoningEffort: String? = existing?.reasoningEffort,
+        customHeadersJson: String = existing?.customHeadersJson ?: "{}",
+        rawRequestJson: String = existing?.rawRequestJson ?: "{}",
     ) {
         if (name.isBlank() || modelName.isBlank() || baseUrl.isBlank()) {
             showMessage(R.string.provider_fields_required)
+            return
+        }
+        if (!RawRequestJson.validate(rawRequestJson).isValid) {
+            showMessage(R.string.provider_raw_json_invalid)
             return
         }
         val content = uiState.value as? ProviderSettingsUiState.Content
@@ -134,6 +144,11 @@ class ProviderSettingsViewModel @Inject constructor(
                 modelName = modelName.trim(),
                 maxContextTokens = maxContextTokens.coerceIn(1_000, 2_000_000),
                 maxOutputTokens = maxOutputTokens.coerceIn(1_024, 1_000_000),
+                temperature = temperature?.coerceIn(0.0, 2.0),
+                topP = topP?.coerceIn(0.0, 1.0),
+                reasoningEffort = reasoningEffort?.trim()?.takeIf(String::isNotEmpty),
+                customHeadersJson = customHeadersJson,
+                rawRequestJson = rawRequestJson.trim(),
             ) ?: ProviderProfile(
                 id = id,
                 name = name.trim(),
@@ -142,6 +157,11 @@ class ProviderSettingsViewModel @Inject constructor(
                 modelName = modelName.trim(),
                 maxContextTokens = maxContextTokens.coerceIn(1_000, 2_000_000),
                 maxOutputTokens = maxOutputTokens.coerceIn(1_024, 1_000_000),
+                temperature = temperature?.coerceIn(0.0, 2.0),
+                topP = topP?.coerceIn(0.0, 1.0),
+                reasoningEffort = reasoningEffort?.trim()?.takeIf(String::isNotEmpty),
+                customHeadersJson = customHeadersJson,
+                rawRequestJson = rawRequestJson.trim(),
                 supportsPdfInput = providerType == ProviderType.GEMINI ||
                     providerType == ProviderType.OPENAI ||
                     providerType == ProviderType.ANTHROPIC,
