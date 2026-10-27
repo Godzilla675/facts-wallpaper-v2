@@ -8,6 +8,7 @@ import androidx.work.workDataOf
 import com.factswallpaper.core.ai.FactDraft
 import com.factswallpaper.core.ai.StructuredAiService
 import com.factswallpaper.core.common.CardPreRenderNotifier
+import com.factswallpaper.core.common.VisionPageRenderer
 import com.factswallpaper.core.data.pipeline.PipelineNotifier
 import com.factswallpaper.core.data.pipeline.PipelineScheduler
 import com.factswallpaper.core.data.repository.CollectionRepository
@@ -17,6 +18,7 @@ import com.factswallpaper.core.data.repository.FactRepository
 import com.factswallpaper.core.data.repository.LessonRepository
 import com.factswallpaper.core.model.CardTemplateType
 import com.factswallpaper.core.model.DiagramKind
+import com.factswallpaper.core.model.DocumentInputMode
 import com.factswallpaper.core.model.ExtractionStatus
 import com.factswallpaper.core.model.Fact
 import com.factswallpaper.core.model.FactFilter
@@ -65,6 +67,7 @@ class FactsGenerationWorker @AssistedInject constructor(
     private val preRenderNotifier: CardPreRenderNotifier,
     private val pipelineNotifier: PipelineNotifier,
     private val pipelineScheduler: PipelineScheduler,
+    private val visionPageRenderer: VisionPageRenderer,
 ) : CoroutineWorker(appContext, params) {
 
     override suspend fun doWork(): Result {
@@ -140,7 +143,10 @@ class FactsGenerationWorker @AssistedInject constructor(
             }
 
             val pages = documentTextRepository.getPages(documentId, lesson.startPage, lesson.endPage)
-            if (pages.isEmpty()) {
+            val isVision = (settings?.documentInputMode == DocumentInputMode.VISION) ||
+                (settings?.documentInputMode == DocumentInputMode.AUTO && pages.isEmpty())
+
+            if (pages.isEmpty() && !isVision) {
                 warnings += "${lesson.title}: no extracted text on pages ${lesson.startPage}–${lesson.endPage}."
                 return@forEachIndexed
             }
@@ -148,31 +154,61 @@ class FactsGenerationWorker @AssistedInject constructor(
                 val existingFacts = factRepository
                     .observeFacts(FactFilter(documentId = documentId))
                     .first()
-                val result = generationOrchestrator.generateLesson(
-                    request = GenerationLessonRequest(
+
+                val resultDrafts: List<FactDraft>
+                val sourceMaterial: String
+                if (isVision) {
+                    val pageImages = visionPageRenderer.getPageImages(
+                        documentId = documentId,
+                        localFilePath = document.localFilePath,
+                        startPage = lesson.startPage,
+                        endPage = lesson.endPage,
+                        maxPages = 20,
+                    )
+                    val visionResult = structuredAiService.generateFactsVision(
                         documentId = documentId,
                         lessonTitle = lesson.title,
-                        lessonPages = pages,
+                        pageImages = pageImages,
                         documentPageCount = document.pageCount,
                         density = settings?.factDensity ?: com.factswallpaper.core.model.FactDensity.BALANCED,
                         includeFormulas = settings?.includeFormulas ?: true,
                         includeDiagrams = settings?.includeDiagrams ?: true,
                         manualProfileId = manualProfileId ?: settings?.preferredProviderProfileId,
                         existingFactTexts = existingFacts.map { it.text },
-                    ),
-                    pageProvider = { start, end ->
-                        documentTextRepository.getPages(documentId, start, end)
-                    },
-                )
-                estimated += result.estimatedCostUsd
-                actual += result.actualCostUsd
-                warnings += result.warnings
-
-                val sourceMaterial = pages.joinToString("\n") {
-                    "[PAGE ${it.pageNumber}]\n${it.text}"
+                    )
+                    estimated += visionResult.estimatedCostUsd
+                    actual += visionResult.actualCostUsd
+                    warnings += visionResult.warnings
+                    resultDrafts = visionResult.facts
+                    sourceMaterial = "Lesson: ${lesson.title} (Pages ${lesson.startPage}–${lesson.endPage})"
+                } else {
+                    val result = generationOrchestrator.generateLesson(
+                        request = GenerationLessonRequest(
+                            documentId = documentId,
+                            lessonTitle = lesson.title,
+                            lessonPages = pages,
+                            documentPageCount = document.pageCount,
+                            density = settings?.factDensity ?: com.factswallpaper.core.model.FactDensity.BALANCED,
+                            includeFormulas = settings?.includeFormulas ?: true,
+                            includeDiagrams = settings?.includeDiagrams ?: true,
+                            manualProfileId = manualProfileId ?: settings?.preferredProviderProfileId,
+                            existingFactTexts = existingFacts.map { it.text },
+                        ),
+                        pageProvider = { start, end ->
+                            documentTextRepository.getPages(documentId, start, end)
+                        },
+                    )
+                    estimated += result.estimatedCostUsd
+                    actual += result.actualCostUsd
+                    warnings += result.warnings
+                    resultDrafts = result.facts
+                    sourceMaterial = pages.joinToString("\n") {
+                        "[PAGE ${it.pageNumber}]\n${it.text}"
+                    }
                 }
+
                 val verify = settings?.autoVerifyFormulas ?: true
-                val newFacts = result.facts.mapNotNull { draft ->
+                val newFacts = resultDrafts.mapNotNull { draft ->
                     createVerifiedFact(
                         draft = draft,
                         documentId = documentId,

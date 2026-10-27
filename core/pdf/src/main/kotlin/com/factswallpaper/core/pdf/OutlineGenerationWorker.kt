@@ -6,11 +6,13 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import com.factswallpaper.core.ai.StructuredAiService
+import com.factswallpaper.core.common.VisionPageRenderer
 import com.factswallpaper.core.data.pipeline.PipelineNotifier
 import com.factswallpaper.core.data.pipeline.PipelineScheduler
 import com.factswallpaper.core.data.repository.DocumentRepository
 import com.factswallpaper.core.data.repository.DocumentTextRepository
 import com.factswallpaper.core.data.repository.LessonRepository
+import com.factswallpaper.core.model.DocumentInputMode
 import com.factswallpaper.core.model.ExtractionStatus
 import com.factswallpaper.core.model.Lesson
 import dagger.assisted.Assisted
@@ -50,6 +52,7 @@ class OutlineGenerationWorker @AssistedInject constructor(
     private val pdfBoxDocumentReader: PdfBoxDocumentReader,
     private val pipelineNotifier: PipelineNotifier,
     private val pipelineScheduler: PipelineScheduler,
+    private val visionPageRenderer: VisionPageRenderer,
 ) : CoroutineWorker(appContext, params) {
 
     override suspend fun doWork(): Result {
@@ -62,7 +65,11 @@ class OutlineGenerationWorker @AssistedInject constructor(
         val startPage = settings?.pageRangeStart ?: 1
         val endPage = settings?.pageRangeEnd ?: document.pageCount
         val pages = documentTextRepository.getPages(documentId, startPage, endPage)
-        if (pages.isEmpty()) {
+        val inputMode = settings?.documentInputMode ?: DocumentInputMode.AUTO
+        val isVision = inputMode == DocumentInputMode.VISION ||
+            (inputMode == DocumentInputMode.AUTO && pages.isEmpty())
+
+        if (pages.isEmpty() && !isVision) {
             return Result.failure(
                 workDataOf(
                     OutlineWork.KEY_MESSAGE to
@@ -87,7 +94,7 @@ class OutlineGenerationWorker @AssistedInject constructor(
             progress = 0.4f,
         )
 
-        setProgress(progress(phase = "starting", completed = 0, total = pages.size))
+        setProgress(progress(phase = "starting", completed = 0, total = maxOf(pages.size, 1)))
         return try {
             val bookmarkWarnings = mutableListOf<String>()
             val bookmarkLessons = try {
@@ -103,6 +110,20 @@ class OutlineGenerationWorker @AssistedInject constructor(
             }
             val result = if (bookmarkLessons.size >= 2) {
                 null
+            } else if (isVision) {
+                val pageImages = visionPageRenderer.getPageImages(
+                    documentId = documentId,
+                    localFilePath = document.localFilePath,
+                    startPage = startPage,
+                    endPage = endPage,
+                    maxPages = 20,
+                )
+                structuredAiService.generateOutlineVision(
+                    documentId = documentId,
+                    pageImages = pageImages,
+                    pdfPageCount = document.pageCount,
+                    manualProfileId = manualProfileId ?: settings?.preferredProviderProfileId,
+                )
             } else {
                 structuredAiService.generateOutline(
                     documentId = documentId,
@@ -138,8 +159,8 @@ class OutlineGenerationWorker @AssistedInject constructor(
             setProgress(
                 progress(
                     phase = "saving",
-                    completed = pages.size,
-                    total = pages.size,
+                    completed = maxOf(pages.size, 1),
+                    total = maxOf(pages.size, 1),
                     estimatedCostUsd = estimatedCost,
                 ),
             )

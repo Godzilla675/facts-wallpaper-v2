@@ -108,6 +108,22 @@ interface StructuredAiService {
         progress: ((completed: Int, total: Int) -> Unit)? = null,
     ): OutlineGenerationResult
 
+    suspend fun generateOutlineVision(
+        documentId: String?,
+        pageImages: List<ByteArray>,
+        pdfPageCount: Int? = null,
+        manualProfileId: String? = null,
+        progress: ((completed: Int, total: Int) -> Unit)? = null,
+    ): OutlineGenerationResult = generateOutline(
+        documentId = documentId,
+        pages = emptyList(),
+        pdfBytes = null,
+        pdfFileName = null,
+        pdfPageCount = pdfPageCount,
+        manualProfileId = manualProfileId,
+        progress = progress,
+    )
+
     suspend fun generateFacts(
         documentId: String?,
         lessonTitle: String,
@@ -122,11 +138,42 @@ interface StructuredAiService {
         progress: ((completed: Int, total: Int) -> Unit)? = null,
     ): FactsGenerationResult
 
+    suspend fun generateFactsVision(
+        documentId: String?,
+        lessonTitle: String,
+        pageImages: List<ByteArray>,
+        documentPageCount: Int,
+        density: FactDensity,
+        includeFormulas: Boolean,
+        includeDiagrams: Boolean,
+        manualProfileId: String? = null,
+        existingFactTexts: List<String> = emptyList(),
+        extraInstruction: String? = null,
+        progress: ((completed: Int, total: Int) -> Unit)? = null,
+    ): FactsGenerationResult = generateFacts(
+        documentId = documentId,
+        lessonTitle = lessonTitle,
+        pages = emptyList(),
+        documentPageCount = documentPageCount,
+        density = density,
+        includeFormulas = includeFormulas,
+        includeDiagrams = includeDiagrams,
+        manualProfileId = manualProfileId,
+        existingFactTexts = existingFactTexts,
+        extraInstruction = extraInstruction,
+        progress = progress,
+    )
+
     suspend fun estimateOutline(
         pages: List<PageText>,
         pdfPageCount: Int? = null,
         manualProfileId: String? = null,
     ): AiCostEstimate
+
+    suspend fun estimateOutlineVision(
+        imageCount: Int,
+        manualProfileId: String? = null,
+    ): AiCostEstimate = estimateOutline(emptyList(), pdfPageCount = imageCount, manualProfileId = manualProfileId)
 
     suspend fun estimateFacts(
         lessonTitle: String,
@@ -136,6 +183,15 @@ interface StructuredAiService {
         includeDiagrams: Boolean,
         manualProfileId: String? = null,
     ): AiCostEstimate
+
+    suspend fun estimateFactsVision(
+        lessonTitle: String,
+        imageCount: Int,
+        density: FactDensity,
+        includeFormulas: Boolean,
+        includeDiagrams: Boolean,
+        manualProfileId: String? = null,
+    ): AiCostEstimate = estimateFacts(lessonTitle, emptyList(), density, includeFormulas, includeDiagrams, manualProfileId)
 
     suspend fun verifyFormula(
         source: String,
@@ -336,6 +392,83 @@ class DefaultStructuredAiService @Inject constructor(
         )
     }
 
+    override suspend fun generateOutlineVision(
+        documentId: String?,
+        pageImages: List<ByteArray>,
+        pdfPageCount: Int?,
+        manualProfileId: String?,
+        progress: ((completed: Int, total: Int) -> Unit)?,
+    ): OutlineGenerationResult {
+        if (pageImages.isEmpty()) {
+            throw AiException(
+                AiErrorKind.INVALID_REQUEST,
+                "No page images were provided for vision outline extraction.",
+            )
+        }
+        val pageCount = pdfPageCount ?: pageImages.size
+        val baseRequest = outlineRequest(userPrompt = "")
+        val profile = callService.resolveProfile(
+            request = baseRequest,
+            manualProfileId = manualProfileId,
+        )
+        val initialOutputBudget = profile.initialOutputTokenBudget()
+        val request = outlineRequest(
+            userPrompt = "Analyze the attached study document page images and extract a comprehensive, structured outline of lessons.",
+        ).copy(
+            images = pageImages,
+            imageMimeType = "image/jpeg",
+            maxOutputTokens = initialOutputBudget,
+        )
+        val estimate = estimateOutlineVision(
+            imageCount = pageImages.size,
+            manualProfileId = manualProfileId,
+        )
+        var outcome = callService.execute(
+            request = request,
+            documentId = documentId,
+            manualProfileId = manualProfileId,
+        )
+        var validation = validator.validateOutline(outcome.response.text, pageCount)
+        if (!validation.isValid) {
+            val retry = retryTruncatedJson(
+                outcome = outcome,
+                request = request,
+                documentId = documentId,
+            ) { raw -> validator.validateOutline(raw, pageCount).isValid }
+            if (retry != null) {
+                outcome = retry
+                validation = validator.validateOutline(retry.response.text, pageCount)
+            }
+        }
+        if (!validation.isValid) {
+            val repaired = runCatching {
+                repairService.repair(
+                    profile = outcome.profile,
+                    canonicalSchema = AiSchemas.OutlineJsonSchema,
+                    malformed = outcome.response.text,
+                )
+            }.getOrNull()
+            if (repaired != null) {
+                validation = validator.validateOutline(repaired.response.text, pageCount)
+            }
+        }
+        val lessons = validation.value ?: throw AiException(
+            AiErrorKind.CONTENT,
+            "The provider returned no usable lessons from vision outline.",
+        )
+        progress?.invoke(1, 1)
+        return OutlineGenerationResult(
+            lessons = mergeOutline(lessons),
+            warnings = validation.errors.take(20),
+            profile = profile,
+            usedFailover = outcome.usedFailover,
+            estimatedCostUsd = estimate.estimatedCostUsd,
+            actualCostUsd = outcomeCost(outcome),
+        )
+    }
+
+
+
     override suspend fun generateFacts(
         documentId: String?,
         lessonTitle: String,
@@ -488,6 +621,113 @@ class DefaultStructuredAiService @Inject constructor(
         )
     }
 
+    override suspend fun generateFactsVision(
+        documentId: String?,
+        lessonTitle: String,
+        pageImages: List<ByteArray>,
+        documentPageCount: Int,
+        density: FactDensity,
+        includeFormulas: Boolean,
+        includeDiagrams: Boolean,
+        manualProfileId: String?,
+        existingFactTexts: List<String>,
+        extraInstruction: String?,
+        progress: ((completed: Int, total: Int) -> Unit)?,
+    ): FactsGenerationResult {
+        if (pageImages.isEmpty()) {
+            throw AiException(
+                AiErrorKind.INVALID_REQUEST,
+                "No page images were provided for vision facts generation.",
+            )
+        }
+        val baseRequest = factsRequest(
+            lessonTitle = lessonTitle,
+            material = "",
+            density = density,
+            includeFormulas = includeFormulas,
+            includeDiagrams = includeDiagrams,
+            extraInstruction = extraInstruction,
+        )
+        val profile = callService.resolveProfile(
+            request = baseRequest,
+            requireDirectPdf = false,
+            manualProfileId = manualProfileId,
+        )
+        val initialOutputBudget = profile.initialOutputTokenBudget()
+        val request = factsRequest(
+            lessonTitle = lessonTitle,
+            material = "Extract high-yield study facts from the attached lesson page images.",
+            density = density,
+            includeFormulas = includeFormulas,
+            includeDiagrams = includeDiagrams,
+            extraInstruction = extraInstruction,
+        ).copy(
+            images = pageImages,
+            imageMimeType = "image/jpeg",
+            maxOutputTokens = initialOutputBudget,
+        )
+        val estimate = estimateFactsVision(
+            lessonTitle = lessonTitle,
+            imageCount = pageImages.size,
+            density = density,
+            includeFormulas = includeFormulas,
+            includeDiagrams = includeDiagrams,
+            manualProfileId = manualProfileId,
+        )
+        var outcome = callService.execute(
+            request = request,
+            documentId = documentId,
+            pdfPageCount = documentPageCount,
+            manualProfileId = manualProfileId,
+        )
+        var validation = validator.validateFacts(
+            raw = outcome.response.text,
+            pageCount = documentPageCount,
+            maxFacts = density.maxFactsPerLesson,
+        )
+        if (!validation.isValid) {
+            val retry = retryTruncatedJson(
+                outcome = outcome,
+                request = request,
+                documentId = documentId,
+            ) { raw ->
+                validator.validateFacts(raw, documentPageCount, density.maxFactsPerLesson).isValid
+            }
+            if (retry != null) {
+                outcome = retry
+                validation = validator.validateFacts(retry.response.text, documentPageCount, density.maxFactsPerLesson)
+            }
+        }
+        if (!validation.isValid) {
+            val repaired = runCatching {
+                repairService.repair(
+                    profile = outcome.profile,
+                    canonicalSchema = AiSchemas.FactsJsonSchema,
+                    malformed = outcome.response.text,
+                )
+            }.getOrNull()
+            if (repaired != null) {
+                validation = validator.validateFacts(repaired.response.text, documentPageCount, density.maxFactsPerLesson)
+            }
+        }
+        val rawFacts = validation.value ?: throw AiException(
+            AiErrorKind.CONTENT,
+            "The provider returned no usable facts from vision generation.",
+        )
+        progress?.invoke(1, 1)
+        return FactsGenerationResult(
+            facts = TextChunker.deduplicate(facts = rawFacts, threshold = 0.82, existing = existingFactTexts),
+            warnings = validation.errors.take(20),
+            profile = profile,
+            usedFailover = outcome.usedFailover,
+            estimatedCostUsd = estimate.estimatedCostUsd,
+            actualCostUsd = outcomeCost(outcome),
+            repairUsed = false,
+        )
+    }
+
+
+
     override suspend fun estimateOutline(
         pages: List<PageText>,
         pdfPageCount: Int?,
@@ -535,6 +775,60 @@ class DefaultStructuredAiService @Inject constructor(
             includeDiagrams = includeDiagrams,
         )
     }
+
+    override suspend fun estimateOutlineVision(
+        imageCount: Int,
+        manualProfileId: String?,
+    ): AiCostEstimate {
+        val baseRequest = outlineRequest(userPrompt = "")
+        val profile = callService.resolveProfile(
+            request = baseRequest,
+            manualProfileId = manualProfileId,
+        )
+        val inputTokens = CostEstimator.estimateVisionTokens(imageCount)
+        val outputTokens = (imageCount.coerceAtLeast(1) * 60).coerceIn(800, profile.outputTokenLimit())
+        return AiCostEstimate(
+            profile = profile,
+            estimatedInputTokens = inputTokens,
+            estimatedOutputTokens = outputTokens,
+            estimatedCostUsd = CostEstimator.estimateCostUsd(profile, inputTokens, outputTokens),
+        )
+    }
+
+    override suspend fun estimateFactsVision(
+        lessonTitle: String,
+        imageCount: Int,
+        density: FactDensity,
+        includeFormulas: Boolean,
+        includeDiagrams: Boolean,
+        manualProfileId: String?,
+    ): AiCostEstimate {
+        val baseRequest = factsRequest(
+            lessonTitle = lessonTitle,
+            material = "",
+            density = density,
+            includeFormulas = includeFormulas,
+            includeDiagrams = includeDiagrams,
+        )
+        val profile = callService.resolveProfile(
+            request = baseRequest,
+            requireDirectPdf = false,
+            manualProfileId = manualProfileId,
+        )
+        val promptTokens = CostEstimator.estimateTextTokens(
+            AiPrompts.factsUserPromptFromText(lessonTitle, "", density, includeFormulas, includeDiagrams),
+        )
+        val inputTokens = promptTokens + CostEstimator.estimateVisionTokens(imageCount)
+        val outputTokens = (density.maxFactsPerLesson * 140 + 300).coerceAtMost(profile.outputTokenLimit())
+        return AiCostEstimate(
+            profile = profile,
+            estimatedInputTokens = inputTokens,
+            estimatedOutputTokens = outputTokens,
+            estimatedCostUsd = CostEstimator.estimateCostUsd(profile, inputTokens, outputTokens),
+        )
+    }
+
+
 
     override suspend fun verifyFormula(
         source: String,

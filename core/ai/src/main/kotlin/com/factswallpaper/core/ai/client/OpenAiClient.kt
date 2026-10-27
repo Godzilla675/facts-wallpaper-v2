@@ -130,6 +130,10 @@ class OpenAiClient(
         } else {
             request.systemPrompt
         }
+        val allImages = buildList {
+            request.imageBytes?.let { add(it) }
+            addAll(request.images)
+        }
         val body = buildJsonObject {
             put("model", profile.modelName)
             put(
@@ -173,13 +177,13 @@ class OpenAiClient(
                                             },
                                         )
                                     }
-                                    request.imageBytes?.let { bytes ->
+                                    allImages.forEach { bytes ->
                                         add(
                                             buildJsonObject {
                                                 put("type", "input_image")
                                                 put(
                                                     "image_url",
-                                                    "data:${request.imageMimeType ?: "image/png"};base64," +
+                                                    "data:${request.imageMimeType ?: "image/jpeg"};base64," +
                                                         Base64.getEncoder().encodeToString(bytes),
                                                 )
                                             },

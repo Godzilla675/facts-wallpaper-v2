@@ -1,5 +1,6 @@
 package com.factswallpaper.core.pdf
 
+import com.factswallpaper.core.common.VisionPageRenderer
 import com.factswallpaper.core.data.pipeline.PipelineNotifier
 import com.factswallpaper.core.data.pipeline.PipelineScheduler
 import dagger.Binds
@@ -40,6 +41,10 @@ abstract class PdfBindingsModule {
     @Binds
     @Singleton
     abstract fun bindOcrPageRenderer(impl: PdfRendererPageRenderer): com.factswallpaper.core.ocr.OcrPageRenderer
+
+    @Binds
+    @Singleton
+    abstract fun bindVisionPageRenderer(impl: PdfPageImageCache): VisionPageRenderer
 
     @Binds
     @Singleton

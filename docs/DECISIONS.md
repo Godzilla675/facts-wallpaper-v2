@@ -269,3 +269,13 @@ No screen pretends these features work.
   - `OUTLINE_AND_GENERATE_ALL`: Extraction -> Outline -> Automatic Facts Generation for selected lessons -> Pre-render cards into rotation pool.
   - `ASK_ME`: Extraction -> Analyzed (user prompted to start outline).
 - Persisted Room schema version 5 adding `pipeline_progress`, `auto_process_mode`, `document_input_mode` with migration `MIGRATION_4_5`.
+
+## Phase P8.2 — Vision Mode with Page Images and Multimodal AI
+
+- Added `VisionPageRenderer` port in `:core:common` and implemented in `:core:pdf` via `PdfPageImageCache`, avoiding circular module dependencies between `:core:data` and `:core:pdf`.
+- `PdfPageImageCache` renders PDF pages at 150 DPI (~1600px maximum long edge, JPEG 85% compression) via Android `PdfRenderer` and caches rendered pages on disk in an LRU store bounded to 50 MB and 100 entries.
+- Page-range filtered sub-PDFs are sliced using `PdfSubPdfBuilder` with PDFBox to ensure direct-PDF and vision tasks only upload user-selected page ranges.
+- Universal `AiRequest` model extended with `images: List<ByteArray>` and multimodal serialization across Gemini (`inline_data`), Anthropic (`type: image`), OpenAI Responses (`type: input_image`), and OpenAI-compatible Chat Completions (`type: image_url`).
+- Cost estimation models vision tokens at 1,200 tokens per rendered page image in `CostEstimator` with pre-flight task estimation.
+- `StructuredAiService` exposes `generateOutlineVision` and `generateFactsVision`, using token budgeting, schema validation, and json repair for vision responses.
+- `OutlineGenerationWorker` and `FactsGenerationWorker` invoke the multimodal vision path when `documentInputMode` is configured to `VISION`, or in `AUTO` mode when no text was extracted.

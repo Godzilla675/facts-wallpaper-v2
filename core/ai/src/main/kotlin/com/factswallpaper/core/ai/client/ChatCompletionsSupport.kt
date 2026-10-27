@@ -33,6 +33,10 @@ internal object ChatCompletionsSupport {
         } else {
             request.systemPrompt
         }
+        val allImages = buildList {
+            request.imageBytes?.let { add(it) }
+            addAll(request.images)
+        }
         val body = buildJsonObject {
             put("model", profile.modelName)
             put(
@@ -47,7 +51,7 @@ internal object ChatCompletionsSupport {
                     add(
                         buildJsonObject {
                             put("role", "user")
-                            if (request.imageBytes != null) {
+                            if (allImages.isNotEmpty()) {
                                 put(
                                     "content",
                                     buildJsonArray {
@@ -57,23 +61,23 @@ internal object ChatCompletionsSupport {
                                                 put("text", request.userPrompt)
                                             },
                                         )
-                                        add(
-                                            buildJsonObject {
-                                                put("type", "image_url")
-                                                put(
-                                                    "image_url",
-                                                    buildJsonObject {
-                                                        put(
-                                                            "url",
-                                                            "data:${request.imageMimeType ?: "image/png"};base64," +
-                                                                Base64.getEncoder().encodeToString(
-                                                                    request.imageBytes,
-                                                                ),
-                                                        )
-                                                    },
-                                                )
-                                            },
-                                        )
+                                        allImages.forEach { bytes ->
+                                            add(
+                                                buildJsonObject {
+                                                    put("type", "image_url")
+                                                    put(
+                                                        "image_url",
+                                                        buildJsonObject {
+                                                            put(
+                                                                "url",
+                                                                "data:${request.imageMimeType ?: "image/jpeg"};base64," +
+                                                                    Base64.getEncoder().encodeToString(bytes),
+                                                            )
+                                                        },
+                                                    )
+                                                },
+                                            )
+                                        }
                                     },
                                 )
                             } else {

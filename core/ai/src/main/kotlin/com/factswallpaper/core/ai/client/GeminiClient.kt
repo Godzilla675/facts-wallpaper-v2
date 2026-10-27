@@ -82,6 +82,10 @@ class GeminiClient(
         } else {
             request.systemPrompt
         }
+        val allImages = buildList {
+            request.imageBytes?.let { add(it) }
+            addAll(request.images)
+        }
         val body = buildJsonObject {
             put(
                 "systemInstruction",
@@ -116,7 +120,7 @@ class GeminiClient(
                                             },
                                         )
                                     }
-                                    request.imageBytes?.let { bytes ->
+                                    allImages.forEach { bytes ->
                                         add(
                                             buildJsonObject {
                                                 put(
@@ -124,7 +128,7 @@ class GeminiClient(
                                                     buildJsonObject {
                                                         put(
                                                             "mime_type",
-                                                            request.imageMimeType ?: "image/png",
+                                                            request.imageMimeType ?: "image/jpeg",
                                                         )
                                                         put("data", base64(bytes))
                                                     },

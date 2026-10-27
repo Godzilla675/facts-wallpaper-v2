@@ -21,6 +21,25 @@ class CostEstimatorTest {
     }
 
     @Test
+    fun `vision token estimate is 1200 per image`() {
+        assertThat(CostEstimator.estimateVisionTokens(0)).isEqualTo(0)
+        assertThat(CostEstimator.estimateVisionTokens(1)).isEqualTo(1_200)
+        assertThat(CostEstimator.estimateVisionTokens(5)).isEqualTo(6_000)
+    }
+
+    @Test
+    fun `vision task estimate combines vision tokens and expected output`() {
+        val profile = testProfile(inputPrice = 1.0, outputPrice = 2.0)
+        val cost = CostEstimator.estimateVisionTask(
+            profile = profile,
+            imageCount = 5,
+            expectedOutputTokens = 1_000,
+        )
+        // 5 * 1200 = 6000 input tokens ($0.006) + 1000 output tokens ($0.002) = $0.008
+        assertThat(cost).isWithin(1e-9).of((6_000 * 1.0 + 1_000 * 2.0) / 1_000_000.0)
+    }
+
+    @Test
     fun `cost formula matches per million rates`() {
         val cost = CostEstimator.estimateCostUsd(
             inputTokens = 1_000_000,

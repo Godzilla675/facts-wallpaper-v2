@@ -93,7 +93,7 @@ class StructuredAiServiceTest {
                 )
             } else {
                 respond(
-                    content = chatEnvelope("""{"facts":[{"text":"broken"""),
+                    content = chatEnvelope("""{"facts":[{"text":"broken""""),
                     status = HttpStatusCode.OK,
                     headers = jsonHeaders(),
                 )
@@ -138,7 +138,7 @@ class StructuredAiServiceTest {
             ).jsonObject
             budgets += body["max_completion_tokens"]!!.jsonPrimitive.content
             val response = if (calls == 1) {
-                chatEnvelope("""{"facts":[{"text":"truncated""", finishReason = "length")
+                chatEnvelope("""{"facts":[{"text":"truncated"""", finishReason = "length")
             } else {
                 chatEnvelope(validFactJson())
             }
@@ -238,6 +238,58 @@ class StructuredAiServiceTest {
 
         assertThat(error).isInstanceOf(AiException::class.java)
         assertThat((error as AiException).kind).isEqualTo(AiErrorKind.INVALID_REQUEST)
+    }
+
+    @Test
+    fun `facts vision pipeline executes multimodal request and parses response`() = runTest {
+        var calls = 0
+        val profile = testProfile(context = 100_000)
+        val (service, usage, _) = buildService(profile) {
+            calls++
+            respond(
+                content = chatEnvelope(validFactJson()),
+                status = HttpStatusCode.OK,
+                headers = jsonHeaders(),
+            )
+        }
+
+        val result = service.generateFactsVision(
+            documentId = "doc-1",
+            lessonTitle = "Lesson",
+            pageImages = listOf(byteArrayOf(1, 2, 3)),
+            documentPageCount = 1,
+            density = FactDensity.BALANCED,
+            includeFormulas = true,
+            includeDiagrams = true,
+        )
+
+        assertThat(calls).isEqualTo(1)
+        assertThat(result.facts).hasSize(1)
+        assertThat(usage.entries).hasSize(1)
+    }
+
+    @Test
+    fun `outline vision pipeline executes multimodal request and returns lessons`() = runTest {
+        var calls = 0
+        val profile = testProfile(context = 100_000)
+        val (service, _, _) = buildService(profile) {
+            calls++
+            respond(
+                content = chatEnvelope("""{"lessons":[{"title":"Vision Lesson","summary":"Extracted via vision.","startPage":1,"endPage":1}]}"""),
+                status = HttpStatusCode.OK,
+                headers = jsonHeaders(),
+            )
+        }
+
+        val result = service.generateOutlineVision(
+            documentId = "doc-1",
+            pageImages = listOf(byteArrayOf(1, 2, 3)),
+            pdfPageCount = 1,
+        )
+
+        assertThat(calls).isEqualTo(1)
+        assertThat(result.lessons).hasSize(1)
+        assertThat(result.lessons.first().title).isEqualTo("Vision Lesson")
     }
 
     @Test

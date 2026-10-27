@@ -11,6 +11,8 @@ object CostEstimator {
 
     fun estimatePdfTokens(pageCount: Int): Int = (pageCount * 300).coerceAtLeast(300)
 
+    fun estimateVisionTokens(imageCount: Int): Int = (imageCount * 1_200).coerceAtLeast(0)
+
     fun estimateCostUsd(
         inputTokens: Int,
         outputTokens: Int,
@@ -35,6 +37,17 @@ object CostEstimator {
     ): Double = estimateCostUsd(
         profile = profile,
         inputTokens = estimateTextTokens(inputText),
+        outputTokens = expectedOutputTokens.coerceAtLeast(1),
+    )
+
+    /** Pre-flight estimate for a vision task: image tokens + expected output. */
+    fun estimateVisionTask(
+        profile: ProviderProfile,
+        imageCount: Int,
+        expectedOutputTokens: Int,
+    ): Double = estimateCostUsd(
+        profile = profile,
+        inputTokens = estimateVisionTokens(imageCount),
         outputTokens = expectedOutputTokens.coerceAtLeast(1),
     )
 }

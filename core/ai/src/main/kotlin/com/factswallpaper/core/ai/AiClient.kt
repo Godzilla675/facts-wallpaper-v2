@@ -17,6 +17,7 @@ data class AiRequest(
     val pdfFileName: String? = null,
     val imageBytes: ByteArray? = null,
     val imageMimeType: String? = null,
+    val images: List<ByteArray> = emptyList(),
     val jsonSchema: String? = null,
     val temperature: Double? = 0.2,
     val maxOutputTokens: Int = 8_192,
@@ -31,6 +32,8 @@ data class AiRequest(
             pdfFileName == other.pdfFileName &&
             imageBytes.contentEquals(other.imageBytes) &&
             imageMimeType == other.imageMimeType &&
+            images.size == other.images.size &&
+            images.indices.all { images[it].contentEquals(other.images[it]) } &&
             jsonSchema == other.jsonSchema &&
             temperature == other.temperature &&
             maxOutputTokens == other.maxOutputTokens
@@ -44,6 +47,7 @@ data class AiRequest(
         result = 31 * result + (pdfFileName?.hashCode() ?: 0)
         result = 31 * result + (imageBytes?.contentHashCode() ?: 0)
         result = 31 * result + (imageMimeType?.hashCode() ?: 0)
+        result = 31 * result + images.fold(0) { acc, arr -> 31 * acc + arr.contentHashCode() }
         result = 31 * result + (jsonSchema?.hashCode() ?: 0)
         result = 31 * result + (temperature?.hashCode() ?: 0)
         result = 31 * result + maxOutputTokens
@@ -58,6 +62,7 @@ data class AiResponse(
     val inputTokens: Int = 0,
     val outputTokens: Int = 0,
     val finishReason: String? = null,
+    val rawUsageJson: String? = null,
     val reasoningText: String = "",
 )
 

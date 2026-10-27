@@ -80,6 +80,10 @@ class AnthropicClient(
         } else {
             request.systemPrompt
         }
+        val allImages = buildList {
+            request.imageBytes?.let { add(it) }
+            addAll(request.images)
+        }
         val body = buildJsonObject {
             put("model", profile.modelName)
             put("max_tokens", JsonPrimitive(request.maxOutputTokens))
@@ -114,7 +118,7 @@ class AnthropicClient(
                                             },
                                         )
                                     }
-                                    request.imageBytes?.let { bytes ->
+                                    allImages.forEach { bytes ->
                                         add(
                                             buildJsonObject {
                                                 put("type", "image")
@@ -124,7 +128,7 @@ class AnthropicClient(
                                                         put("type", "base64")
                                                         put(
                                                             "media_type",
-                                                            request.imageMimeType ?: "image/png",
+                                                            request.imageMimeType ?: "image/jpeg",
                                                         )
                                                         put(
                                                             "data",
