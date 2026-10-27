@@ -238,7 +238,7 @@ class FactsLiveWallpaperService : WallpaperService() {
             // Accent category / source lesson tag
             val headerText = fact.tags.firstOrNull()?.uppercase()
                 ?: fact.sourceLessonTitle?.uppercase()?.take(28)
-                ?: "FACT"
+                ?: getString(R.string.wallpaper_fallback_fact_label)
             val headerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = Color.rgb(196, 161, 96) // Warm gold
                 textSize = (width * 0.034f).coerceIn(12f, 22f)
@@ -277,7 +277,7 @@ class FactsLiveWallpaperService : WallpaperService() {
                 if (fact.sourceBookTitle.isNotBlank()) append(fact.sourceBookTitle)
                 if (fact.sourcePage != null) {
                     if (isNotEmpty()) append(" · ")
-                    append("p. ${fact.sourcePage}")
+                    append(getString(R.string.wallpaper_fallback_page_short, fact.sourcePage))
                 }
             }
             if (sourceText.isNotBlank()) {
@@ -319,7 +319,7 @@ class FactsLiveWallpaperService : WallpaperService() {
                 typeface = Typeface.create(Typeface.SERIF, Typeface.BOLD)
             }
             val titleY = clockSafeTop + (width * 0.12f)
-            canvas.drawText("Facts Wallpaper", width / 2f, titleY, titlePaint)
+            canvas.drawText(getString(R.string.facts_wallpaper_service_title), width / 2f, titleY, titlePaint)
 
             // Subtitle: "Import a PDF to start studying"
             val subtitlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -329,7 +329,12 @@ class FactsLiveWallpaperService : WallpaperService() {
                 typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL)
             }
             val subtitleY = titleY + (width * 0.08f)
-            canvas.drawText("Import a PDF to start studying", width / 2f, subtitleY, subtitlePaint)
+            canvas.drawText(
+                getString(R.string.wallpaper_fallback_subtitle),
+                width / 2f,
+                subtitleY,
+                subtitlePaint,
+            )
 
             // Gesture-safe bottom hint
             val hintPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -338,7 +343,12 @@ class FactsLiveWallpaperService : WallpaperService() {
                 textSize = (width * 0.032f).coerceIn(12f, 24f)
                 typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL)
             }
-            canvas.drawText("Open Facts Wallpaper to configure rotation", width / 2f, bottomSafe - 24f, hintPaint)
+            canvas.drawText(
+                getString(R.string.wallpaper_fallback_hint),
+                width / 2f,
+                bottomSafe - 24f,
+                hintPaint,
+            )
         }
     }
 }

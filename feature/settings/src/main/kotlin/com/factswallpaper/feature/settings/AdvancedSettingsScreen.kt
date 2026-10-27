@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
@@ -60,6 +61,7 @@ import com.factswallpaper.core.designsystem.theme.LocalSpacing
 import com.factswallpaper.core.model.AiRequestLogEntry
 import com.factswallpaper.core.model.AiTask
 import com.factswallpaper.core.ui.UiMessageEffect
+import com.factswallpaper.core.ui.component.ErrorStatePanel
 import com.factswallpaper.core.ui.component.MetricPill
 import com.factswallpaper.core.ui.component.SectionGroupCard
 import com.factswallpaper.core.ui.component.SettingSwitchRow
@@ -108,9 +110,12 @@ fun AdvancedSettingsScreen(
     ) { padding ->
         when (val value = state) {
             AdvancedSettingsUiState.Loading -> AdvancedLoading(Modifier.padding(padding))
-            is AdvancedSettingsUiState.Error -> AdvancedError(
-                messageRes = value.messageRes,
-                modifier = Modifier.padding(padding),
+            is AdvancedSettingsUiState.Error -> ErrorStatePanel(
+                message = stringResource(value.messageRes),
+                onRetry = viewModel::retry,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
             )
             is AdvancedSettingsUiState.Content -> AdvancedContent(
                 state = value,
@@ -284,6 +289,7 @@ private fun AdvancedContent(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .heightIn(min = 48.dp)
                             .clickable { onEditSuffix(task) }
                             .padding(vertical = spacing.sm),
                         verticalAlignment = Alignment.CenterVertically,
@@ -494,6 +500,7 @@ private fun AdvancedContent(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .heightIn(min = 48.dp)
                         .clickable(onClick = onSqlCipher)
                         .padding(vertical = spacing.sm),
                     verticalAlignment = Alignment.CenterVertically,
@@ -526,6 +533,7 @@ private fun LogRow(log: AiRequestLogEntry, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .heightIn(min = 48.dp)
             .clickable(onClick = onClick)
             .padding(vertical = spacing.sm),
         verticalAlignment = Alignment.CenterVertically,
@@ -652,7 +660,9 @@ private fun BackupDialog(
                 )
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.clickable { includeAssets = !includeAssets },
+                    modifier = Modifier
+                        .heightIn(min = 48.dp)
+                        .clickable { includeAssets = !includeAssets },
                 ) {
                     Checkbox(checked = includeAssets, onCheckedChange = { includeAssets = it })
                     Text(
@@ -662,7 +672,9 @@ private fun BackupDialog(
                 }
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.clickable { includePdfs = !includePdfs },
+                    modifier = Modifier
+                        .heightIn(min = 48.dp)
+                        .clickable { includePdfs = !includePdfs },
                 ) {
                     Checkbox(checked = includePdfs, onCheckedChange = { includePdfs = it })
                     Text(
@@ -739,6 +751,7 @@ private fun ValueRow(title: String, value: String, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .heightIn(min = 48.dp)
             .clickable(onClick = onClick)
             .padding(vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -871,24 +884,5 @@ private fun AdvancedLoading(modifier: Modifier = Modifier) {
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         CircularProgressIndicator()
-    }
-}
-
-@Composable
-private fun AdvancedError(
-    messageRes: Int,
-    modifier: Modifier = Modifier,
-) {
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(24.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Text(
-            text = stringResource(messageRes),
-            style = MaterialTheme.typography.bodyLarge,
-        )
     }
 }

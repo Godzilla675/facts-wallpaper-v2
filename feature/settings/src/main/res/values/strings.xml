@@ -2,9 +2,8 @@
 <resources>
     <string name="provider_title">Settings</string>
     <string name="provider_advanced">Advanced settings</string>
-    <string name="provider_keys_banner">Provider API keys are sealed in the Android Keystore. Key storage and connection testing ship with the AI phase; profiles and routing below are saved now.</string>
+    <string name="provider_keys_banner">Provider API keys are sealed in the Android Keystore on this device. Profiles, routing and connection tests run entirely from this phone.</string>
     <string name="provider_keys_action">Key storage details</string>
-    <string name="provider_keys_not_yet">Secure API key storage arrives with the AI phase. Profiles and routing choices are already saved.</string>
     <string name="provider_routing_title">Routing strategy</string>
     <string name="provider_routing_helper">Balanced favours quality per cost. Per-task overrides below take precedence.</string>
     <string name="provider_routing_cheapest">Cheapest</string>
@@ -37,7 +36,7 @@
     <string name="provider_base_url_label">Base URL</string>
     <string name="provider_model_label">Model name</string>
     <string name="provider_context_label">Max context tokens</string>
-    <string name="provider_keys_dialog_note">API keys are not stored yet. Adding a key arrives with the AI phase.</string>
+    <string name="provider_api_key_label">API key</string>
     <string name="provider_save">Save</string>
     <string name="provider_cancel">Cancel</string>
     <string name="provider_saved">Provider profile saved.</string>
@@ -49,7 +48,6 @@
     <string name="provider_deleted">Provider profile deleted.</string>
     <string name="provider_delete_failed">Could not delete the provider profile.</string>
     <string name="provider_test_connection">Test connection</string>
-    <string name="provider_test_not_yet">Connection testing arrives with the AI phase.</string>
     <string name="provider_settings_load_error">Could not load provider settings.</string>
 
     <string name="provider_task_outline">Outline detection</string>
@@ -93,7 +91,7 @@
     <string name="advanced_double_tap_helper">Lets the live wallpaper move to the next card on a double tap.</string>
     <string name="advanced_logs_count">%1$d recent requests</string>
     <string name="advanced_logs_clear">Clear</string>
-    <string name="advanced_logs_empty">No requests logged yet. Entries appear after the AI phase is connected.</string>
+    <string name="advanced_logs_empty">No AI requests logged yet. Entries appear after you run outline detection, fact generation or a connection test.</string>
     <string name="advanced_logs_cleared">Request log cleared.</string>
     <string name="advanced_log_line">%1$s &#183; %2$s</string>
     <string name="advanced_log_meta">%1$d ms &#183; %2$d in / %3$d out &#183; %4$s</string>

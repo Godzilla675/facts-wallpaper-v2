@@ -23,8 +23,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 sealed interface ProviderSettingsUiState {
@@ -50,29 +52,36 @@ class ProviderSettingsViewModel @Inject constructor(
 
     private val configuredKeyIds = MutableStateFlow<Set<String>>(emptySet())
     private val testingProfileId = MutableStateFlow<String?>(null)
+    private val retrySignal = MutableStateFlow(0)
 
-    val uiState = combine(
-        profileRepository.observeProfiles(),
-        settingsRepository.observePreferences(),
-        diagnosticsRepository.observeUsageSummary(),
-        configuredKeyIds,
-        testingProfileId,
-    ) { profiles, preferences, usage, keyIds, testingId ->
-        ProviderSettingsUiState.Content(
-            profiles = profiles,
-            preferences = preferences,
-            usage = usage,
-            configuredKeyProfileIds = keyIds,
-            testingProfileId = testingId,
-        )
+    val uiState = retrySignal.flatMapLatest {
+        combine(
+            profileRepository.observeProfiles(),
+            settingsRepository.observePreferences(),
+            diagnosticsRepository.observeUsageSummary(),
+            configuredKeyIds,
+            testingProfileId,
+        ) { profiles, preferences, usage, keyIds, testingId ->
+            ProviderSettingsUiState.Content(
+                profiles = profiles,
+                preferences = preferences,
+                usage = usage,
+                configuredKeyProfileIds = keyIds,
+                testingProfileId = testingId,
+            )
+        }
+            .map<ProviderSettingsUiState.Content, ProviderSettingsUiState> { it }
+            .catch { emit(ProviderSettingsUiState.Error(R.string.provider_settings_load_error)) }
     }
-        .map<ProviderSettingsUiState.Content, ProviderSettingsUiState> { it }
-        .catch { emit(ProviderSettingsUiState.Error(R.string.provider_settings_load_error)) }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
             initialValue = ProviderSettingsUiState.Loading,
         )
+
+    fun retry() {
+        retrySignal.update { it + 1 }
+    }
 
     init {
         viewModelScope.launch {

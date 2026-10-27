@@ -56,6 +56,7 @@ import com.factswallpaper.core.model.Lesson
 import com.factswallpaper.core.model.VerificationStatus
 import com.factswallpaper.core.ui.UiMessageEffect
 import com.factswallpaper.core.ui.component.BannerSeverity
+import com.factswallpaper.core.ui.component.ErrorStatePanel
 import com.factswallpaper.core.ui.component.InlineBanner
 import com.factswallpaper.core.ui.component.LessonSelectionRow
 import com.factswallpaper.core.ui.component.MetricPill
@@ -68,7 +69,7 @@ import java.util.Locale
 @Composable
 fun OutlineScreen(
     onBack: () -> Unit,
-    onOpenFacts: (String) -> Unit = {},
+    onOpenFacts: (String) -> Unit,
     modifier: Modifier = Modifier,
     viewModel: OutlineViewModel = hiltViewModel(),
 ) {
@@ -106,9 +107,12 @@ fun OutlineScreen(
     ) { padding ->
         when (val value = state) {
             OutlineUiState.Loading -> OutlineLoading(Modifier.padding(padding))
-            is OutlineUiState.Error -> OutlineError(
-                messageRes = value.messageRes,
-                modifier = Modifier.padding(padding),
+            is OutlineUiState.Error -> ErrorStatePanel(
+                message = stringResource(value.messageRes),
+                onRetry = viewModel::retry,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
             )
             is OutlineUiState.Content -> OutlineContent(
                 state = value,
@@ -739,25 +743,6 @@ private fun OutlineLoading(modifier: Modifier = Modifier) {
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         androidx.compose.material3.CircularProgressIndicator()
-    }
-}
-
-@Composable
-private fun OutlineError(
-    @androidx.annotation.StringRes messageRes: Int,
-    modifier: Modifier = Modifier,
-) {
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(24.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Text(
-            text = stringResource(messageRes),
-            style = MaterialTheme.typography.bodyLarge,
-        )
     }
 }
 

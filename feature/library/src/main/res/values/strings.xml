@@ -76,7 +76,7 @@
     <string name="import_route_text">Local text extraction</string>
     <string name="import_route_local_ocr">Local OCR</string>
     <string name="import_route_override">OCR needs an override</string>
-    <string name="import_route_explanation_direct">A sub-PDF containing pages %1$d&#8211;%2$d will be prepared for the AI upload phase.</string>
+    <string name="import_route_explanation_direct">A sub-PDF containing pages %1$d&#8211;%2$d will be uploaded with your AI request.</string>
     <string name="import_route_explanation_text">All %1$d selected pages already contain a text layer.</string>
     <string name="import_route_explanation_ocr">%1$d scanned pages in the range will be rasterized and OCR\'d on this device.</string>
     <string name="import_route_explanation_override">%1$d scanned pages exceed the %2$d-page OCR limit.</string>
@@ -88,7 +88,7 @@
     <string name="import_cost_source">Pricing: %1$s</string>
     <string name="import_cost_baseline">No provider profile configured &#8212; the baseline price table is used.</string>
     <string name="import_cost_range">Estimate for pages %1$d&#8211;%2$d.</string>
-    <string name="import_cost_note">Shown before processing. No AI request is sent during the import phase.</string>
+    <string name="import_cost_note">Shown before processing. No AI request is sent while importing; generation starts separately.</string>
     <string name="import_start">Import and start processing</string>
     <string name="import_starting">Importing&#8230;</string>
     <string name="import_duplicate_title">PDF already in your library</string>
@@ -103,7 +103,7 @@
     <string name="import_session_title">This import</string>
     <string name="import_session_queued">Queued locally. Processing will start shortly.</string>
     <string name="import_session_text_running">Extracting the text layer on this device&#8230;</string>
-    <string name="import_session_direct_ready">Page-range PDF prepared for the direct-upload phase.</string>
+    <string name="import_session_direct_ready">Page-range PDF prepared for direct upload.</string>
     <string name="import_session_ocr_running">OCR page %1$d of %2$d &#183; %3$d pages saved</string>
     <string name="import_session_ocr_paused">OCR paused at page %1$d of %2$d</string>
     <string name="import_session_saved_pages">Pages %1$d&#8211;%2$d saved</string>

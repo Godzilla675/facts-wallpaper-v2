@@ -21,6 +21,7 @@ import com.factswallpaper.core.model.Fact
 import com.factswallpaper.core.model.SourceReferenceMode
 import com.factswallpaper.core.model.ThemeMode
 import com.factswallpaper.core.model.WallpaperTarget
+import com.factswallpaper.core.render.R
 import com.factswallpaper.core.render.cache.RenderCacheKey
 import com.factswallpaper.core.render.template.BackgroundStyle
 import java.io.ByteArrayOutputStream
@@ -356,7 +357,7 @@ class CardBitmapRenderer @Inject constructor(
         )
         val subtitle = listOfNotNull(
             fact.sourceBookTitle.takeIf { it.isNotBlank() },
-            fact.sourcePage?.let { "p. $it" },
+            fact.sourcePage?.let { context.getString(R.string.card_page_short, it) },
         ).joinToString(" · ")
         canvas.drawText(
             ellipsize(subtitle, subtitlePaint, inner.width()),
@@ -377,8 +378,8 @@ class CardBitmapRenderer @Inject constructor(
         innerWidth: Float,
     ): Float {
         val label = when {
-            fact.hasFormula -> "FORMULA"
-            fact.hasDiagram -> "DIAGRAM"
+            fact.hasFormula -> context.getString(R.string.card_label_formula)
+            fact.hasDiagram -> context.getString(R.string.card_label_diagram)
             else -> displayName(fact.templateType)
         }
         val paint = textPaint(TemplateFontFamily.SANS, 12f * scale, palette.accent, bold = true)
@@ -459,7 +460,7 @@ class CardBitmapRenderer @Inject constructor(
 
         val chipHeight = 26f * scale
         val chipPaint = textPaint(TemplateFontFamily.SANS, 10.5f * scale, palette.muted, bold = true)
-        val chipText = "DIAGRAM PENDING"
+        val chipText = context.getString(R.string.card_label_diagram_pending)
         val chipWidth = chipPaint.measureText(chipText) + 22f * scale
         val chip = RectF(
             rect.left + 14f * scale,
@@ -635,15 +636,17 @@ class CardBitmapRenderer @Inject constructor(
 
     private fun provenance(fact: Fact, mode: SourceReferenceMode): String? = when (mode) {
         SourceReferenceMode.HIDDEN -> null
-        SourceReferenceMode.PAGE_ONLY -> fact.sourcePage?.let { "p. $it" }
+        SourceReferenceMode.PAGE_ONLY -> fact.sourcePage?.let {
+            context.getString(R.string.card_page_short, it)
+        }
         SourceReferenceMode.COMPACT -> listOfNotNull(
             fact.sourceBookTitle.takeIf { it.isNotBlank() },
-            fact.sourcePage?.let { "p. $it" },
+            fact.sourcePage?.let { context.getString(R.string.card_page_short, it) },
         ).joinToString("  \u2022  ").ifBlank { null }
         SourceReferenceMode.FULL -> listOfNotNull(
             fact.sourceBookTitle.takeIf { it.isNotBlank() },
             fact.sourceLessonTitle?.takeIf { it.isNotBlank() },
-            fact.sourcePage?.let { "p. $it" },
+            fact.sourcePage?.let { context.getString(R.string.card_page_short, it) },
         ).joinToString("  \u2022  ").ifBlank { null }
     }
 
@@ -673,8 +676,18 @@ class CardBitmapRenderer @Inject constructor(
         return TextUtils.ellipsize(text, paint, width, TextUtils.TruncateAt.END).toString()
     }
 
-    private fun displayName(type: CardTemplateType): String =
-        if (type == CardTemplateType.QA) "Q&A" else type.name.lowercase().replaceFirstChar { it.uppercase() }
+    private fun displayName(type: CardTemplateType): String = context.getString(
+        when (type) {
+            CardTemplateType.TEXT -> R.string.card_type_text
+            CardTemplateType.QUOTE -> R.string.card_type_quote
+            CardTemplateType.BULLET -> R.string.card_type_bullet
+            CardTemplateType.DEFINITION -> R.string.card_type_definition
+            CardTemplateType.QA -> R.string.card_type_qa
+            CardTemplateType.FORMULA -> R.string.card_type_formula
+            CardTemplateType.DIAGRAM -> R.string.card_type_diagram
+            CardTemplateType.TIMELINE -> R.string.card_type_timeline
+        },
+    )
 
     private fun String.toColorInt(): Int = Color.parseColor(this)
 

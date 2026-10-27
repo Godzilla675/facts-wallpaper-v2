@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="card_type_text">Text</string>
+    <string name="card_type_quote">Quote</string>
+    <string name="card_type_bullet">Bullet</string>
+    <string name="card_type_definition">Definition</string>
+    <string name="card_type_qa">Q&amp;A</string>
+    <string name="card_type_formula">Formula</string>
+    <string name="card_type_diagram">Diagram</string>
+    <string name="card_type_timeline">Timeline</string>
+    <string name="card_label_formula">FORMULA</string>
+    <string name="card_label_diagram">DIAGRAM</string>
+    <string name="card_label_diagram_pending">DIAGRAM PENDING</string>
+    <string name="card_page_short">p. %1$d</string>
+</resources>

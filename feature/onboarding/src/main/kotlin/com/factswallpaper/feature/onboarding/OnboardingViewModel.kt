@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -62,29 +63,36 @@ class OnboardingViewModel @Inject constructor(
 ) : FeatureViewModel() {
 
     private val draft = MutableStateFlow(Draft())
+    private val retrySignal = MutableStateFlow(0)
 
-    val uiState = combine(
-        draft,
-        settingsRepository.observePreferences(),
-        templateRepository.observeTemplates(),
-        providerProfileRepository.observeProfiles(),
-    ) { current, preferences, templates, _ ->
-        OnboardingUiState.Content(
-            step = current.step,
-            selectedPreset = current.selectedPreset,
-            apiKey = current.apiKey,
-            apiKeyVisible = current.apiKeyVisible,
-            themeMode = preferences.appThemeMode,
-            templates = templates,
-            selectedTemplateId = current.selectedTemplateId
-                ?: templates.firstOrNull { it.isDefault }?.id,
-            isSaving = current.isSaving,
-            finished = current.finished,
-        )
+    val uiState = retrySignal.flatMapLatest {
+        combine(
+            draft,
+            settingsRepository.observePreferences(),
+            templateRepository.observeTemplates(),
+            providerProfileRepository.observeProfiles(),
+        ) { current, preferences, templates, _ ->
+            OnboardingUiState.Content(
+                step = current.step,
+                selectedPreset = current.selectedPreset,
+                apiKey = current.apiKey,
+                apiKeyVisible = current.apiKeyVisible,
+                themeMode = preferences.appThemeMode,
+                templates = templates,
+                selectedTemplateId = current.selectedTemplateId
+                    ?: templates.firstOrNull { it.isDefault }?.id,
+                isSaving = current.isSaving,
+                finished = current.finished,
+            )
+        }
+            .map<OnboardingUiState.Content, OnboardingUiState> { it }
+            .catch { emit(OnboardingUiState.Error(R.string.onboarding_load_error)) }
     }
-        .map<OnboardingUiState.Content, OnboardingUiState> { it }
-        .catch { emit(OnboardingUiState.Error(R.string.onboarding_load_error)) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), OnboardingUiState.Loading)
+
+    fun retry() {
+        retrySignal.update { it + 1 }
+    }
 
     fun selectPreset(type: ProviderType) {
         draft.update { it.copy(selectedPreset = type) }

@@ -59,6 +59,7 @@ import com.factswallpaper.core.model.FactStatusFilter
 import com.factswallpaper.core.model.UserFolder
 import com.factswallpaper.core.ui.UiMessageEffect
 import com.factswallpaper.core.ui.component.BannerSeverity
+import com.factswallpaper.core.ui.component.ErrorStatePanel
 import com.factswallpaper.core.ui.component.InlineBanner
 import com.factswallpaper.core.ui.component.MetricPill
 import com.factswallpaper.core.ui.component.SectionGroupCard
@@ -107,9 +108,12 @@ fun CollectionsScreen(
     ) { padding ->
         when (val value = state) {
             CollectionsUiState.Loading -> CollectionsLoading(Modifier.padding(padding))
-            is CollectionsUiState.Error -> CollectionsError(
-                messageRes = value.messageRes,
-                modifier = Modifier.padding(padding),
+            is CollectionsUiState.Error -> ErrorStatePanel(
+                message = stringResource(value.messageRes),
+                onRetry = viewModel::retry,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
             )
             is CollectionsUiState.Content -> CollectionsContent(
                 state = value,
@@ -292,9 +296,7 @@ private fun CollectionsContent(
                                 state.counts.total,
                             ),
                             label = stringResource(R.string.collections_smart_all_label),
-                            modifier = Modifier.clickable {
-                                onOpenFacts(FactStatusFilter.ALL)
-                            },
+                            onClick = { onOpenFacts(FactStatusFilter.ALL) },
                         )
                     }
                     item {
@@ -304,9 +306,7 @@ private fun CollectionsContent(
                                 state.counts.active,
                             ),
                             label = stringResource(R.string.collections_smart_active),
-                            modifier = Modifier.clickable {
-                                onOpenFacts(FactStatusFilter.ACTIVE)
-                            },
+                            onClick = { onOpenFacts(FactStatusFilter.ACTIVE) },
                         )
                     }
                     item {
@@ -316,9 +316,7 @@ private fun CollectionsContent(
                                 state.counts.favorites,
                             ),
                             label = stringResource(R.string.collections_smart_favorites),
-                            modifier = Modifier.clickable {
-                                onOpenFacts(FactStatusFilter.FAVORITES)
-                            },
+                            onClick = { onOpenFacts(FactStatusFilter.FAVORITES) },
                         )
                     }
                     item {
@@ -328,9 +326,7 @@ private fun CollectionsContent(
                                 state.counts.formulas,
                             ),
                             label = stringResource(R.string.collections_smart_formulas),
-                            modifier = Modifier.clickable {
-                                onOpenFacts(FactStatusFilter.FORMULAS)
-                            },
+                            onClick = { onOpenFacts(FactStatusFilter.FORMULAS) },
                         )
                     }
                     item {
@@ -340,9 +336,7 @@ private fun CollectionsContent(
                                 state.counts.diagrams,
                             ),
                             label = stringResource(R.string.collections_smart_diagrams),
-                            modifier = Modifier.clickable {
-                                onOpenFacts(FactStatusFilter.DIAGRAMS)
-                            },
+                            onClick = { onOpenFacts(FactStatusFilter.DIAGRAMS) },
                         )
                     }
                 }
@@ -737,6 +731,7 @@ private fun MembershipDialog(
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
+                                        .heightIn(min = 48.dp)
                                         .clickable { onToggle(fact.id) },
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
@@ -979,18 +974,5 @@ private fun CollectionsLoading(modifier: Modifier = Modifier) {
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         CircularProgressIndicator()
-    }
-}
-
-@Composable
-private fun CollectionsError(messageRes: Int, modifier: Modifier = Modifier) {
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(24.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Text(text = stringResource(messageRes), style = MaterialTheme.typography.bodyLarge)
     }
 }

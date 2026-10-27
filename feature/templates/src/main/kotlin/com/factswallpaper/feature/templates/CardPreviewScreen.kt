@@ -58,6 +58,7 @@ import com.factswallpaper.core.model.ThemeMode
 import com.factswallpaper.core.ui.UiMessageEffect
 import com.factswallpaper.core.ui.component.BannerSeverity
 import com.factswallpaper.core.ui.component.EmptyStatePanel
+import com.factswallpaper.core.ui.component.ErrorStatePanel
 import com.factswallpaper.core.ui.component.InlineBanner
 import com.factswallpaper.core.ui.component.SectionGroupCard
 import com.factswallpaper.core.ui.component.SourceBadge
@@ -108,9 +109,12 @@ fun CardPreviewScreen(
     ) { padding ->
         when (val value = state) {
             CardPreviewUiState.Loading -> PreviewLoading(Modifier.padding(padding))
-            is CardPreviewUiState.Error -> PreviewError(
-                messageRes = value.messageRes,
-                modifier = Modifier.padding(padding),
+            is CardPreviewUiState.Error -> ErrorStatePanel(
+                message = stringResource(value.messageRes),
+                onRetry = viewModel::retry,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
             )
             is CardPreviewUiState.Content -> {
                 if (value.selectedFact == null) {
@@ -471,18 +475,5 @@ private fun PreviewLoading(modifier: Modifier = Modifier) {
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         CircularProgressIndicator()
-    }
-}
-
-@Composable
-private fun PreviewError(messageRes: Int, modifier: Modifier = Modifier) {
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(24.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Text(text = stringResource(messageRes), style = MaterialTheme.typography.bodyLarge)
     }
 }

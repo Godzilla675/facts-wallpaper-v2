@@ -65,6 +65,7 @@ import com.factswallpaper.core.model.SourceReferenceMode
 import com.factswallpaper.core.ui.UiMessageEffect
 import com.factswallpaper.core.ui.component.BannerSeverity
 import com.factswallpaper.core.ui.component.EmptyStatePanel
+import com.factswallpaper.core.ui.component.ErrorStatePanel
 import com.factswallpaper.core.ui.component.FactListItemCard
 import com.factswallpaper.core.ui.component.InlineBanner
 import com.factswallpaper.core.ui.component.SectionGroupCard
@@ -104,9 +105,12 @@ fun FactsScreen(
     ) { padding ->
         when (val value = state) {
             FactsUiState.Loading -> CenteredLoading(Modifier.padding(padding))
-            is FactsUiState.Error -> CenteredMessage(
-                text = stringResource(value.messageRes),
-                modifier = Modifier.padding(padding),
+            is FactsUiState.Error -> ErrorStatePanel(
+                message = stringResource(value.messageRes),
+                onRetry = viewModel::retry,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
             )
             is FactsUiState.Content -> FactsContent(
                 state = value,
@@ -723,18 +727,5 @@ private fun CenteredLoading(modifier: Modifier = Modifier) {
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         CircularProgressIndicator()
-    }
-}
-
-@Composable
-private fun CenteredMessage(text: String, modifier: Modifier = Modifier) {
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(24.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Text(text = text, style = MaterialTheme.typography.bodyLarge)
     }
 }

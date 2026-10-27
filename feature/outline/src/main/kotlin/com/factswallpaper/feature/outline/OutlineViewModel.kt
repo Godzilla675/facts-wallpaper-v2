@@ -34,8 +34,10 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 data class OutlineGenerationUi(
@@ -113,36 +115,44 @@ class OutlineViewModel @Inject constructor(
         )
     }
 
-    val uiState = combine(
-        base,
-        workInfos,
-        networkMonitor.observeOnline(),
-        estimate,
-        combine(pendingCostGuard, factsJobStarted) { pending, started -> pending to started },
-    ) { base, infos, online, estimate, guardAndFacts ->
-        val document = base.document
-        if (document == null) {
-            OutlineUiState.Error(R.string.outline_document_missing)
-        } else {
-            OutlineUiState.Content(
-                document = document,
-                lessons = base.lessons,
-                settings = base.settings ?: defaultSettings(document),
-                generation = infos.toGenerationUi(),
-                online = online,
-                estimate = estimate,
-                costGuardThresholdUsd = base.costGuardThresholdUsd,
-                pendingCostGuard = guardAndFacts.first,
-                factsJobStarted = guardAndFacts.second,
-            )
+    private val retrySignal = MutableStateFlow(0)
+
+    val uiState = retrySignal.flatMapLatest {
+        combine(
+            base,
+            workInfos,
+            networkMonitor.observeOnline(),
+            estimate,
+            combine(pendingCostGuard, factsJobStarted) { pending, started -> pending to started },
+        ) { base, infos, online, estimate, guardAndFacts ->
+            val document = base.document
+            if (document == null) {
+                OutlineUiState.Error(R.string.outline_document_missing)
+            } else {
+                OutlineUiState.Content(
+                    document = document,
+                    lessons = base.lessons,
+                    settings = base.settings ?: defaultSettings(document),
+                    generation = infos.toGenerationUi(),
+                    online = online,
+                    estimate = estimate,
+                    costGuardThresholdUsd = base.costGuardThresholdUsd,
+                    pendingCostGuard = guardAndFacts.first,
+                    factsJobStarted = guardAndFacts.second,
+                )
+            }
         }
+            .catch { emit(OutlineUiState.Error(R.string.outline_load_error)) }
     }
-        .catch { emit(OutlineUiState.Error(R.string.outline_load_error)) }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
             initialValue = OutlineUiState.Loading,
         )
+
+    fun retry() {
+        retrySignal.update { it + 1 }
+    }
 
     init {
         viewModelScope.launch {

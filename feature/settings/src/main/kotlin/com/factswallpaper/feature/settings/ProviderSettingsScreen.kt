@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -63,6 +64,7 @@ import com.factswallpaper.core.model.ProviderType
 import com.factswallpaper.core.model.RoutingStrategy
 import com.factswallpaper.core.ui.UiMessageEffect
 import com.factswallpaper.core.ui.component.BannerSeverity
+import com.factswallpaper.core.ui.component.ErrorStatePanel
 import com.factswallpaper.core.ui.component.InlineBanner
 import com.factswallpaper.core.ui.component.MetricPill
 import com.factswallpaper.core.ui.component.ProviderProfileCard
@@ -106,9 +108,12 @@ fun ProviderSettingsScreen(
     ) { padding ->
         when (val value = state) {
             ProviderSettingsUiState.Loading -> SettingsLoading(Modifier.padding(padding))
-            is ProviderSettingsUiState.Error -> SettingsError(
-                messageRes = value.messageRes,
-                modifier = Modifier.padding(padding),
+            is ProviderSettingsUiState.Error -> ErrorStatePanel(
+                message = stringResource(value.messageRes),
+                onRetry = viewModel::retry,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
             )
             is ProviderSettingsUiState.Content -> ProviderContent(
                 state = value,
@@ -263,6 +268,7 @@ private fun ProviderContent(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .heightIn(min = 48.dp)
                             .clickable { onEditOverride(task) }
                             .padding(vertical = spacing.sm),
                         verticalAlignment = Alignment.CenterVertically,
@@ -443,7 +449,7 @@ private fun ApiKeyDialog(
                 OutlinedTextField(
                     value = key,
                     onValueChange = { key = it },
-                    label = { Text("API Key") },
+                    label = { Text(stringResource(R.string.provider_api_key_label)) },
                     singleLine = true,
                     visualTransformation = PasswordVisualTransformation(),
                     modifier = Modifier.fillMaxWidth(),
@@ -613,6 +619,7 @@ private fun TaskOverrideDialog(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .heightIn(min = 48.dp)
                         .clickable { onSelect(null) }
                         .padding(vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -627,6 +634,7 @@ private fun TaskOverrideDialog(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .heightIn(min = 48.dp)
                             .clickable { onSelect(profile.id) }
                             .padding(vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -718,18 +726,5 @@ private fun SettingsLoading(modifier: Modifier = Modifier) {
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         CircularProgressIndicator()
-    }
-}
-
-@Composable
-private fun SettingsError(messageRes: Int, modifier: Modifier = Modifier) {
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(24.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Text(text = stringResource(messageRes), style = MaterialTheme.typography.bodyLarge)
     }
 }

@@ -23,11 +23,14 @@ import com.factswallpaper.core.wallpaper.WallpaperRotationScheduler
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.io.File
 import javax.inject.Inject
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 sealed interface WallpaperUiState {
@@ -56,26 +59,34 @@ class WallpaperViewModel @Inject constructor(
         viewModelScope.launch { wallpaperRepository.ensureInitialized() }
     }
 
-    val uiState = combine(
-        wallpaperRepository.observeState(),
-        rotationPoolRepository.observePool(),
-        rotationPoolRepository.observePoolSummary(),
-        templateRepository.observeTemplates(),
-    ) { state, pool, summary, templates ->
-        WallpaperUiState.Content(
-            wallpaper = state,
-            pool = pool,
-            poolSummary = summary,
-            templates = templates,
-        )
+    private val retrySignal = MutableStateFlow(0)
+
+    val uiState = retrySignal.flatMapLatest {
+        combine(
+            wallpaperRepository.observeState(),
+            rotationPoolRepository.observePool(),
+            rotationPoolRepository.observePoolSummary(),
+            templateRepository.observeTemplates(),
+        ) { state, pool, summary, templates ->
+            WallpaperUiState.Content(
+                wallpaper = state,
+                pool = pool,
+                poolSummary = summary,
+                templates = templates,
+            )
+        }
+            .map<WallpaperUiState.Content, WallpaperUiState> { it }
+            .catch { emit(WallpaperUiState.Error(R.string.wallpaper_load_error)) }
     }
-        .map<WallpaperUiState.Content, WallpaperUiState> { it }
-        .catch { emit(WallpaperUiState.Error(R.string.wallpaper_load_error)) }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
             initialValue = WallpaperUiState.Loading,
         )
+
+    fun retry() {
+        retrySignal.update { it + 1 }
+    }
 
     fun setScheduleMode(mode: WallpaperScheduleMode) {
         viewModelScope.launch {

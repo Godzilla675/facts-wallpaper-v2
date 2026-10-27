@@ -62,6 +62,7 @@ import com.factswallpaper.core.render.template.TemplateAlignment
 import com.factswallpaper.core.render.template.TemplateFontFamily
 import com.factswallpaper.core.ui.UiMessageEffect
 import com.factswallpaper.core.ui.component.EmptyStatePanel
+import com.factswallpaper.core.ui.component.ErrorStatePanel
 import com.factswallpaper.core.ui.component.TemplatePreviewCard
 import kotlin.math.roundToInt
 
@@ -114,9 +115,12 @@ fun TemplatesScreen(
     ) { padding ->
         when (val value = state) {
             TemplatesUiState.Loading -> TemplatesLoading(Modifier.padding(padding))
-            is TemplatesUiState.Error -> TemplatesError(
-                messageRes = value.messageRes,
-                modifier = Modifier.padding(padding),
+            is TemplatesUiState.Error -> ErrorStatePanel(
+                message = stringResource(value.messageRes),
+                onRetry = viewModel::retry,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
             )
             is TemplatesUiState.Content -> {
                 if (value.templates.isEmpty()) {
@@ -650,18 +654,5 @@ private fun TemplatesLoading(modifier: Modifier = Modifier) {
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         CircularProgressIndicator()
-    }
-}
-
-@Composable
-private fun TemplatesError(messageRes: Int, modifier: Modifier = Modifier) {
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(24.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Text(text = stringResource(messageRes), style = MaterialTheme.typography.bodyLarge)
     }
 }

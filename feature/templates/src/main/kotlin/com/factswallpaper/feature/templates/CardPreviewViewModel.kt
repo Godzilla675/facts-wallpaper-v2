@@ -146,14 +146,22 @@ class CardPreviewViewModel @Inject constructor(
         )
     }.distinctUntilChanged()
 
-    val uiState = baseState
-        .flatMapLatest { content -> renderPreview(content) }
-        .catch { emit(CardPreviewUiState.Error(R.string.preview_load_error)) }
+    private val retrySignal = MutableStateFlow(0)
+
+    val uiState = retrySignal.flatMapLatest {
+        baseState
+            .flatMapLatest { content -> renderPreview(content) }
+            .catch { emit(CardPreviewUiState.Error(R.string.preview_load_error)) }
+    }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
             initialValue = CardPreviewUiState.Loading,
         )
+
+    fun retry() {
+        retrySignal.update { it + 1 }
+    }
 
     fun nextFact() {
         val content = uiState.value as? CardPreviewUiState.Content ?: return

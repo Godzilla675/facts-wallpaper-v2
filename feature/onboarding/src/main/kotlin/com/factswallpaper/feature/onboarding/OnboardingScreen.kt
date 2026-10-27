@@ -60,6 +60,7 @@ import com.factswallpaper.core.model.ProviderType
 import com.factswallpaper.core.model.SourceReferenceMode
 import com.factswallpaper.core.model.ThemeMode
 import com.factswallpaper.core.ui.UiMessageEffect
+import com.factswallpaper.core.ui.component.ErrorStatePanel
 import com.factswallpaper.core.ui.component.InlineBanner
 import com.factswallpaper.core.ui.component.BannerSeverity
 import com.factswallpaper.core.ui.component.PhoneWallpaperMockup
@@ -101,19 +102,13 @@ fun OnboardingScreen(
                 CircularProgressIndicator()
             }
 
-            is OnboardingUiState.Error -> Box(
+            is OnboardingUiState.Error -> ErrorStatePanel(
+                message = stringResource(value.messageRes),
+                onRetry = viewModel::retry,
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(padding)
-                    .padding(24.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = stringResource(value.messageRes),
-                    style = MaterialTheme.typography.bodyLarge,
-                    textAlign = TextAlign.Center,
-                )
-            }
+                    .padding(padding),
+            )
 
             is OnboardingUiState.Content -> OnboardingContent(
                 state = value,

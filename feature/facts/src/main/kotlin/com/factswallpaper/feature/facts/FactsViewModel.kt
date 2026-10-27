@@ -100,6 +100,7 @@ class FactsViewModel @Inject constructor(
     )
 
     private val regeneratingFactId = MutableStateFlow<String?>(null)
+    private val retrySignal = MutableStateFlow(0)
 
     private val workUi = filter
         .map { it.documentId }
@@ -130,37 +131,43 @@ class FactsViewModel @Inject constructor(
             }
         }
 
-    val uiState = combine(
+    val uiState = retrySignal.flatMapLatest {
         combine(
-            filter.flatMapLatest { factRepository.observeFacts(it) },
-            documentRepository.observeDocuments(),
-            factRepository.observeTags(),
-            filter,
-        ) { facts, documents, tags, currentFilter ->
-            FactDataTuple(facts, documents, tags, currentFilter)
-        },
-        networkMonitor.observeOnline(),
-        regeneratingFactId,
-        workUi,
-    ) { data, online, regenId, work ->
-        FactsUiState.Content(
-            facts = data.facts,
-            documents = data.documents,
-            tags = data.tags,
-            filter = data.filter,
-            isOnline = online,
-            isRegenerating = regenId != null,
-            regeneratingFactId = regenId,
-            generationWork = work,
-        )
+            combine(
+                filter.flatMapLatest { factRepository.observeFacts(it) },
+                documentRepository.observeDocuments(),
+                factRepository.observeTags(),
+                filter,
+            ) { facts, documents, tags, currentFilter ->
+                FactDataTuple(facts, documents, tags, currentFilter)
+            },
+            networkMonitor.observeOnline(),
+            regeneratingFactId,
+            workUi,
+        ) { data, online, regenId, work ->
+            FactsUiState.Content(
+                facts = data.facts,
+                documents = data.documents,
+                tags = data.tags,
+                filter = data.filter,
+                isOnline = online,
+                isRegenerating = regenId != null,
+                regeneratingFactId = regenId,
+                generationWork = work,
+            )
+        }
+            .map<FactsUiState.Content, FactsUiState> { it }
+            .catch { emit(FactsUiState.Error(R.string.facts_load_error)) }
     }
-        .map<FactsUiState.Content, FactsUiState> { it }
-        .catch { emit(FactsUiState.Error(R.string.facts_load_error)) }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
             initialValue = FactsUiState.Loading,
         )
+
+    fun retry() {
+        retrySignal.update { it + 1 }
+    }
 
     fun updateQuery(value: String) {
         filter.update { it.copy(query = value) }

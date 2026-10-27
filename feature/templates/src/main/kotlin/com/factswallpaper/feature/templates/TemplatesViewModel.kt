@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -63,24 +64,31 @@ class TemplatesViewModel @Inject constructor(
 ) : FeatureViewModel() {
 
     private val overlay = MutableStateFlow(TemplatesOverlay())
+    private val retrySignal = MutableStateFlow(0)
 
-    val uiState = combine(
-        templateRepository.observeTemplates(),
-        overlay,
-    ) { templates, current ->
-        TemplatesUiState.Content(
-            templates = templates,
-            editor = current.editor,
-            ai = current.ai,
-        )
+    val uiState = retrySignal.flatMapLatest {
+        combine(
+            templateRepository.observeTemplates(),
+            overlay,
+        ) { templates, current ->
+            TemplatesUiState.Content(
+                templates = templates,
+                editor = current.editor,
+                ai = current.ai,
+            )
+        }
+            .map<TemplatesUiState.Content, TemplatesUiState> { it }
+            .catch { emit(TemplatesUiState.Error(R.string.templates_load_error)) }
     }
-        .map<TemplatesUiState.Content, TemplatesUiState> { it }
-        .catch { emit(TemplatesUiState.Error(R.string.templates_load_error)) }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
             initialValue = TemplatesUiState.Loading,
         )
+
+    fun retry() {
+        retrySignal.update { it + 1 }
+    }
 
     init {
         viewModelScope.launch {

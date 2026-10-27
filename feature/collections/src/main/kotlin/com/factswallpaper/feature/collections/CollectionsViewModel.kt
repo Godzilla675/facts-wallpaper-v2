@@ -28,6 +28,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -78,32 +79,39 @@ class CollectionsViewModel @Inject constructor(
 ) : FeatureViewModel() {
 
     private val membership = MutableStateFlow<MembershipEditorState?>(null)
+    private val retrySignal = MutableStateFlow(0)
 
-    val uiState = combine(
-        factRepository.observeSmartViewCounts(),
-        rotationPoolRepository.observePoolSummary(),
-        collectionRepository.observeCollections(),
-        collectionRepository.observeFolders(),
-        factRepository.observeTags(),
-    ) { counts, pool, collections, folders, tags ->
-        CollectionsUiState.Content(
-            counts = counts,
-            poolSummary = pool,
-            collections = collections,
-            folders = folders,
-            tags = tags,
-        )
-    }
-        .combine(membership) { content, editor ->
-            content.copy(membership = editor)
+    val uiState = retrySignal.flatMapLatest {
+        combine(
+            factRepository.observeSmartViewCounts(),
+            rotationPoolRepository.observePoolSummary(),
+            collectionRepository.observeCollections(),
+            collectionRepository.observeFolders(),
+            factRepository.observeTags(),
+        ) { counts, pool, collections, folders, tags ->
+            CollectionsUiState.Content(
+                counts = counts,
+                poolSummary = pool,
+                collections = collections,
+                folders = folders,
+                tags = tags,
+            )
         }
-        .map<CollectionsUiState.Content, CollectionsUiState> { it }
-        .catch { emit(CollectionsUiState.Error(R.string.collections_load_error)) }
+            .combine(membership) { content, editor ->
+                content.copy(membership = editor)
+            }
+            .map<CollectionsUiState.Content, CollectionsUiState> { it }
+            .catch { emit(CollectionsUiState.Error(R.string.collections_load_error)) }
+    }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
             initialValue = CollectionsUiState.Loading,
         )
+
+    fun retry() {
+        retrySignal.update { it + 1 }
+    }
 
     fun createCollection(name: String, description: String) {
         if (name.isBlank()) {

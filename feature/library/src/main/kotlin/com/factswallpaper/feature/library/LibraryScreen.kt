@@ -52,6 +52,7 @@ import com.factswallpaper.core.model.RotationPoolSummary
 import com.factswallpaper.core.ui.UiMessageEffect
 import com.factswallpaper.core.ui.component.DocumentCard
 import com.factswallpaper.core.ui.component.EmptyStatePanel
+import com.factswallpaper.core.ui.component.ErrorStatePanel
 import com.factswallpaper.core.ui.component.MetricPill
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -91,19 +92,13 @@ fun LibraryScreen(
                 CircularProgressIndicator()
             }
 
-            is LibraryUiState.Error -> Box(
+            is LibraryUiState.Error -> ErrorStatePanel(
+                message = stringResource(value.messageRes),
+                onRetry = viewModel::retry,
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(padding)
-                    .padding(24.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = stringResource(value.messageRes),
-                    style = MaterialTheme.typography.bodyLarge,
-                    textAlign = TextAlign.Center,
-                )
-            }
+                    .padding(padding),
+            )
 
             is LibraryUiState.Empty -> EmptyStatePanel(
                 icon = Icons.Filled.LibraryBooks,

@@ -23,8 +23,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 sealed interface AdvancedSettingsUiState {
@@ -48,31 +50,39 @@ class AdvancedSettingsViewModel @Inject constructor(
 ) : FeatureViewModel() {
 
     private val storage = MutableStateFlow(StorageStats())
+    private val retrySignal = MutableStateFlow(0)
 
     init {
         refreshStorage()
     }
 
-    val uiState = combine(
-        settingsRepository.observePreferences(),
-        diagnosticsRepository.observeRecentLogs(limit = 50),
-        storage,
-        diagnosticsRepository.observeUsageSummary(),
-    ) { preferences, logs, stats, usage ->
-        AdvancedSettingsUiState.Content(
-            preferences = preferences,
-            logs = logs,
-            storage = stats,
-            usage = usage,
-        )
+    val uiState = retrySignal.flatMapLatest {
+        combine(
+            settingsRepository.observePreferences(),
+            diagnosticsRepository.observeRecentLogs(limit = 50),
+            storage,
+            diagnosticsRepository.observeUsageSummary(),
+        ) { preferences, logs, stats, usage ->
+            AdvancedSettingsUiState.Content(
+                preferences = preferences,
+                logs = logs,
+                storage = stats,
+                usage = usage,
+            )
+        }
+            .map<AdvancedSettingsUiState.Content, AdvancedSettingsUiState> { it }
+            .catch { emit(AdvancedSettingsUiState.Error(R.string.advanced_load_error)) }
     }
-        .map<AdvancedSettingsUiState.Content, AdvancedSettingsUiState> { it }
-        .catch { emit(AdvancedSettingsUiState.Error(R.string.advanced_load_error)) }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
             initialValue = AdvancedSettingsUiState.Loading,
         )
+
+    fun retry() {
+        retrySignal.update { it + 1 }
+        refreshStorage()
+    }
 
     fun setDefaultOcrPageLimit(limit: Int) {
         viewModelScope.launch {

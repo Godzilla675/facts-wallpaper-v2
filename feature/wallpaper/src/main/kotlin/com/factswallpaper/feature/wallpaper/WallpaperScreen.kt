@@ -55,6 +55,7 @@ import com.factswallpaper.core.model.WallpaperScheduleMode
 import com.factswallpaper.core.model.WallpaperTarget
 import com.factswallpaper.core.ui.UiMessageEffect
 import com.factswallpaper.core.ui.component.BannerSeverity
+import com.factswallpaper.core.ui.component.ErrorStatePanel
 import com.factswallpaper.core.ui.component.InlineBanner
 import com.factswallpaper.core.ui.component.MetricPill
 import com.factswallpaper.core.ui.component.SectionGroupCard
@@ -94,9 +95,12 @@ fun WallpaperScreen(
     ) { padding ->
         when (val value = state) {
             WallpaperUiState.Loading -> WallpaperLoading(Modifier.padding(padding))
-            is WallpaperUiState.Error -> WallpaperError(
-                messageRes = value.messageRes,
-                modifier = Modifier.padding(padding),
+            is WallpaperUiState.Error -> ErrorStatePanel(
+                message = stringResource(value.messageRes),
+                onRetry = viewModel::retry,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
             )
             is WallpaperUiState.Content -> WallpaperContent(
                 state = value,
@@ -473,24 +477,5 @@ private fun WallpaperLoading(modifier: Modifier = Modifier) {
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         CircularProgressIndicator()
-    }
-}
-
-@Composable
-private fun WallpaperError(
-    messageRes: Int,
-    modifier: Modifier = Modifier,
-) {
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(24.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Text(
-            text = stringResource(messageRes),
-            style = MaterialTheme.typography.bodyLarge,
-        )
     }
 }

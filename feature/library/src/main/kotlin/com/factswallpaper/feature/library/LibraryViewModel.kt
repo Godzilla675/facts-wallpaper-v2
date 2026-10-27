@@ -16,7 +16,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 sealed interface LibraryUiState {
@@ -39,31 +41,38 @@ class LibraryViewModel @Inject constructor(
 ) : FeatureViewModel() {
 
     private val query = MutableStateFlow("")
+    private val retrySignal = MutableStateFlow(0)
 
-    val uiState = combine(
-        documentRepository.observeDocuments(),
-        documentRepository.observeAllSettings(),
-        rotationPoolRepository.observePoolSummary(),
-        query,
-    ) { documents, settings, summary, search ->
-        val filtered = filterDocuments(documents, search)
-        if (filtered.isEmpty()) {
-            LibraryUiState.Empty(query = search)
-        } else {
-            LibraryUiState.Content(
-                documents = filtered,
-                settings = settings.associateBy { it.documentId },
-                poolSummary = summary,
-                query = search,
-            )
+    val uiState = retrySignal.flatMapLatest {
+        combine(
+            documentRepository.observeDocuments(),
+            documentRepository.observeAllSettings(),
+            rotationPoolRepository.observePoolSummary(),
+            query,
+        ) { documents, settings, summary, search ->
+            val filtered = filterDocuments(documents, search)
+            if (filtered.isEmpty()) {
+                LibraryUiState.Empty(query = search)
+            } else {
+                LibraryUiState.Content(
+                    documents = filtered,
+                    settings = settings.associateBy { it.documentId },
+                    poolSummary = summary,
+                    query = search,
+                )
+            }
         }
+            .catch { emit(LibraryUiState.Error(R.string.library_load_error)) }
     }
-        .catch { emit(LibraryUiState.Error(R.string.library_load_error)) }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
             initialValue = LibraryUiState.Loading,
         )
+
+    fun retry() {
+        retrySignal.update { it + 1 }
+    }
 
     fun updateQuery(value: String) {
         query.value = value
