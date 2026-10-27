@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!--
+      WorkManager promotes OCR imports to a data-sync foreground service. The
+      service type must be declared in every manifest that runs the work, not
+      only in :app, so lint can verify this module independently.
+    -->
+    <application>
+        <service
+            android:name="androidx.work.impl.foreground.SystemForegroundService"
+            android:foregroundServiceType="dataSync"
+            tools:node="merge" />
+    </application>
+
+</manifest>

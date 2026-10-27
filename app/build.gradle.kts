@@ -18,6 +18,12 @@ android {
         buildConfig = true
     }
 
+    lint {
+        // local.properties is machine-generated (SDK path) and intentionally
+        // not committed; its Windows escaping is not a source-code concern.
+        disable += "PropertyEscape"
+    }
+
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"

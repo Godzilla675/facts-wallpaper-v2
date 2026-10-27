@@ -10,6 +10,7 @@ import android.graphics.Path
 import android.graphics.RectF
 import android.graphics.Shader
 import android.graphics.Typeface
+import android.graphics.text.LineBreaker
 import android.text.Layout
 import android.text.StaticLayout
 import android.text.TextPaint
@@ -601,7 +602,7 @@ class CardBitmapRenderer @Inject constructor(
         .setAlignment(alignment)
         .setIncludePad(false)
         .setLineSpacing(0f, 1.16f)
-        .setBreakStrategy(Layout.BREAK_STRATEGY_HIGH_QUALITY)
+        .setBreakStrategy(LineBreaker.BREAK_STRATEGY_HIGH_QUALITY)
         .setHyphenationFrequency(Layout.HYPHENATION_FREQUENCY_NONE)
         .build()
 
@@ -663,7 +664,12 @@ class CardBitmapRenderer @Inject constructor(
                 TemplateFontFamily.SANS -> "sans-serif"
                 TemplateFontFamily.MONOSPACE -> "monospace"
             },
-            (if (bold) Typeface.BOLD else 0) or (if (italic) Typeface.ITALIC else 0),
+            when {
+                bold && italic -> Typeface.BOLD_ITALIC
+                bold -> Typeface.BOLD
+                italic -> Typeface.ITALIC
+                else -> Typeface.NORMAL
+            },
         )
         textSize = size
         this.color = colorHex.toColorInt()

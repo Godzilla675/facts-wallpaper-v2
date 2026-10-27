@@ -4,7 +4,6 @@ import android.app.WallpaperManager
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.os.Build
 import com.factswallpaper.core.common.AppError
 import com.factswallpaper.core.common.AppResult
 import com.factswallpaper.core.common.FactsDispatchers
@@ -32,11 +31,7 @@ class StaticWallpaperExporter @Inject constructor(
                 WallpaperTarget.BOTH -> WallpaperManager.FLAG_SYSTEM or WallpaperManager.FLAG_LOCK
                 WallpaperTarget.LIVE -> WallpaperManager.FLAG_SYSTEM
             }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                wallpaperManager.setBitmap(bitmap, null, true, flags)
-            } else {
-                wallpaperManager.setBitmap(bitmap)
-            }
+            wallpaperManager.setBitmap(bitmap, null, true, flags)
             AppResult.Success(Unit)
         } catch (t: Throwable) {
             AppResult.Failure(AppError.Storage(t))
