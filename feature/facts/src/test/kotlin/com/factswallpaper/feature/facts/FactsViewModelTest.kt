@@ -140,13 +140,13 @@ class FactsViewModelTest {
     }
 }
 
-private class FakeNetworkMonitor : NetworkMonitor {
+internal class FakeNetworkMonitor : NetworkMonitor {
     val onlineFlow = MutableStateFlow(true)
     override fun isOnline(): Boolean = onlineFlow.value
     override fun observeOnline(): Flow<Boolean> = onlineFlow
 }
 
-private class FakeFactRepository : FactRepository {
+internal class FakeFactRepository : FactRepository {
     val factsFlow = MutableStateFlow<List<Fact>>(emptyList())
 
     override fun observeFacts(filter: FactFilter): Flow<List<Fact>> = factsFlow
@@ -176,7 +176,7 @@ private class FakeFactRepository : FactRepository {
     override fun observeTotalCount(): Flow<Int> = MutableStateFlow(factsFlow.value.size)
 }
 
-private class FakeDocumentRepository : DocumentRepository {
+internal class FakeDocumentRepository : DocumentRepository {
     val docsFlow = MutableStateFlow<List<Document>>(emptyList())
     override fun observeDocuments(): Flow<List<Document>> = docsFlow
     override fun observeDocument(documentId: String): Flow<Document?> =
@@ -210,12 +210,12 @@ private class FakeDocumentRepository : DocumentRepository {
     override suspend fun updateCompiledText(documentId: String, compiledTextPath: String, status: ExtractionStatus) {}
 }
 
-private class FakeDocumentTextRepository : DocumentTextRepository {
+internal class FakeDocumentTextRepository : DocumentTextRepository {
     override suspend fun getPages(documentId: String, startPage: Int, endPage: Int): List<PageText> = emptyList()
     override suspend fun getPageCount(documentId: String): Int = 0
 }
 
-private class FakeStructuredAiService : StructuredAiService {
+internal class FakeStructuredAiService : StructuredAiService {
     override suspend fun generateOutline(
         documentId: String?,
         pages: List<PageText>,
