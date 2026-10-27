@@ -1,5 +1,7 @@
 package com.factswallpaper.feature.facts
 
+import android.content.Context
+import android.net.Uri
 import androidx.annotation.StringRes
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
@@ -22,7 +24,9 @@ import com.factswallpaper.core.model.SourceReferenceMode
 import com.factswallpaper.core.render.CardPreRenderScheduler
 import com.factswallpaper.core.ui.FeatureViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
+import java.io.OutputStreamWriter
 import javax.inject.Inject
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -211,6 +215,12 @@ class FactsViewModel @Inject constructor(
         }
     }
 
+    fun recordReview(factId: String, gotIt: Boolean) {
+        viewModelScope.launch {
+            factRepository.recordReview(factId, gotIt)
+        }
+    }
+
     fun saveFact(
         factId: String,
         text: String,
@@ -304,6 +314,36 @@ class FactsViewModel @Inject constructor(
                 showMessage(R.string.facts_regenerate_failed)
             } finally {
                 regeneratingFactId.value = null
+            }
+        }
+    }
+
+    fun exportFacts(destinationUri: Uri, context: Context) {
+        val content = uiState.value as? FactsUiState.Content ?: return
+        viewModelScope.launch(Dispatchers.IO) {
+            val result = runCatching {
+                context.contentResolver.openOutputStream(destinationUri, "wt")?.use { out ->
+                    OutputStreamWriter(out).use { writer ->
+                        writer.write("# Facts Study Export\n\n")
+                        writer.write("Exported ${content.facts.size} study cards.\n\n")
+                        content.facts.forEachIndexed { idx, fact ->
+                            writer.write("## ${idx + 1}. [${fact.templateType}] ${fact.sourceLessonTitle ?: "Study Card"}\n\n")
+                            writer.write("${fact.text}\n\n")
+                            if (!fact.latex.isNullOrBlank()) {
+                                writer.write("```latex\n${fact.latex}\n```\n\n")
+                            }
+                            if (fact.tags.isNotEmpty()) {
+                                writer.write("Tags: ${fact.tags.joinToString(", ")}\n\n")
+                            }
+                            writer.write("Reviews: ${fact.reviewGotItCount} got it / ${fact.reviewAgainCount} again\n\n---\n\n")
+                        }
+                    }
+                } ?: error("Failed to open output stream")
+            }
+            if (result.isSuccess) {
+                showMessage(R.string.facts_export_success)
+            } else {
+                showMessage(R.string.facts_export_failed)
             }
         }
     }

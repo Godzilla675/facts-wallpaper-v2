@@ -67,6 +67,17 @@ class RoomFactRepository @Inject constructor(
         }
     }
 
+    override suspend fun recordReview(factId: String, gotIt: Boolean) {
+        withContext(dispatchers.io) {
+            val now = System.currentTimeMillis()
+            if (gotIt) {
+                factDao.incrementGotItCount(factId, now)
+            } else {
+                factDao.incrementAgainCount(factId, now)
+            }
+        }
+    }
+
     override suspend fun deleteFact(factId: String): AppResult<Unit> =
         withContext(dispatchers.io) {
             try {

@@ -103,6 +103,12 @@ abstract class FactDao {
     @Query("UPDATE facts SET favorite = :favorite, updatedAtEpochMs = :updatedAtEpochMs WHERE id = :factId")
     abstract suspend fun setFavorite(factId: String, favorite: Boolean, updatedAtEpochMs: Long)
 
+    @Query("UPDATE facts SET reviewGotItCount = reviewGotItCount + 1, updatedAtEpochMs = :updatedAtEpochMs WHERE id = :factId")
+    abstract suspend fun incrementGotItCount(factId: String, updatedAtEpochMs: Long)
+
+    @Query("UPDATE facts SET reviewAgainCount = reviewAgainCount + 1, updatedAtEpochMs = :updatedAtEpochMs WHERE id = :factId")
+    abstract suspend fun incrementAgainCount(factId: String, updatedAtEpochMs: Long)
+
     @Transaction
     open suspend fun upsertFactWithTags(fact: FactItemEntity, tags: List<String>) {
         upsert(fact)

@@ -1,5 +1,6 @@
 package com.factswallpaper.core.wallpaper
 
+import android.app.WallpaperManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -12,10 +13,12 @@ import android.graphics.Paint
 import android.graphics.Rect
 import android.graphics.Typeface
 import android.os.Build
+import android.os.Bundle
 import android.service.wallpaper.WallpaperService
 import android.text.Layout
 import android.text.StaticLayout
 import android.text.TextPaint
+import android.view.MotionEvent
 import android.view.SurfaceHolder
 import androidx.core.content.ContextCompat
 import com.factswallpaper.core.data.repository.WallpaperRepository
@@ -59,6 +62,7 @@ class FactsLiveWallpaperService : WallpaperService() {
         private var isVisibleState = false
         private var unlockReceiverRegistered = false
         private var stateObserverJob: Job? = null
+        private var lastTapTimeMs = 0L
 
         private val unlockReceiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context?, intent: Intent?) {
@@ -101,6 +105,45 @@ class FactsLiveWallpaperService : WallpaperService() {
                     drawCurrentCard()
                 }
             }
+        }
+
+        override fun onTouchEvent(event: MotionEvent?) {
+            super.onTouchEvent(event)
+            if (event?.action == MotionEvent.ACTION_DOWN) {
+                val now = System.currentTimeMillis()
+                if (now - lastTapTimeMs < 400) {
+                    lastTapTimeMs = 0L
+                    engineScope.launch {
+                        rotationController.advance()
+                        drawCurrentCard()
+                    }
+                } else {
+                    lastTapTimeMs = now
+                }
+            }
+        }
+
+        override fun onCommand(
+            action: String?,
+            x: Int,
+            y: Int,
+            z: Int,
+            data: Bundle?,
+            resultRequested: Boolean,
+        ): Bundle? {
+            if (action == WallpaperManager.COMMAND_TAP) {
+                val now = System.currentTimeMillis()
+                if (now - lastTapTimeMs < 400) {
+                    lastTapTimeMs = 0L
+                    engineScope.launch {
+                        rotationController.advance()
+                        drawCurrentCard()
+                    }
+                } else {
+                    lastTapTimeMs = now
+                }
+            }
+            return super.onCommand(action, x, y, z, data, resultRequested)
         }
 
         override fun onSurfaceDestroyed(holder: SurfaceHolder?) {

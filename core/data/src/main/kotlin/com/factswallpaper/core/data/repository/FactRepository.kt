@@ -15,6 +15,7 @@ interface FactRepository {
     suspend fun saveFacts(facts: List<Fact>)
     suspend fun setActive(factId: String, active: Boolean)
     suspend fun setFavorite(factId: String, favorite: Boolean)
+    suspend fun recordReview(factId: String, gotIt: Boolean) {}
     suspend fun deleteFact(factId: String): AppResult<Unit>
     fun observeTags(): Flow<List<FactTag>>
     fun observeSmartViewCounts(): Flow<SmartViewCounts>

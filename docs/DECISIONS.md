@@ -279,3 +279,16 @@ No screen pretends these features work.
 - Cost estimation models vision tokens at 1,200 tokens per rendered page image in `CostEstimator` with pre-flight task estimation.
 - `StructuredAiService` exposes `generateOutlineVision` and `generateFactsVision`, using token budgeting, schema validation, and json repair for vision responses.
 - `OutlineGenerationWorker` and `FactsGenerationWorker` invoke the multimodal vision path when `documentInputMode` is configured to `VISION`, or in `AUTO` mode when no text was extracted.
+
+## Phase P8.3 — Quality-of-Life, Study Mode, SAF Export, and Wallpaper Controls
+
+- **Wallpaper Gesture Controls:** FactsLiveWallpaperService.FactsWallpaperEngine supports double-tap gestures via both onTouchEvent and onCommand(WallpaperManager.COMMAND_TAP) (<400ms delta), advancing rotation immediately via rotationController.advance() and drawing the next card without waiting for the scheduled rotation interval.
+- **Study Mode with Spaced Repetition Counters:**
+  - Added incrementGotItCount and incrementAgainCount queries in FactDao and FactRepository.recordReview(factId: String, gotIt: Boolean).
+  - Added StudyModeSheet bottom sheet to FactsScreen allowing sequential review of cards with "Got it" and "Review again" counters, updating review counts in Room and summarizing session results upon completion.
+- **SAF Export:**
+  - Added Storage Access Framework Markdown export (CreateDocument("text/markdown")) in FactsViewModel / FactsScreen to export cards with lesson titles, content, LaTeX blocks, tags, and review statistics.
+- **Library Search, Sorting, and Batch Delete:**
+  - LibraryViewModel and LibraryScreen support sorting by recent date (DATE_DESC), title (TITLE_ASC), and pipeline progress (PROGRESS).
+  - Added multi-document selection mode with select all, individual checkboxes, and batch deletion that cleans up database entries, associated files, and cancels active WorkManager tasks.
+- **PDF Share / View Integration:** Verified intent filter in AndroidManifest.xml handling ACTION_VIEW and ACTION_SEND for application/pdf, routed from MainActivity directly into the import pipeline.

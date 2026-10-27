@@ -21,6 +21,13 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+enum class DocumentSortOrder {
+    DATE_DESC,
+    DATE_ASC,
+    TITLE_ASC,
+    PROGRESS,
+}
+
 sealed interface LibraryUiState {
     data object Loading : LibraryUiState
     data class Error(@StringRes val messageRes: Int) : LibraryUiState
@@ -30,6 +37,8 @@ sealed interface LibraryUiState {
         val settings: Map<String, DocumentSettings>,
         val poolSummary: RotationPoolSummary,
         val query: String,
+        val sortOrder: DocumentSortOrder = DocumentSortOrder.DATE_DESC,
+        val selectedDocumentIds: Set<String> = emptySet(),
     ) : LibraryUiState
 }
 
@@ -40,25 +49,41 @@ class LibraryViewModel @Inject constructor(
     private val scheduler: DocumentProcessingScheduler,
 ) : FeatureViewModel() {
 
+    private data class FilterState(
+        val query: String,
+        val sortOrder: DocumentSortOrder,
+        val selectedIds: Set<String>,
+    )
+
     private val query = MutableStateFlow("")
+    private val sortOrder = MutableStateFlow(DocumentSortOrder.DATE_DESC)
+    private val selectedIds = MutableStateFlow<Set<String>>(emptySet())
     private val retrySignal = MutableStateFlow(0)
+
+    private val filterState = combine(query, sortOrder, selectedIds) { q, s, sel ->
+        FilterState(q, s, sel)
+    }
 
     val uiState = retrySignal.flatMapLatest {
         combine(
             documentRepository.observeDocuments(),
             documentRepository.observeAllSettings(),
             rotationPoolRepository.observePoolSummary(),
-            query,
-        ) { documents, settings, summary, search ->
-            val filtered = filterDocuments(documents, search)
-            if (filtered.isEmpty()) {
-                LibraryUiState.Empty(query = search)
+            filterState,
+        ) { documents, settings, summary, filters ->
+            val filtered = filterAndSortDocuments(documents, filters.query, filters.sortOrder)
+            if (filtered.isEmpty() && filters.query.isNotBlank()) {
+                LibraryUiState.Empty(query = filters.query)
+            } else if (documents.isEmpty()) {
+                LibraryUiState.Empty(query = "")
             } else {
                 LibraryUiState.Content(
                     documents = filtered,
                     settings = settings.associateBy { it.documentId },
                     poolSummary = summary,
-                    query = search,
+                    query = filters.query,
+                    sortOrder = filters.sortOrder,
+                    selectedDocumentIds = filters.selectedIds,
                 )
             }
         }
@@ -80,6 +105,43 @@ class LibraryViewModel @Inject constructor(
 
     fun clearQuery() {
         query.value = ""
+    }
+
+    fun setSortOrder(order: DocumentSortOrder) {
+        sortOrder.value = order
+    }
+
+    fun toggleDocumentSelection(documentId: String) {
+        selectedIds.update { current ->
+            if (documentId in current) current - documentId else current + documentId
+        }
+    }
+
+    fun selectAll(documentIds: Collection<String>) {
+        selectedIds.value = documentIds.toSet()
+    }
+
+    fun clearSelection() {
+        selectedIds.value = emptySet()
+    }
+
+    fun batchDelete(documentIds: Set<String> = selectedIds.value) {
+        if (documentIds.isEmpty()) return
+        viewModelScope.launch {
+            var failed = 0
+            documentIds.forEach { id ->
+                scheduler.cancel(id)
+                if (documentRepository.deleteDocument(id) is AppResult.Failure) {
+                    failed++
+                }
+            }
+            selectedIds.value = emptySet()
+            if (failed == 0) {
+                showMessage(R.string.library_delete_success)
+            } else {
+                showMessage(R.string.library_delete_failed)
+            }
+        }
     }
 
     fun deleteDocument(document: Document) {
@@ -116,12 +178,25 @@ class LibraryViewModel @Inject constructor(
         showMessage(R.string.library_retry_started)
     }
 
-    private fun filterDocuments(documents: List<Document>, query: String): List<Document> {
+    private fun filterAndSortDocuments(
+        documents: List<Document>,
+        query: String,
+        sort: DocumentSortOrder,
+    ): List<Document> {
         val needle = query.trim()
-        if (needle.isEmpty()) return documents
-        return documents.filter { document ->
-            document.title.contains(needle, ignoreCase = true) ||
-                document.sourceUri.contains(needle, ignoreCase = true)
+        val filtered = if (needle.isEmpty()) {
+            documents
+        } else {
+            documents.filter { document ->
+                document.title.contains(needle, ignoreCase = true) ||
+                    document.sourceUri.contains(needle, ignoreCase = true)
+            }
+        }
+        return when (sort) {
+            DocumentSortOrder.DATE_DESC -> filtered.sortedByDescending { it.createdAtEpochMs }
+            DocumentSortOrder.DATE_ASC -> filtered.sortedBy { it.createdAtEpochMs }
+            DocumentSortOrder.TITLE_ASC -> filtered.sortedBy { it.title.lowercase() }
+            DocumentSortOrder.PROGRESS -> filtered.sortedByDescending { it.pipelineProgress }
         }
     }
 }

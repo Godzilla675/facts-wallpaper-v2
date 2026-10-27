@@ -15,14 +15,18 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.LibraryBooks
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -68,11 +72,66 @@ fun LibraryScreen(
     val message by viewModel.message.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     var pendingDelete by remember { mutableStateOf<Document?>(null) }
+    var showBatchDeleteConfirm by remember { mutableStateOf(false) }
     UiMessageEffect(message, snackbarHostState, viewModel::onMessageShown)
+
+    val contentState = state as? LibraryUiState.Content
+    val inSelectionMode = contentState?.selectedDocumentIds?.isNotEmpty() == true
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
-        topBar = { TopAppBar(title = { Text(stringResource(R.string.library_title)) }) },
+        topBar = {
+            if (inSelectionMode && contentState != null) {
+                TopAppBar(
+                    title = {
+                        Text(
+                            stringResource(
+                                R.string.library_selected_count,
+                                contentState.selectedDocumentIds.size,
+                            ),
+                        )
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = viewModel::clearSelection) {
+                            Icon(
+                                Icons.Filled.Close,
+                                contentDescription = stringResource(R.string.library_clear_selection),
+                            )
+                        }
+                    },
+                    actions = {
+                        TextButton(
+                            onClick = {
+                                viewModel.selectAll(contentState.documents.map { it.id })
+                            },
+                        ) {
+                            Text(stringResource(R.string.library_select_all))
+                        }
+                        IconButton(onClick = { showBatchDeleteConfirm = true }) {
+                            Icon(
+                                Icons.Filled.Delete,
+                                contentDescription = stringResource(R.string.library_multi_delete_confirm),
+                            )
+                        }
+                    },
+                )
+            } else {
+                TopAppBar(
+                    title = { Text(stringResource(R.string.library_title)) },
+                    actions = {
+                        if (contentState != null && contentState.documents.isNotEmpty()) {
+                            TextButton(
+                                onClick = {
+                                    viewModel.selectAll(contentState.documents.map { it.id })
+                                },
+                            ) {
+                                Text(stringResource(R.string.library_select_all))
+                            }
+                        }
+                    },
+                )
+            }
+        },
         snackbarHost = { SnackbarHost(snackbarHostState) },
         floatingActionButton = {
             ExtendedFloatingActionButton(
@@ -131,6 +190,8 @@ fun LibraryScreen(
                 state = value,
                 onQueryChange = viewModel::updateQuery,
                 onClearQuery = viewModel::clearQuery,
+                onSortChange = viewModel::setSortOrder,
+                onToggleSelect = viewModel::toggleDocumentSelection,
                 onOpenOutline = onOpenDocument,
                 onOpenFacts = onOpenFacts,
                 onToggleRotation = viewModel::setIncludedInRotation,
@@ -165,6 +226,36 @@ fun LibraryScreen(
             },
         )
     }
+
+    if (showBatchDeleteConfirm && contentState != null) {
+        AlertDialog(
+            onDismissRequest = { showBatchDeleteConfirm = false },
+            title = {
+                Text(
+                    stringResource(
+                        R.string.library_multi_delete_title,
+                        contentState.selectedDocumentIds.size,
+                    ),
+                )
+            },
+            text = { Text(stringResource(R.string.library_multi_delete_body)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.batchDelete()
+                        showBatchDeleteConfirm = false
+                    },
+                ) {
+                    Text(stringResource(R.string.library_multi_delete_confirm))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showBatchDeleteConfirm = false }) {
+                    Text(stringResource(R.string.library_cancel))
+                }
+            },
+        )
+    }
 }
 
 @Composable
@@ -172,6 +263,8 @@ private fun LibraryContent(
     state: LibraryUiState.Content,
     onQueryChange: (String) -> Unit,
     onClearQuery: () -> Unit,
+    onSortChange: (DocumentSortOrder) -> Unit,
+    onToggleSelect: (String) -> Unit,
     onOpenOutline: (String) -> Unit,
     onOpenFacts: (String) -> Unit,
     onToggleRotation: (String, Boolean) -> Unit,
@@ -217,20 +310,63 @@ private fun LibraryContent(
                 singleLine = true,
             )
         }
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(spacing.sm),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = stringResource(R.string.library_sort_by),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                FilterChip(
+                    selected = state.sortOrder == DocumentSortOrder.DATE_DESC,
+                    onClick = { onSortChange(DocumentSortOrder.DATE_DESC) },
+                    label = { Text(stringResource(R.string.library_sort_recent)) },
+                )
+                FilterChip(
+                    selected = state.sortOrder == DocumentSortOrder.TITLE_ASC,
+                    onClick = { onSortChange(DocumentSortOrder.TITLE_ASC) },
+                    label = { Text(stringResource(R.string.library_sort_name)) },
+                )
+                FilterChip(
+                    selected = state.sortOrder == DocumentSortOrder.PROGRESS,
+                    onClick = { onSortChange(DocumentSortOrder.PROGRESS) },
+                    label = { Text(stringResource(R.string.library_sort_progress)) },
+                )
+            }
+        }
         items(state.documents, key = { it.id }) { document ->
             val settings: DocumentSettings? = state.settings[document.id]
-            DocumentCard(
-                document = document,
-                pageRangeStart = settings?.pageRangeStart ?: 1,
-                pageRangeEnd = settings?.pageRangeEnd ?: document.pageCount,
-                onOpenOutline = { onOpenOutline(document.id) },
-                onOpenFacts = { onOpenFacts(document.id) },
-                onToggleRotation = { included -> onToggleRotation(document.id, included) },
-                onPauseOcr = { onPauseOcr(document.id) },
-                onResumeOcr = { onResumeOcr(document.id) },
-                onRetry = { onRetry(document.id) },
-                onDelete = { onDelete(document) },
-            )
+            val isSelected = document.id in state.selectedDocumentIds
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (state.selectedDocumentIds.isNotEmpty()) {
+                    Checkbox(
+                        checked = isSelected,
+                        onCheckedChange = { onToggleSelect(document.id) },
+                        modifier = Modifier.padding(end = spacing.xs),
+                    )
+                }
+                Box(modifier = Modifier.weight(1f)) {
+                    DocumentCard(
+                        document = document,
+                        pageRangeStart = settings?.pageRangeStart ?: 1,
+                        pageRangeEnd = settings?.pageRangeEnd ?: document.pageCount,
+                        onOpenOutline = { onOpenOutline(document.id) },
+                        onOpenFacts = { onOpenFacts(document.id) },
+                        onToggleRotation = { included -> onToggleRotation(document.id, included) },
+                        onPauseOcr = { onPauseOcr(document.id) },
+                        onResumeOcr = { onResumeOcr(document.id) },
+                        onRetry = { onRetry(document.id) },
+                        onDelete = { onDelete(document) },
+                    )
+                }
+            }
         }
     }
 }

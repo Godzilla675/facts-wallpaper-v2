@@ -1,5 +1,7 @@
 package com.factswallpaper.feature.facts
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -7,8 +9,10 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -19,11 +23,15 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.FilterAlt
 import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -43,11 +51,13 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
@@ -82,8 +92,19 @@ fun FactsScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val message by viewModel.message.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
+    val context = LocalContext.current
     var editingFact by remember { mutableStateOf<Fact?>(null) }
     var regeneratingFact by remember { mutableStateOf<Fact?>(null) }
+    var isStudyModeOpen by remember { mutableStateOf(false) }
+
+    val exportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("text/markdown"),
+    ) { uri ->
+        if (uri != null) {
+            viewModel.exportFacts(uri, context)
+        }
+    }
+
     UiMessageEffect(message, snackbarHostState, viewModel::onMessageShown)
 
     Scaffold(
@@ -92,6 +113,25 @@ fun FactsScreen(
             TopAppBar(
                 title = { Text(stringResource(R.string.facts_title)) },
                 actions = {
+                    val content = state as? FactsUiState.Content
+                    if (content != null && content.facts.isNotEmpty()) {
+                        IconButton(onClick = { isStudyModeOpen = true }) {
+                            Icon(
+                                imageVector = Icons.Filled.School,
+                                contentDescription = stringResource(R.string.facts_study_mode),
+                            )
+                        }
+                        IconButton(
+                            onClick = {
+                                exportLauncher.launch("facts_export_${System.currentTimeMillis()}.md")
+                            },
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.FileDownload,
+                                contentDescription = stringResource(R.string.facts_export),
+                            )
+                        }
+                    }
                     IconButton(onClick = onOpenTemplates) {
                         Icon(
                             imageVector = Icons.Filled.Palette,
@@ -166,6 +206,19 @@ fun FactsScreen(
                 regeneratingFact = null
             },
         )
+    }
+
+    if (isStudyModeOpen) {
+        val content = state as? FactsUiState.Content
+        if (content != null && content.facts.isNotEmpty()) {
+            StudyModeSheet(
+                facts = content.facts,
+                onDismiss = { isStudyModeOpen = false },
+                onRecordReview = viewModel::recordReview,
+            )
+        } else {
+            isStudyModeOpen = false
+        }
     }
 }
 
@@ -406,6 +459,139 @@ private fun FactsContent(
                         onEdit = { onEdit(fact) },
                         onRegenerate = { onRegenerate(fact) },
                     )
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun StudyModeSheet(
+    facts: List<Fact>,
+    onDismiss: () -> Unit,
+    onRecordReview: (String, Boolean) -> Unit,
+) {
+    val spacing = LocalSpacing.current
+    var currentIndex by remember { mutableIntStateOf(0) }
+    var sessionGotIt by remember { mutableIntStateOf(0) }
+    var sessionAgain by remember { mutableIntStateOf(0) }
+
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = spacing.lg)
+                .padding(bottom = spacing.xl),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = stringResource(R.string.facts_study_mode),
+                    style = MaterialTheme.typography.titleLarge,
+                )
+                IconButton(onClick = onDismiss) {
+                    Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.facts_cancel))
+                }
+            }
+            Spacer(modifier = Modifier.height(spacing.md))
+
+            if (currentIndex in facts.indices) {
+                val fact = facts[currentIndex]
+                Text(
+                    text = stringResource(
+                        R.string.facts_study_card_counter,
+                        currentIndex + 1,
+                        facts.size,
+                    ),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(modifier = Modifier.height(spacing.sm))
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    ),
+                ) {
+                    Column(modifier = Modifier.padding(spacing.md)) {
+                        fact.sourceLessonTitle?.let { lesson ->
+                            Text(
+                                text = lesson,
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                            Spacer(modifier = Modifier.height(spacing.xs))
+                        }
+                        Text(
+                            text = fact.text,
+                            style = MaterialTheme.typography.bodyLarge,
+                        )
+                        val latex = fact.latex
+                        if (!latex.isNullOrBlank()) {
+                            Spacer(modifier = Modifier.height(spacing.xs))
+                            Text(
+                                text = latex,
+                                fontFamily = FontFamily.Monospace,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.secondary,
+                            )
+                        }
+                        if (fact.tags.isNotEmpty()) {
+                            Spacer(modifier = Modifier.height(spacing.xs))
+                            Text(
+                                text = fact.tags.joinToString(", "),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(spacing.lg))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(spacing.md),
+                ) {
+                    OutlinedButton(
+                        modifier = Modifier.weight(1f),
+                        onClick = {
+                            onRecordReview(fact.id, false)
+                            sessionAgain++
+                            currentIndex++
+                        },
+                    ) {
+                        Text(stringResource(R.string.facts_study_again, fact.reviewAgainCount))
+                    }
+                    Button(
+                        modifier = Modifier.weight(1f),
+                        onClick = {
+                            onRecordReview(fact.id, true)
+                            sessionGotIt++
+                            currentIndex++
+                        },
+                    ) {
+                        Text(stringResource(R.string.facts_study_got_it, fact.reviewGotItCount))
+                    }
+                }
+            } else {
+                Text(
+                    text = stringResource(R.string.facts_study_done),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                Spacer(modifier = Modifier.height(spacing.sm))
+                Text(
+                    text = "$sessionGotIt marked as got it \u00B7 $sessionAgain to review again",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(modifier = Modifier.height(spacing.lg))
+                Button(onClick = onDismiss) {
+                    Text(stringResource(R.string.facts_cancel))
                 }
             }
         }

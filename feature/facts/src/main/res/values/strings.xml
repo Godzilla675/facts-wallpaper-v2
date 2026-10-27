@@ -78,4 +78,13 @@
     <string name="facts_template_formula">Formula</string>
     <string name="facts_template_diagram">Diagram</string>
     <string name="facts_template_timeline">Timeline</string>
+
+    <string name="facts_study_mode">Study Mode</string>
+    <string name="facts_study_got_it">Got it (%1$d)</string>
+    <string name="facts_study_again">Review again (%1$d)</string>
+    <string name="facts_study_done">All cards reviewed in this session!</string>
+    <string name="facts_study_card_counter">%1$d of %2$d</string>
+    <string name="facts_export">Export cards</string>
+    <string name="facts_export_success">Cards exported successfully.</string>
+    <string name="facts_export_failed">Failed to export cards.</string>
 </resources>
