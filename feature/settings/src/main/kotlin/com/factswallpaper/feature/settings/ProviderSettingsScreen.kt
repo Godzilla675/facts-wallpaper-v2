@@ -566,7 +566,17 @@ private fun ProfileEditorDialog(
                 OutlinedTextField(
                     value = apiKey,
                     onValueChange = { apiKey = it },
-                    label = { Text(if (existing == null) "API Key (optional)" else "New API Key (optional)") },
+                    label = {
+                        Text(
+                            stringResource(
+                                if (existing == null) {
+                                    R.string.provider_api_key_optional
+                                } else {
+                                    R.string.provider_new_api_key_optional
+                                },
+                            ),
+                        )
+                    },
                     singleLine = true,
                     visualTransformation = PasswordVisualTransformation(),
                     modifier = Modifier.fillMaxWidth(),

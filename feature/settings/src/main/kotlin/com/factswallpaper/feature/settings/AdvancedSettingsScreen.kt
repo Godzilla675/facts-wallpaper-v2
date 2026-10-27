@@ -585,11 +585,20 @@ private fun PromptInspectorDialog(
                 verticalArrangement = Arrangement.spacedBy(spacing.sm),
             ) {
                 Text(
-                    text = "${taskLabel(log.taskType)} • ${log.modelName}",
+                    text = stringResource(
+                        R.string.advanced_log_line,
+                        taskLabel(log.taskType),
+                        log.modelName,
+                    ),
                     style = MaterialTheme.typography.titleMedium,
                 )
                 Text(
-                    text = "Latency: ${log.durationMs}ms | Tokens: ${log.inputTokens} in, ${log.outputTokens} out",
+                    text = stringResource(
+                        R.string.advanced_log_detail_meta,
+                        log.durationMs,
+                        log.inputTokens,
+                        log.outputTokens,
+                    ),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -599,7 +608,9 @@ private fun PromptInspectorDialog(
                     style = MaterialTheme.typography.labelLarge,
                 )
                 Text(
-                    text = log.redactedRequestSummary.ifBlank { "(empty)" },
+                    text = log.redactedRequestSummary.ifBlank {
+                        stringResource(R.string.advanced_log_empty_value)
+                    },
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 Spacer(modifier = Modifier.height(spacing.xs))
@@ -608,7 +619,9 @@ private fun PromptInspectorDialog(
                     style = MaterialTheme.typography.labelLarge,
                 )
                 Text(
-                    text = log.redactedResponseSnippet.ifBlank { "(empty)" },
+                    text = log.redactedResponseSnippet.ifBlank {
+                        stringResource(R.string.advanced_log_empty_value)
+                    },
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 val errorMsg = log.errorMessage

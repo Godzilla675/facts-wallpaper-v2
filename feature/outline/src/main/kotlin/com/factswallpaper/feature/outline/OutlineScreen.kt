@@ -63,7 +63,6 @@ import com.factswallpaper.core.ui.component.MetricPill
 import com.factswallpaper.core.ui.component.SectionGroupCard
 import com.factswallpaper.core.ui.component.SettingSwitchRow
 import com.factswallpaper.core.ui.component.VerificationBadge
-import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -370,9 +369,8 @@ private fun OutlineContent(
                     )
                     state.estimate?.let { est ->
                         MetricPill(
-                            value = String.format(
-                                Locale.US,
-                                "~$%.4f (%s)",
+                            value = stringResource(
+                                R.string.outline_estimate_cost,
                                 est.estimatedCostUsd,
                                 est.profile.name,
                             ),

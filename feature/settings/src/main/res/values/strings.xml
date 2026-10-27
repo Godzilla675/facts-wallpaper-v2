@@ -37,6 +37,8 @@
     <string name="provider_model_label">Model name</string>
     <string name="provider_context_label">Max context tokens</string>
     <string name="provider_api_key_label">API key</string>
+    <string name="provider_api_key_optional">API Key (optional)</string>
+    <string name="provider_new_api_key_optional">New API Key (optional)</string>
     <string name="provider_save">Save</string>
     <string name="provider_cancel">Cancel</string>
     <string name="provider_saved">Provider profile saved.</string>
@@ -97,6 +99,8 @@
     <string name="advanced_log_meta">%1$d ms &#183; %2$d in / %3$d out &#183; %4$s</string>
     <string name="advanced_log_details_title">AI Request Details</string>
     <string name="advanced_log_prompt">Request summary</string>
+    <string name="advanced_log_detail_meta">Latency: %1$d ms | Tokens: %2$d in, %3$d out</string>
+    <string name="advanced_log_empty_value">(empty)</string>
     <string name="advanced_log_response">Response snippet</string>
     <string name="advanced_log_error">Error message</string>
     <string name="advanced_log_close">Close</string>

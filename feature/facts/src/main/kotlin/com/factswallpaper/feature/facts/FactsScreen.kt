@@ -534,11 +534,11 @@ private fun FactEditorSheet(
             )
             FlowRow(horizontalArrangement = Arrangement.spacedBy(spacing.sm)) {
                 listOf(
-                    null to "Default",
-                    SourceReferenceMode.FULL to "Full",
-                    SourceReferenceMode.COMPACT to "Compact",
-                    SourceReferenceMode.PAGE_ONLY to "Page only",
-                    SourceReferenceMode.HIDDEN to "Hidden",
+                    null to stringResource(R.string.facts_source_mode_default),
+                    SourceReferenceMode.FULL to stringResource(R.string.facts_source_mode_full),
+                    SourceReferenceMode.COMPACT to stringResource(R.string.facts_source_mode_compact),
+                    SourceReferenceMode.PAGE_ONLY to stringResource(R.string.facts_source_mode_page_only),
+                    SourceReferenceMode.HIDDEN to stringResource(R.string.facts_source_mode_hidden),
                 ).forEach { (mode, label) ->
                     FilterChip(
                         selected = sourceMode == mode,
