@@ -6,17 +6,20 @@ import com.factswallpaper.core.common.AppResult
 import com.factswallpaper.core.data.repository.RotationPoolRepository
 import com.factswallpaper.core.data.repository.TemplateRepository
 import com.factswallpaper.core.data.repository.WallpaperRepository
+import com.factswallpaper.core.datastore.AppPreferences
 import com.factswallpaper.core.datastore.SettingsRepository
 import com.factswallpaper.core.model.CardTemplate
 import com.factswallpaper.core.model.Fact
 import com.factswallpaper.core.model.RotationOrder
 import com.factswallpaper.core.model.RotationPoolSummary
+import com.factswallpaper.core.model.RotationSource
 import com.factswallpaper.core.model.SourceReferenceMode
 import com.factswallpaper.core.model.ThemeMode
 import com.factswallpaper.core.model.WallpaperScheduleMode
 import com.factswallpaper.core.model.WallpaperState
 import com.factswallpaper.core.model.WallpaperTarget
 import com.factswallpaper.core.ui.FeatureViewModel
+import com.factswallpaper.core.wallpaper.FactOfTheDayScheduler
 import com.factswallpaper.core.wallpaper.StaticWallpaperExporter
 import com.factswallpaper.core.wallpaper.WallpaperRotationController
 import com.factswallpaper.core.wallpaper.WallpaperRotationScheduler
@@ -27,6 +30,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -38,6 +42,7 @@ sealed interface WallpaperUiState {
     data class Error(@StringRes val messageRes: Int) : WallpaperUiState
     data class Content(
         val wallpaper: WallpaperState,
+        val preferences: AppPreferences,
         val pool: List<Fact>,
         val poolSummary: RotationPoolSummary,
         val templates: List<CardTemplate>,
@@ -53,6 +58,7 @@ class WallpaperViewModel @Inject constructor(
     private val rotationController: WallpaperRotationController,
     private val staticWallpaperExporter: StaticWallpaperExporter,
     private val scheduler: WallpaperRotationScheduler,
+    private val factOfTheDayScheduler: FactOfTheDayScheduler,
 ) : FeatureViewModel() {
 
     init {
@@ -64,12 +70,14 @@ class WallpaperViewModel @Inject constructor(
     val uiState = retrySignal.flatMapLatest {
         combine(
             wallpaperRepository.observeState(),
+            settingsRepository.observePreferences(),
             rotationPoolRepository.observePool(),
             rotationPoolRepository.observePoolSummary(),
             templateRepository.observeTemplates(),
-        ) { state, pool, summary, templates ->
+        ) { state, prefs, pool, summary, templates ->
             WallpaperUiState.Content(
                 wallpaper = state,
+                preferences = prefs,
                 pool = pool,
                 poolSummary = summary,
                 templates = templates,
@@ -134,6 +142,61 @@ class WallpaperViewModel @Inject constructor(
         viewModelScope.launch {
             wallpaperRepository.updateState { it.copy(activeTemplateId = templateId) }
             showMessage(R.string.wallpaper_template_saved)
+        }
+    }
+
+    fun setRotationSource(source: RotationSource) {
+        viewModelScope.launch {
+            settingsRepository.setRotationSource(source)
+            showMessage(R.string.wallpaper_saved)
+        }
+    }
+
+    fun setRotationPaused(paused: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setRotationPaused(paused)
+            showMessage(R.string.wallpaper_saved)
+        }
+    }
+
+    fun setQuietHoursEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setQuietHoursEnabled(enabled)
+            showMessage(R.string.wallpaper_saved)
+        }
+    }
+
+    fun setQuietHoursWindow(startMinute: Int, endMinute: Int) {
+        viewModelScope.launch {
+            settingsRepository.setQuietHoursWindow(startMinute, endMinute)
+            showMessage(R.string.wallpaper_saved)
+        }
+    }
+
+    fun setBatterySaverSlowdown(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setBatterySaverSlowdownEnabled(enabled)
+            showMessage(R.string.wallpaper_saved)
+        }
+    }
+
+    fun setDailyFactNotificationEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setDailyFactNotificationEnabled(enabled)
+            val prefs = settingsRepository.observePreferences().first()
+            factOfTheDayScheduler.updateSchedule(enabled, prefs.dailyFactNotificationTimeMinutes)
+            showMessage(R.string.wallpaper_saved)
+        }
+    }
+
+    fun setDailyFactNotificationTime(timeMinutes: Int) {
+        viewModelScope.launch {
+            settingsRepository.setDailyFactNotificationTime(timeMinutes)
+            val prefs = settingsRepository.observePreferences().first()
+            if (prefs.dailyFactNotificationEnabled) {
+                factOfTheDayScheduler.updateSchedule(true, timeMinutes)
+            }
+            showMessage(R.string.wallpaper_saved)
         }
     }
 

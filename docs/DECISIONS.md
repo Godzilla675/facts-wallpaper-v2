@@ -27,3 +27,21 @@
   - Added static launcher shortcuts (`shortcuts.xml`): "Next fact" (`com.factswallpaper.app.ACTION_NEXT_FACT`) and "Import PDF" (`com.factswallpaper.app.ACTION_IMPORT_PDF`).
 - **Encrypted Backup Restore via File Picker:**
   - Added `restoreBackupFromUri(Uri, String)` in `BackupManager` allowing direct file restore of encrypted `.fwbk` archives chosen by the user via SAF `OpenDocument`. Wired into `AdvancedSettingsScreen`.
+
+## Phase P9.2 — Wallpaper & Daily Use
+
+- **Fact of the Day Notification (`FactOfTheDayScheduler` & `FactOfTheDayWorker`):**
+  - Configurable daily notification with user-chosen delivery time (default 08:00).
+  - Tapping notification launches the app directly into the fact details.
+  - Notification action buttons: "Next" (advances rotation and updates notification text) and "Got it" (records successful spaced-repetition review and dismisses notification) handled in `FactNotificationReceiver`.
+- **Quiet Hours & Pause Rotation:**
+  - Time window (e.g. 22:00 to 07:00, with support for midnight-crossing intervals) during which wallpaper rotation is suppressed.
+  - Instant "Pause rotation" master toggle to halt periodic wallpaper changes without losing rotation state.
+- **Battery Saver Awareness:**
+  - Checks `PowerManager.isPowerSaveMode` when enabled; automatically doubles rotation interval during low-power mode to minimize battery and CPU impact.
+- **Home-Screen Widget (`FactAppWidgetProvider`):**
+  - Built an Android `AppWidgetProvider` displaying current fact card text and formatted source citation.
+  - Interactive "Next" button on widget advances rotation and broadcasts `ACTION_FACT_UPDATED` to update all active widgets and live wallpaper in sync.
+- **Rotation Source Picker:**
+  - Added `RotationSource` enum: `ALL` (all cards from active documents), `COLLECTIONS` (specific collections/folders marked for rotation), `FAVORITES` (favorite cards only), `DUE_FOR_REVIEW` (spaced repetition review cards).
+  - Integrated into `RoomRotationPoolRepository`, `AppPreferences`, `WallpaperViewModel`, and `WallpaperScreen`.

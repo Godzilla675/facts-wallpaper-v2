@@ -9,4 +9,5 @@
     <string name="shortcut_import_pdf_short">Import PDF</string>
     <string name="shortcut_import_pdf_long">Import a PDF document</string>
     <string name="toast_next_fact_advanced">Wallpaper rotated to next fact</string>
+    <string name="widget_empty_fact">No facts available in rotation</string>
 </resources>

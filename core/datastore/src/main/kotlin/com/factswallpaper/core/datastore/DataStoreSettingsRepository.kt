@@ -11,6 +11,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import com.factswallpaper.core.model.AiTask
 import com.factswallpaper.core.model.AutoProcessMode
 import com.factswallpaper.core.model.DocumentInputMode
+import com.factswallpaper.core.model.RotationSource
 import com.factswallpaper.core.model.RoutingStrategy
 import com.factswallpaper.core.model.ThemeMode
 import java.io.IOException
@@ -126,6 +127,41 @@ class DataStoreSettingsRepository @Inject constructor(
     override suspend fun setMaxImagesPerRequest(maxImages: Int) {
         dataStore.edit { it[Keys.MAX_IMAGES_PER_REQUEST] = maxImages.coerceIn(1, 50) }
     }
+
+    override suspend fun setRotationSource(source: RotationSource) {
+        dataStore.edit { it[Keys.ROTATION_SOURCE] = source.name }
+    }
+
+    override suspend fun setQuietHoursEnabled(enabled: Boolean) {
+        dataStore.edit { it[Keys.QUIET_HOURS_ENABLED] = enabled }
+    }
+
+    override suspend fun setQuietHoursWindow(startMinute: Int, endMinute: Int) {
+        dataStore.edit {
+            it[Keys.QUIET_HOURS_START_MINUTE] = startMinute.coerceIn(0, 1439)
+            it[Keys.QUIET_HOURS_END_MINUTE] = endMinute.coerceIn(0, 1439)
+        }
+    }
+
+    override suspend fun setRotationPaused(paused: Boolean) {
+        dataStore.edit { it[Keys.ROTATION_PAUSED] = paused }
+    }
+
+    override suspend fun setBatterySaverSlowdownEnabled(enabled: Boolean) {
+        dataStore.edit { it[Keys.BATTERY_SAVER_SLOWDOWN_ENABLED] = enabled }
+    }
+
+    override suspend fun setDailyFactNotificationEnabled(enabled: Boolean) {
+        dataStore.edit { it[Keys.DAILY_FACT_NOTIFICATION_ENABLED] = enabled }
+    }
+
+    override suspend fun setDailyFactNotificationTime(timeMinutes: Int) {
+        dataStore.edit { it[Keys.DAILY_FACT_NOTIFICATION_TIME_MINUTES] = timeMinutes.coerceIn(0, 1439) }
+    }
+
+    override suspend fun setDynamicColorEnabled(enabled: Boolean) {
+        dataStore.edit { it[Keys.DYNAMIC_COLOR_ENABLED] = enabled }
+    }
 }
 
 private object Keys {
@@ -145,6 +181,15 @@ private object Keys {
     val DEFAULT_AUTO_PROCESS_MODE = stringPreferencesKey("default_auto_process_mode")
     val DEFAULT_DOCUMENT_INPUT_MODE = stringPreferencesKey("default_document_input_mode")
     val MAX_IMAGES_PER_REQUEST = intPreferencesKey("max_images_per_request")
+    val ROTATION_SOURCE = stringPreferencesKey("rotation_source")
+    val QUIET_HOURS_ENABLED = booleanPreferencesKey("quiet_hours_enabled")
+    val QUIET_HOURS_START_MINUTE = intPreferencesKey("quiet_hours_start_minute")
+    val QUIET_HOURS_END_MINUTE = intPreferencesKey("quiet_hours_end_minute")
+    val ROTATION_PAUSED = booleanPreferencesKey("rotation_paused")
+    val BATTERY_SAVER_SLOWDOWN_ENABLED = booleanPreferencesKey("battery_saver_slowdown_enabled")
+    val DAILY_FACT_NOTIFICATION_ENABLED = booleanPreferencesKey("daily_fact_notification_enabled")
+    val DAILY_FACT_NOTIFICATION_TIME_MINUTES = intPreferencesKey("daily_fact_notification_time_minutes")
+    val DYNAMIC_COLOR_ENABLED = booleanPreferencesKey("dynamic_color_enabled")
 }
 
 private fun Preferences.toAppPreferences(
@@ -167,6 +212,15 @@ private fun Preferences.toAppPreferences(
     defaultAutoProcessMode = this[Keys.DEFAULT_AUTO_PROCESS_MODE].toEnum(AutoProcessMode.OUTLINE_ONLY),
     defaultDocumentInputMode = this[Keys.DEFAULT_DOCUMENT_INPUT_MODE].toEnum(DocumentInputMode.AUTO),
     maxImagesPerRequest = (this[Keys.MAX_IMAGES_PER_REQUEST] ?: 10).coerceIn(1, 50),
+    rotationSource = this[Keys.ROTATION_SOURCE].toEnum(RotationSource.COLLECTIONS),
+    quietHoursEnabled = this[Keys.QUIET_HOURS_ENABLED] ?: false,
+    quietHoursStartMinute = (this[Keys.QUIET_HOURS_START_MINUTE] ?: (22 * 60)).coerceIn(0, 1439),
+    quietHoursEndMinute = (this[Keys.QUIET_HOURS_END_MINUTE] ?: (7 * 60)).coerceIn(0, 1439),
+    rotationPaused = this[Keys.ROTATION_PAUSED] ?: false,
+    batterySaverSlowdownEnabled = this[Keys.BATTERY_SAVER_SLOWDOWN_ENABLED] ?: true,
+    dailyFactNotificationEnabled = this[Keys.DAILY_FACT_NOTIFICATION_ENABLED] ?: false,
+    dailyFactNotificationTimeMinutes = (this[Keys.DAILY_FACT_NOTIFICATION_TIME_MINUTES] ?: (8 * 60)).coerceIn(0, 1439),
+    dynamicColorEnabled = this[Keys.DYNAMIC_COLOR_ENABLED] ?: true,
 )
 
 private inline fun <reified T : Enum<T>> String?.toEnum(default: T): T =

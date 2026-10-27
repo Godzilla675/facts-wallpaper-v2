@@ -3,6 +3,7 @@ package com.factswallpaper.core.datastore
 import com.factswallpaper.core.model.AiTask
 import com.factswallpaper.core.model.AutoProcessMode
 import com.factswallpaper.core.model.DocumentInputMode
+import com.factswallpaper.core.model.RotationSource
 import com.factswallpaper.core.model.RoutingStrategy
 import com.factswallpaper.core.model.ThemeMode
 
@@ -28,4 +29,13 @@ data class AppPreferences(
     val defaultAutoProcessMode: AutoProcessMode = AutoProcessMode.OUTLINE_ONLY,
     val defaultDocumentInputMode: DocumentInputMode = DocumentInputMode.AUTO,
     val maxImagesPerRequest: Int = 10,
+    val rotationSource: RotationSource = RotationSource.COLLECTIONS,
+    val quietHoursEnabled: Boolean = false,
+    val quietHoursStartMinute: Int = 22 * 60,
+    val quietHoursEndMinute: Int = 7 * 60,
+    val rotationPaused: Boolean = false,
+    val batterySaverSlowdownEnabled: Boolean = true,
+    val dailyFactNotificationEnabled: Boolean = false,
+    val dailyFactNotificationTimeMinutes: Int = 8 * 60,
+    val dynamicColorEnabled: Boolean = true,
 )

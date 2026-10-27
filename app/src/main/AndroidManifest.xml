@@ -70,6 +70,28 @@
         </service>
 
         <receiver
+            android:name=".FactAppWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="com.factswallpaper.app.ACTION_WIDGET_NEXT_FACT" />
+                <action android:name="com.factswallpaper.app.ACTION_FACT_UPDATED" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_fact_info" />
+        </receiver>
+
+        <receiver
+            android:name=".FactNotificationReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.factswallpaper.app.ACTION_NOTIFICATION_NEXT_FACT" />
+                <action android:name="com.factswallpaper.app.ACTION_NOTIFICATION_GOT_IT" />
+            </intent-filter>
+        </receiver>
+
+        <receiver
             android:name="com.factswallpaper.core.pdf.OcrControlReceiver"
             android:exported="false" />
 

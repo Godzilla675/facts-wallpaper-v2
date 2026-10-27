@@ -4,9 +4,11 @@ import com.factswallpaper.core.data.mapper.toDomain
 import com.factswallpaper.core.database.dao.CollectionDao
 import com.factswallpaper.core.database.dao.FactDao
 import com.factswallpaper.core.database.dao.PdfDocumentDao
+import com.factswallpaper.core.datastore.SettingsRepository
 import com.factswallpaper.core.model.Fact
 import com.factswallpaper.core.model.RotationOrder
 import com.factswallpaper.core.model.RotationPoolSummary
+import com.factswallpaper.core.model.RotationSource
 import java.security.MessageDigest
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -19,6 +21,7 @@ class RoomRotationPoolRepository @Inject constructor(
     private val documentDao: PdfDocumentDao,
     private val collectionDao: CollectionDao,
     private val wallpaperRepository: WallpaperRepository,
+    private val settingsRepository: SettingsRepository,
 ) : RotationPoolRepository {
 
     private data class PoolSources(
@@ -29,20 +32,42 @@ class RoomRotationPoolRepository @Inject constructor(
     )
 
     override fun observePool(): Flow<List<Fact>> = combine(
-        factDao.observeAllActiveOrdered(),
-        documentDao.observeAll(),
-        observeSources(),
+        combine(
+            factDao.observeAllActiveOrdered(),
+            documentDao.observeAll(),
+            observeSources(),
+        ) { activeFacts, documents, sources ->
+            Triple(activeFacts, documents, sources)
+        },
         wallpaperRepository.observeState(),
-    ) { activeFacts, documents, sources, wallpaperState ->
+        settingsRepository.observePreferences(),
+    ) { (activeFacts, documents, sources), wallpaperState, preferences ->
         val includedDocumentIds = documents.filter { it.includedInRotation }.map { it.id }.toSet()
         var pool = activeFacts.asSequence()
-        if (sources.hasExplicitSources) {
-            val allowed = sources.allowedFactIds
-            pool = pool.filter { it.id in allowed }
-        } else {
-            pool = pool.filter { it.documentId in includedDocumentIds }
+        when (preferences.rotationSource) {
+            RotationSource.ALL -> {
+                pool = pool.filter { it.documentId in includedDocumentIds }
+            }
+            RotationSource.COLLECTIONS -> {
+                if (sources.hasExplicitSources) {
+                    val allowed = sources.allowedFactIds
+                    pool = pool.filter { it.id in allowed }
+                } else {
+                    pool = pool.filter { it.documentId in includedDocumentIds }
+                }
+            }
+            RotationSource.FAVORITES -> {
+                pool = pool.filter { it.documentId in includedDocumentIds && it.favorite }
+            }
+            RotationSource.DUE_FOR_REVIEW -> {
+                val now = System.currentTimeMillis()
+                pool = pool.filter {
+                    val due = it.nextReviewDueEpochMs
+                    it.documentId in includedDocumentIds && (due == null || due <= now)
+                }
+            }
         }
-        if (wallpaperState.onlyFavoritesInPool) {
+        if (wallpaperState.onlyFavoritesInPool && preferences.rotationSource != RotationSource.FAVORITES) {
             pool = pool.filter { it.favorite }
         }
         val ordered = pool.map { it.toDomain() }.toList()

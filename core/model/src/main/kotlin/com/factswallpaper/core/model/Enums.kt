@@ -48,6 +48,14 @@ enum class WallpaperScheduleMode { ON_UNLOCK, INTERVAL, MANUAL }
 enum class RotationOrder { SEQUENTIAL, RANDOM }
 
 @Serializable
+enum class RotationSource {
+    ALL,
+    COLLECTIONS,
+    FAVORITES,
+    DUE_FOR_REVIEW
+}
+
+@Serializable
 enum class ThemeMode { LIGHT, DARK, AMOLED, DYNAMIC }
 
 @Serializable

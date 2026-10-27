@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.factswallpaper.core.model.AiTask
+import com.factswallpaper.core.model.RotationSource
 import com.factswallpaper.core.model.RoutingStrategy
 import com.factswallpaper.core.model.ThemeMode
 import com.google.common.truth.Truth.assertThat
@@ -131,6 +132,27 @@ class DataStoreSettingsRepositoryTest {
         assertThat(stored.encryptedDatabaseEnabled).isTrue()
         assertThat(stored.enableAiDiagnosticsLog).isFalse()
         assertThat(stored.enableDoubleTapWallpaperAdvance).isTrue()
+    }
+
+    @Test
+    fun `rotation source, quiet hours, pause and notification round trip`() = runBlocking<Unit> {
+        repository.setRotationSource(RotationSource.DUE_FOR_REVIEW)
+        repository.setQuietHoursEnabled(true)
+        repository.setQuietHoursWindow(23 * 60, 6 * 60)
+        repository.setRotationPaused(true)
+        repository.setBatterySaverSlowdownEnabled(false)
+        repository.setDailyFactNotificationEnabled(true)
+        repository.setDailyFactNotificationTime(9 * 60 + 30)
+
+        val stored = preferences()
+        assertThat(stored.rotationSource).isEqualTo(RotationSource.DUE_FOR_REVIEW)
+        assertThat(stored.quietHoursEnabled).isTrue()
+        assertThat(stored.quietHoursStartMinute).isEqualTo(23 * 60)
+        assertThat(stored.quietHoursEndMinute).isEqualTo(6 * 60)
+        assertThat(stored.rotationPaused).isTrue()
+        assertThat(stored.batterySaverSlowdownEnabled).isFalse()
+        assertThat(stored.dailyFactNotificationEnabled).isTrue()
+        assertThat(stored.dailyFactNotificationTimeMinutes).isEqualTo(9 * 60 + 30)
     }
 }
 
