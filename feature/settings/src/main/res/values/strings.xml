@@ -122,6 +122,10 @@
     <string name="advanced_storage_note">Clearing caches never removes PDFs, lessons, facts or collections.</string>
     <string name="advanced_cache_cleared">Cache cleared.</string>
     <string name="advanced_cache_failed">Could not clear this cache.</string>
+    <string name="advanced_clear_cache_title">Clear cache?</string>
+    <string name="advanced_clear_cards_body">Pre-rendered card images will be removed and rebuilt when needed. PDFs, lessons, facts and collections stay.</string>
+    <string name="advanced_clear_diagrams_body">Cached diagram images will be removed and rebuilt when needed. Facts and diagram source stay.</string>
+    <string name="advanced_clear_cache_confirm">Clear</string>
     <string name="advanced_database_compacted">Database compacted successfully.</string>
     <string name="advanced_database_compact_failed">Failed to compact database.</string>
 

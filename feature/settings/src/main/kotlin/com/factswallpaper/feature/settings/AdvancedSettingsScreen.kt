@@ -88,6 +88,7 @@ fun AdvancedSettingsScreen(
     var inspectedLog by remember { mutableStateOf<AiRequestLogEntry?>(null) }
     var showBackupDialog by remember { mutableStateOf(false) }
     var showRestoreDialog by remember { mutableStateOf(false) }
+    var pendingCacheClear by remember { mutableStateOf<CacheClearTarget?>(null) }
 
     UiMessageEffect(message, snackbarHostState, viewModel::onMessageShown)
 
@@ -128,8 +129,8 @@ fun AdvancedSettingsScreen(
                 onInspectLog = { inspectedLog = it },
                 onClearLogs = viewModel::clearLogs,
                 onRefreshStorage = viewModel::refreshStorage,
-                onClearRenderCache = viewModel::clearRenderCache,
-                onClearDiagramCache = viewModel::clearDiagramCache,
+                onClearRenderCache = { pendingCacheClear = CacheClearTarget.CARDS },
+                onClearDiagramCache = { pendingCacheClear = CacheClearTarget.DIAGRAMS },
                 onCompactDatabase = viewModel::compactDatabase,
                 onOpenBackupDialog = { showBackupDialog = true },
                 onOpenRestoreDialog = { showRestoreDialog = true },
@@ -137,6 +138,42 @@ fun AdvancedSettingsScreen(
                 modifier = Modifier.padding(padding),
             )
         }
+    }
+
+    pendingCacheClear?.let { target ->
+        AlertDialog(
+            onDismissRequest = { pendingCacheClear = null },
+            title = { Text(stringResource(R.string.advanced_clear_cache_title)) },
+            text = {
+                Text(
+                    stringResource(
+                        if (target == CacheClearTarget.CARDS) {
+                            R.string.advanced_clear_cards_body
+                        } else {
+                            R.string.advanced_clear_diagrams_body
+                        },
+                    ),
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        pendingCacheClear = null
+                        when (target) {
+                            CacheClearTarget.CARDS -> viewModel.clearRenderCache()
+                            CacheClearTarget.DIAGRAMS -> viewModel.clearDiagramCache()
+                        }
+                    },
+                ) {
+                    Text(stringResource(R.string.advanced_clear_cache_confirm))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingCacheClear = null }) {
+                    Text(stringResource(R.string.advanced_cancel))
+                }
+            },
+        )
     }
 
     if (editingOcrLimit) {
@@ -898,4 +935,9 @@ private fun AdvancedLoading(modifier: Modifier = Modifier) {
     ) {
         CircularProgressIndicator()
     }
+}
+
+private enum class CacheClearTarget {
+    CARDS,
+    DIAGRAMS,
 }
