@@ -93,3 +93,32 @@ The live wallpaper never performs network, AI, PDF or WebView work.
 - Request logs store only redacted summaries and are opt-in.
 - Backups are passphrase-protected AES-256 archives; restore validates archive
   paths and versions before replacing local data.
+- Backup destinations can be local or any document provider exposed by Android,
+  including Google Drive, through the Storage Access Framework. Automatic
+  backups are scheduled daily or weekly by WorkManager and may run later under
+  Android's background-execution policy.
+
+## How the AI pipeline works
+
+PDF text extraction and OCR run on-device. The outline stage prefers embedded
+PDF bookmarks; otherwise it makes bounded, chunked provider requests and merges
+the results into chapter/lesson page ranges. After selecting lessons, the
+generation worker sends each lesson's source pages to the configured fact
+provider, verifies the returned facts, and repairs invalid content. Cards are
+rendered offline with the bundled formula/diagram renderers, then saved in a
+book collection and queued for pre-rendering. Generation and rendering can
+resume through WorkManager. The current HTTP clients send the selected lesson
+pages directly; provider-native `get_pages` tool calls are not yet wired.
+
+### NVIDIA NIM and reasoning models
+
+Add NVIDIA NIM as an **OpenAI-compatible** provider with base URL
+`https://integrate.api.nvidia.com/v1`, the model's exact ID, and its API key.
+Reasoning tokens consume the model's output-token budget, so a response may
+contain little visible text or hit its length limit even when the prompt is
+small. Keep the profile's max output tokens at an appropriate higher value
+(default 8,192; minimum 1,024), and use the connection test's actionable
+guidance if the model spends its budget thinking. Provider-specific reasoning
+controls are under **Advanced parameters**; raw JSON body overrides are
+deep-merged last and can be used for provider options such as
+`{"reasoning_effort":"low"}` or disabling a provider's thinking template.
