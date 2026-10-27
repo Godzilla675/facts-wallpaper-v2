@@ -13,4 +13,10 @@ abstract class BackupModule {
     @Binds
     @Singleton
     abstract fun bindBackupManager(impl: BackupManagerImpl): BackupManager
+
+    @Binds
+    @Singleton
+    abstract fun bindBackupDestinationStore(
+        impl: SharedPreferencesBackupDestinationStore,
+    ): BackupDestinationStore
 }

@@ -368,7 +368,11 @@ private fun WorkingCard(state: ImportPdfUiState) {
         Column(modifier = Modifier.padding(spacing.lg)) {
             Text(
                 text = stringResource(
-                    if (progress != null) R.string.import_downloading else R.string.import_staging,
+                    when {
+                        state.isCopyingLocal -> R.string.import_staging
+                        progress != null -> R.string.import_downloading
+                        else -> R.string.import_staging
+                    },
                 ),
                 style = MaterialTheme.typography.bodyMedium,
             )
@@ -381,7 +385,11 @@ private fun WorkingCard(state: ImportPdfUiState) {
                 Spacer(modifier = Modifier.height(spacing.xs))
                 Text(
                     text = stringResource(
-                        R.string.import_download_progress,
+                        if (state.isCopyingLocal) {
+                            R.string.import_copy_progress
+                        } else {
+                            R.string.import_download_progress
+                        },
                         (progress * 100).roundToInt(),
                     ),
                     style = MaterialTheme.typography.labelSmall,

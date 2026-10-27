@@ -32,10 +32,16 @@ object PdfHashing {
      * Streams [input] into [output] while hashing exactly the bytes written.
      * The caller owns both streams.
      */
-    fun copyAndHash(input: InputStream, output: OutputStream): CopyHashResult {
+    fun copyAndHash(
+        input: InputStream,
+        output: OutputStream,
+        totalBytes: Long? = null,
+        onProgress: (copiedBytes: Long, totalBytes: Long?) -> Unit = { _, _ -> },
+    ): CopyHashResult {
         val digest = MessageDigest.getInstance("SHA-256")
         val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
         var total = 0L
+        onProgress(total, totalBytes)
         while (true) {
             val read = input.read(buffer)
             if (read < 0) break
@@ -43,6 +49,7 @@ object PdfHashing {
             digest.update(buffer, 0, read)
             output.write(buffer, 0, read)
             total += read
+            onProgress(total, totalBytes)
         }
         output.flush()
         return CopyHashResult(sha256 = digest.digest().toHex(), bytesCopied = total)

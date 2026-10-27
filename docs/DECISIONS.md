@@ -236,3 +236,26 @@ No screen pretends these features work.
   being accepted and included in wallpaper rotation. The existing pre-render
   worker is then enqueued. WorkManager progress remains available in the
   outline/facts screens, and its unique work can be cancelled by the user.
+
+## Phase P7.4 — SAF Backups and Cloud PDF Import
+
+- Backups use the Storage Access Framework rather than a Drive API. The user
+  chooses a document with `ACTION_CREATE_DOCUMENT`; the persisted URI grant
+  lets manual and WorkManager daily/weekly backups overwrite the same document
+  using provider mode `wt`. The archive format remains the existing encrypted
+  AES-256 `.fwbk`; only the destination changes.
+- The backup passphrase is encrypted with the Android Keystore-backed
+  `SecretCipher`. It is never stored in plaintext preferences, Room, or the
+  archive metadata. If URI permission is revoked or the provider becomes
+  unavailable, the run is recorded as failed with its cause and the user can
+  choose the destination again.
+- WorkManager periodic scheduling is approximate and subject to Android
+  battery/background execution policy; it is not an exact-time backup service.
+- Local SAF PDF copies report byte progress when the document provider exposes
+  a content length. Providers that do not report a size still show an
+  indeterminate progress indicator. Public PDF URLs retain HTTPS, content-type,
+  `%PDF` header, and streaming size-cap validation.
+- There is no Apps Script relay. A relay would add network latency and
+  maintenance, while Apps Script's six-minute execution limit constrains long
+  books; it provides no benefit over on-device PDF extraction followed by
+  direct provider calls from the app.

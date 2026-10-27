@@ -52,6 +52,23 @@ class PdfHashingTest {
     }
 
     @Test
+    fun `copyAndHash reports byte progress against a known source size`() {
+        val content = ByteArray(40_000) { index -> (index % 239).toByte() }
+        val progress = mutableListOf<Pair<Long, Long?>>()
+
+        PdfHashing.copyAndHash(
+            input = ByteArrayInputStream(content),
+            output = ByteArrayOutputStream(),
+            totalBytes = content.size.toLong(),
+            onProgress = { copied, total -> progress += copied to total },
+        )
+
+        assertThat(progress.first()).isEqualTo(0L to content.size.toLong())
+        assertThat(progress.last()).isEqualTo(content.size.toLong() to content.size.toLong())
+        assertThat(progress.map { it.first }).isInOrder()
+    }
+
+    @Test
     fun `file hashing streams the same digest as the byte vector`() {
         val file = temporaryFolder.newFile("document.pdf")
         val content = "%PDF-1.4\nfile-backed content\n%%EOF".toByteArray()

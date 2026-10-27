@@ -54,6 +54,7 @@ data class ImportFailure(
 data class ImportPdfUiState(
     val url: String = "",
     val isWorking: Boolean = false,
+    val isCopyingLocal: Boolean = false,
     val downloadProgress: Float? = null,
     val staged: StagedPdf? = null,
     val duplicatePrompt: ImportDuplicatePrompt? = null,
@@ -201,6 +202,7 @@ class ImportPdfViewModel @Inject constructor(
                     duplicatePrompt = null,
                     failure = null,
                     isWorking = true,
+                    isCopyingLocal = false,
                     downloadProgress = 0f,
                     decision = null,
                     cost = null,
@@ -475,6 +477,7 @@ class ImportPdfViewModel @Inject constructor(
             recompute(
                 it.copy(
                     isWorking = true,
+                    isCopyingLocal = true,
                     failure = null,
                     staged = null,
                     duplicatePrompt = null,
@@ -487,7 +490,23 @@ class ImportPdfViewModel @Inject constructor(
         }
         viewModelScope.launch {
             previous?.let { importRepository.discard(it.id) }
-            applyStageResult(importRepository.stageLocal(uri, displayName, DuplicatePolicy.ASK))
+            val result = importRepository.stageLocal(
+                uri = uri,
+                displayName = displayName,
+                policy = DuplicatePolicy.ASK,
+                onProgress = { copied, total ->
+                    val progress = if (total != null && total > 0L) {
+                        (copied.toFloat() / total.toFloat()).coerceIn(0f, 1f)
+                    } else {
+                        null
+                    }
+                    _uiState.update { current ->
+                        if (current.isWorking) current.copy(downloadProgress = progress) else current
+                    }
+                },
+            )
+            _uiState.update { it.copy(isCopyingLocal = false) }
+            applyStageResult(result)
         }
     }
 

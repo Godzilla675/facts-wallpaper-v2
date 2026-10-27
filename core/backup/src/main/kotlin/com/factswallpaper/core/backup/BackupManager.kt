@@ -1,11 +1,18 @@
 package com.factswallpaper.core.backup
 
+import android.net.Uri
 import com.factswallpaper.core.common.AppResult
 import java.io.File
 
 interface BackupManager {
     suspend fun createBackup(
         destinationFile: File,
+        passphrase: String,
+        options: BackupOptions = BackupOptions(),
+    ): AppResult<BackupManifest>
+
+    suspend fun createBackupToUri(
+        destination: Uri,
         passphrase: String,
         options: BackupOptions = BackupOptions(),
     ): AppResult<BackupManifest>

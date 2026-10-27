@@ -29,6 +29,7 @@ interface PdfImportRepository {
         uri: String,
         displayName: String? = null,
         policy: DuplicatePolicy = DuplicatePolicy.ASK,
+        onProgress: (copiedBytes: Long, totalBytes: Long?) -> Unit = { _, _ -> },
     ): PdfImportResult
 
     suspend fun stageUrl(
@@ -64,10 +65,11 @@ class DefaultPdfImportRepository @Inject constructor(
         uri: String,
         displayName: String?,
         policy: DuplicatePolicy,
+        onProgress: (Long, Long?) -> Unit,
     ): PdfImportResult = withContext(dispatchers.io) {
         fileStore.pruneStaging()
         val copy = try {
-            fileStore.copyFromUri(uri, displayName)
+            fileStore.copyFromUri(uri, displayName, onProgress)
         } catch (error: PdfImportException) {
             return@withContext PdfImportResult.Failure(
                 PdfImportError(error.code, error.message, error.cause),

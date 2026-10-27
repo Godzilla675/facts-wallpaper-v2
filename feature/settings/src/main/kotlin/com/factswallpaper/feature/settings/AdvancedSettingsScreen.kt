@@ -1,5 +1,7 @@
 package com.factswallpaper.feature.settings
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -31,6 +33,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -57,6 +60,8 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.factswallpaper.core.backup.BackupOptions
+import com.factswallpaper.core.backup.AutomaticBackupFrequency
+import com.factswallpaper.core.backup.BackupDestinationStatus
 import com.factswallpaper.core.designsystem.theme.LocalSpacing
 import com.factswallpaper.core.model.AiRequestLogEntry
 import com.factswallpaper.core.model.AiTask
@@ -70,6 +75,13 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+
+private data class BackupDestinationRequest(
+    val passphrase: String,
+    val options: BackupOptions,
+    val automaticEnabled: Boolean,
+    val frequency: AutomaticBackupFrequency,
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -89,6 +101,24 @@ fun AdvancedSettingsScreen(
     var showBackupDialog by remember { mutableStateOf(false) }
     var showRestoreDialog by remember { mutableStateOf(false) }
     var pendingCacheClear by remember { mutableStateOf<CacheClearTarget?>(null) }
+    var pendingBackupDestination by remember { mutableStateOf<BackupDestinationRequest?>(null) }
+    val backupDocumentPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/octet-stream"),
+    ) { uri ->
+        val request = pendingBackupDestination
+        pendingBackupDestination = null
+        if (uri != null && request != null) {
+            viewModel.configureBackupDestination(
+                uri = uri,
+                passphrase = request.passphrase,
+                options = request.options,
+                automaticEnabled = request.automaticEnabled,
+                frequency = request.frequency,
+            ) {
+                showBackupDialog = false
+            }
+        }
+    }
 
     UiMessageEffect(message, snackbarHostState, viewModel::onMessageShown)
 
@@ -134,6 +164,13 @@ fun AdvancedSettingsScreen(
                 onCompactDatabase = viewModel::compactDatabase,
                 onOpenBackupDialog = { showBackupDialog = true },
                 onOpenRestoreDialog = { showRestoreDialog = true },
+                onBackupToSavedLocation = viewModel::backupToSavedLocation,
+                onAutomaticBackupChange = {
+                    viewModel.setAutomaticBackup(it, value.backupDestination.frequency)
+                },
+                onBackupFrequencyChange = {
+                    viewModel.setAutomaticBackup(value.backupDestination.automaticEnabled, it)
+                },
                 onSqlCipher = viewModel::sqlCipherInfo,
                 modifier = Modifier.padding(padding),
             )
@@ -242,6 +279,15 @@ fun AdvancedSettingsScreen(
                     showBackupDialog = false
                 }
             },
+            onChooseLocation = { pass, options, automatic, frequency ->
+                pendingBackupDestination = BackupDestinationRequest(
+                    passphrase = pass,
+                    options = options,
+                    automaticEnabled = automatic,
+                    frequency = frequency,
+                )
+                backupDocumentPicker.launch("facts-wallpaper-backup.fwbk")
+            },
         )
     }
 
@@ -275,6 +321,9 @@ private fun AdvancedContent(
     onCompactDatabase: () -> Unit,
     onOpenBackupDialog: () -> Unit,
     onOpenRestoreDialog: () -> Unit,
+    onBackupToSavedLocation: () -> Unit,
+    onAutomaticBackupChange: (Boolean) -> Unit,
+    onBackupFrequencyChange: (AutomaticBackupFrequency) -> Unit,
     onSqlCipher: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -526,6 +575,61 @@ private fun AdvancedContent(
                 title = stringResource(R.string.advanced_data_title),
                 subtitle = stringResource(R.string.advanced_data_helper),
             ) {
+                Text(
+                    text = backupStatusSummary(state.backupDestination),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (state.backupDestination.lastBackupSucceeded == false) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                )
+                state.backupDestination.lastError?.let { error ->
+                    Text(
+                        text = stringResource(R.string.advanced_backup_last_error, error),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+                SettingSwitchRow(
+                    title = stringResource(R.string.advanced_backup_automatic),
+                    subtitle = stringResource(
+                        if (state.backupDestination.frequency == AutomaticBackupFrequency.WEEKLY) {
+                            R.string.advanced_backup_weekly
+                        } else {
+                            R.string.advanced_backup_daily
+                        },
+                    ),
+                    checked = state.backupDestination.automaticEnabled,
+                    enabled = state.backupDestination.hasDestination,
+                    onCheckedChange = onAutomaticBackupChange,
+                )
+                if (state.backupDestination.hasDestination) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(spacing.sm)) {
+                        FilterChip(
+                            selected = state.backupDestination.frequency == AutomaticBackupFrequency.DAILY,
+                            onClick = {
+                                onBackupFrequencyChange(AutomaticBackupFrequency.DAILY)
+                            },
+                            label = { Text(stringResource(R.string.advanced_backup_daily)) },
+                        )
+                        FilterChip(
+                            selected = state.backupDestination.frequency == AutomaticBackupFrequency.WEEKLY,
+                            onClick = {
+                                onBackupFrequencyChange(AutomaticBackupFrequency.WEEKLY)
+                            },
+                            label = { Text(stringResource(R.string.advanced_backup_weekly)) },
+                        )
+                    }
+                }
+                if (state.backupDestination.hasDestination) {
+                    OutlinedButton(
+                        onClick = onBackupToSavedLocation,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(stringResource(R.string.advanced_backup_now))
+                    }
+                }
                 Row(horizontalArrangement = Arrangement.spacedBy(spacing.sm)) {
                     Button(onClick = onOpenBackupDialog, modifier = Modifier.weight(1f)) {
                         Text(stringResource(R.string.advanced_backup))
@@ -533,6 +637,12 @@ private fun AdvancedContent(
                     OutlinedButton(onClick = onOpenRestoreDialog, modifier = Modifier.weight(1f)) {
                         Text(stringResource(R.string.advanced_restore))
                     }
+                }
+                OutlinedButton(
+                    onClick = onOpenBackupDialog,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(stringResource(R.string.advanced_backup_choose_location))
                 }
                 Row(
                     modifier = Modifier
@@ -689,17 +799,30 @@ private fun PromptInspectorDialog(
 private fun BackupDialog(
     onDismiss: () -> Unit,
     onConfirm: (passphrase: String, options: BackupOptions) -> Unit,
+    onChooseLocation: (
+        passphrase: String,
+        options: BackupOptions,
+        automaticEnabled: Boolean,
+        frequency: AutomaticBackupFrequency,
+    ) -> Unit,
 ) {
     var passphrase by remember { mutableStateOf("") }
     var includeAssets by remember { mutableStateOf(false) }
     var includePdfs by remember { mutableStateOf(false) }
+    var automaticEnabled by remember { mutableStateOf(false) }
+    var frequency by remember { mutableStateOf(AutomaticBackupFrequency.DAILY) }
     val isValid = passphrase.length >= 8
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.advanced_backup_title)) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 OutlinedTextField(
                     value = passphrase,
                     onValueChange = { passphrase = it },
@@ -732,6 +855,40 @@ private fun BackupDialog(
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }
+                SettingSwitchRow(
+                    title = stringResource(R.string.advanced_backup_automatic),
+                    subtitle = stringResource(R.string.advanced_backup_schedule_helper),
+                    checked = automaticEnabled,
+                    onCheckedChange = { automaticEnabled = it },
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(
+                        selected = frequency == AutomaticBackupFrequency.DAILY,
+                        onClick = { frequency = AutomaticBackupFrequency.DAILY },
+                        label = { Text(stringResource(R.string.advanced_backup_daily)) },
+                        enabled = automaticEnabled,
+                    )
+                    FilterChip(
+                        selected = frequency == AutomaticBackupFrequency.WEEKLY,
+                        onClick = { frequency = AutomaticBackupFrequency.WEEKLY },
+                        label = { Text(stringResource(R.string.advanced_backup_weekly)) },
+                        enabled = automaticEnabled,
+                    )
+                }
+                OutlinedButton(
+                    onClick = {
+                        onChooseLocation(
+                            passphrase,
+                            BackupOptions(includeAssets, includePdfs),
+                            automaticEnabled,
+                            frequency,
+                        )
+                    },
+                    enabled = isValid,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(stringResource(R.string.advanced_backup_choose_location))
+                }
             }
         },
         confirmButton = {
@@ -750,6 +907,25 @@ private fun BackupDialog(
             }
         },
     )
+}
+
+@Composable
+private fun backupStatusSummary(status: BackupDestinationStatus): String {
+    val target = stringResource(
+        if (status.hasDestination) {
+            R.string.advanced_backup_location_configured
+        } else {
+            R.string.advanced_backup_location_missing
+        },
+    )
+    val lastRun = status.lastBackupAtEpochMs?.let(::formatEpoch)
+        ?: stringResource(R.string.advanced_backup_never_run)
+    val result = when (status.lastBackupSucceeded) {
+        true -> stringResource(R.string.advanced_backup_status_success, lastRun)
+        false -> stringResource(R.string.advanced_backup_status_failure, lastRun)
+        null -> stringResource(R.string.advanced_backup_status_not_run)
+    }
+    return "$target\n$result"
 }
 
 @Composable

@@ -71,7 +71,11 @@ class PdfFileStore @Inject constructor(
         }
     }
 
-    suspend fun copyFromUri(uriString: String, displayName: String?): StagedCopy =
+    suspend fun copyFromUri(
+        uriString: String,
+        displayName: String?,
+        onProgress: (copiedBytes: Long, totalBytes: Long?) -> Unit = { _, _ -> },
+    ): StagedCopy =
         withContext(dispatchers.io) {
             val uri = Uri.parse(uriString)
             val destination = newStagingFile()
@@ -81,9 +85,10 @@ class PdfFileStore @Inject constructor(
                         PdfImportErrorCode.UNREADABLE_SOURCE,
                         "Could not open $uriString",
                     )
+                val totalBytes = querySize(uri)
                 val result = source.use { input ->
                     destination.outputStream().use { output ->
-                        PdfHashing.copyAndHash(input, output)
+                        PdfHashing.copyAndHash(input, output, totalBytes, onProgress)
                     }
                 }
                 if (!hasMagicHeader(destination)) {
@@ -167,6 +172,19 @@ class PdfFileStore @Inject constructor(
         )?.use { cursor ->
             val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
             if (index >= 0 && cursor.moveToFirst()) cursor.getString(index) else null
+        }
+    }.getOrNull()
+
+    private fun querySize(uri: Uri): Long? = runCatching {
+        context.contentResolver.query(
+            uri,
+            arrayOf(OpenableColumns.SIZE),
+            null,
+            null,
+            null,
+        )?.use { cursor ->
+            val index = cursor.getColumnIndex(OpenableColumns.SIZE)
+            if (index >= 0 && cursor.moveToFirst()) cursor.getLong(index).takeIf { it > 0L } else null
         }
     }.getOrNull()
 

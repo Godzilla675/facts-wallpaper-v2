@@ -36,6 +36,7 @@
     <string name="import_staging">Copying and inspecting the PDF locally&#8230;</string>
     <string name="import_downloading">Downloading the PDF&#8230;</string>
     <string name="import_download_progress">Downloaded %1$d%%</string>
+    <string name="import_copy_progress">Copied %1$d%%</string>
     <string name="import_selected_file">File: %1$s</string>
     <string name="import_ready">PDF inspected. Review the processing plan.</string>
     <string name="import_inspection_title">Inspection</string>

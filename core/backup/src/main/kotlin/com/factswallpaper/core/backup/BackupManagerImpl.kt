@@ -4,6 +4,7 @@ import android.content.ContentValues
 import android.content.Context
 import android.database.Cursor
 import android.database.sqlite.SQLiteDatabase
+import android.net.Uri
 import com.factswallpaper.core.common.AppError
 import com.factswallpaper.core.common.AppResult
 import com.factswallpaper.core.common.FactsDispatchers
@@ -14,6 +15,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.ByteArrayInputStream
 import java.io.File
 import java.io.FileOutputStream
+import java.io.IOException
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.withContext
@@ -51,6 +53,35 @@ class BackupManagerImpl @Inject constructor(
         encodeDefaults = true
     }
 
+    override suspend fun createBackupToUri(
+        destination: Uri,
+        passphrase: String,
+        options: BackupOptions,
+    ): AppResult<BackupManifest> = withContext(dispatchers.io) {
+        var temporaryFile: File? = null
+        try {
+            val backupFile = File.createTempFile("backup-export-", ".fwbk", context.cacheDir)
+            temporaryFile = backupFile
+            when (val created = createBackup(backupFile, passphrase, options)) {
+                is AppResult.Failure -> created
+                is AppResult.Success -> {
+                    val output = context.contentResolver.openOutputStream(destination, "wt")
+                        ?: throw IOException("The selected backup destination is no longer writable.")
+                    output.use { stream ->
+                        backupFile.inputStream().use { input -> input.copyTo(stream) }
+                    }
+                    created
+                }
+            }
+        } catch (error: kotlinx.coroutines.CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            AppResult.Failure(AppError.Storage(error))
+        } finally {
+            temporaryFile?.delete()
+        }
+    }
+
     override suspend fun createBackup(
         destinationFile: File,
         passphrase: String,
@@ -61,7 +92,6 @@ class BackupManagerImpl @Inject constructor(
                 AppError.InvalidOperation("Passphrase must be at least $MIN_PASSPHRASE_LENGTH characters long"),
             )
         }
-
         try {
             if (destinationFile.exists()) {
                 destinationFile.delete()
