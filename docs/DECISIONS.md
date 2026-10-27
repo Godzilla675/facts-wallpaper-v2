@@ -146,3 +146,38 @@ No screen pretends these features work.
 - `RoomDocumentTextRepository` in `:core:data` now delegates directly to `DocumentRepository.getChunks` and compiled text to eliminate duplication between P2 and P3 text access.
 - `OutlineScreen` header now provides an active navigation button to open the `FactsScreen` whenever facts have been extracted for the document.
 - Stubs and "not yet available" placeholder strings across onboarding and advanced settings have been replaced with real functional bindings and explanatory copy.
+
+## Phase P6b — Hardening, Accessibility and CI
+
+### String resources and localization
+- Remaining hardcoded user-facing labels were moved to module string resources:
+  advanced log detail metadata and empty values, provider API-key optional
+  labels, fact source-reference mode chips, and the outline cost estimate.
+- Technical exception text from provider diagnostics is still passed as the
+  `%2$s` detail argument of a localized failure message. Fully localizing
+  provider/network diagnostics would require a message-code layer in
+  `:core:ai`; this is intentionally deferred rather than adding a second
+  user-facing string system.
+
+### Lint and manifests
+- `PropertyEscape` is disabled in `:app` because the warning is raised only for
+  the machine-generated, git-ignored `local.properties` SDK path, not for
+  source code.
+- `:core:pdf` now declares the WorkManager foreground `SystemForegroundService`
+  with `foregroundServiceType="dataSync"` so the module lints independently.
+- `:core:wallpaper` declares `SET_WALLPAPER` in its own manifest instead of
+  relying on manifest merging from `:app`.
+
+### Testing
+- Added `JsonRepairServiceTest` covering the single repair pass, schema-bound
+  prompt construction, `temperature = 0.0`, the 512-token floor, larger token
+  budgets and `repairTriggered` log metadata.
+- Compose UI coverage remains Robolectric-based (`LibraryScreenTest` plus
+  feature ViewModel tests). Roborazzi golden screenshots and the full
+  seven-flow Hilt end-to-end suite from spec §10.2 are not implemented; this is
+  recorded as a remaining release-acceptance gap.
+
+### CI
+- Added `.github/workflows/android-ci.yml` with a tracked-file secret scanner
+  for Google API keys, OpenAI-style keys and hardcoded bearer tokens, followed
+  by `lintDebug testDebugUnitTest assembleDebug`.
