@@ -193,6 +193,13 @@ internal class FakeDocumentRepository : DocumentRepository {
     override suspend fun saveSettings(settings: DocumentSettings) {}
     override suspend fun setIncludedInRotation(documentId: String, included: Boolean) {}
     override suspend fun updateExtractionStatus(documentId: String, status: ExtractionStatus, errorMessage: String?) {}
+    override suspend fun updatePipelineProgress(documentId: String, progress: Float) {}
+    override suspend fun updatePipelineStatus(
+        documentId: String,
+        status: ExtractionStatus,
+        progress: Float,
+        errorMessage: String?,
+    ) {}
     override suspend fun deleteDocument(documentId: String): AppResult<Unit> {
         docsFlow.value = docsFlow.value.filter { it.id != documentId }
         return AppResult.Success(Unit)

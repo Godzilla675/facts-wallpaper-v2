@@ -36,6 +36,15 @@ interface DocumentRepository {
         errorMessage: String? = null,
     )
 
+    suspend fun updatePipelineProgress(documentId: String, progress: Float)
+
+    suspend fun updatePipelineStatus(
+        documentId: String,
+        status: ExtractionStatus,
+        progress: Float,
+        errorMessage: String? = null,
+    )
+
     suspend fun deleteDocument(documentId: String): AppResult<Unit>
     fun observeRouteCounts(): Flow<Map<PdfProcessingRoute, Int>>
 

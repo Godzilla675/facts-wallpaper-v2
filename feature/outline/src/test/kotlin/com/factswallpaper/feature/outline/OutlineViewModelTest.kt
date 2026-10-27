@@ -24,7 +24,9 @@ import com.factswallpaper.core.data.repository.LessonRepository
 import com.factswallpaper.core.datastore.AppPreferences
 import com.factswallpaper.core.datastore.SettingsRepository
 import com.factswallpaper.core.model.AiTask
+import com.factswallpaper.core.model.AutoProcessMode
 import com.factswallpaper.core.model.Document
+import com.factswallpaper.core.model.DocumentInputMode
 import com.factswallpaper.core.model.DocumentSettings
 import com.factswallpaper.core.model.ExtractionStatus
 import com.factswallpaper.core.model.Fact
@@ -273,6 +275,13 @@ private class FakeDocumentRepository : DocumentRepository {
     }
     override suspend fun setIncludedInRotation(documentId: String, included: Boolean) {}
     override suspend fun updateExtractionStatus(documentId: String, status: ExtractionStatus, errorMessage: String?) {}
+    override suspend fun updatePipelineProgress(documentId: String, progress: Float) {}
+    override suspend fun updatePipelineStatus(
+        documentId: String,
+        status: ExtractionStatus,
+        progress: Float,
+        errorMessage: String?,
+    ) {}
     override suspend fun deleteDocument(documentId: String): AppResult<Unit> {
         docsFlow.value = docsFlow.value.filter { it.id != documentId }
         return AppResult.Success(Unit)
@@ -313,6 +322,9 @@ private class FakeSettingsRepository : SettingsRepository {
     override suspend fun setEnableAiDiagnosticsLog(enabled: Boolean) {}
     override suspend fun setEnableDoubleTapWallpaperAdvance(enabled: Boolean) {}
     override suspend fun setAiCostGuardThresholdUsd(thresholdUsd: Double) {}
+    override suspend fun setDefaultAutoProcessMode(mode: AutoProcessMode) {}
+    override suspend fun setDefaultDocumentInputMode(mode: DocumentInputMode) {}
+    override suspend fun setMaxImagesPerRequest(maxImages: Int) {}
 }
 
 private class FakeStructuredAiService : StructuredAiService {

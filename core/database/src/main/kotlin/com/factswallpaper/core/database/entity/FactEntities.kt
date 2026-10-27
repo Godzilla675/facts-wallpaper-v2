@@ -55,6 +55,8 @@ data class FactItemEntity(
     val favorite: Boolean = false,
     val createdAtEpochMs: Long,
     val updatedAtEpochMs: Long = createdAtEpochMs,
+    val reviewGotItCount: Int = 0,
+    val reviewAgainCount: Int = 0,
 )
 
 /** 6. Normalized fact tag cross-reference for multi-tag filtering. */

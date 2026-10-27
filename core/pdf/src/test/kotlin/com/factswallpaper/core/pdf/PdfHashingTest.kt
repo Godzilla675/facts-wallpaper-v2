@@ -171,6 +171,13 @@ private class FakeHashDocumentRepository(
         status: ExtractionStatus,
         errorMessage: String?,
     ) = Unit
+    override suspend fun updatePipelineProgress(documentId: String, progress: Float) = Unit
+    override suspend fun updatePipelineStatus(
+        documentId: String,
+        status: ExtractionStatus,
+        progress: Float,
+        errorMessage: String?,
+    ) = Unit
     override suspend fun deleteDocument(documentId: String): AppResult<Unit> = AppResult.Success(Unit)
     override fun observeRouteCounts(): Flow<Map<PdfProcessingRoute, Int>> = flowOf(emptyMap())
     override fun observeChunks(documentId: String): Flow<List<DocumentChunk>> = flowOf(emptyList())

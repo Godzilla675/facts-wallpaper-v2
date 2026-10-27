@@ -84,6 +84,24 @@ abstract class PdfDocumentDao {
     )
 
     @Query(
+        "UPDATE pdf_documents SET pipelineProgress = :progress, " +
+            "updatedAtEpochMs = :updatedAtEpochMs WHERE id = :id"
+    )
+    abstract suspend fun updatePipelineProgress(id: String, progress: Float, updatedAtEpochMs: Long)
+
+    @Query(
+        "UPDATE pdf_documents SET extractionStatus = :status, pipelineProgress = :progress, " +
+            "lastErrorMessage = :errorMessage, updatedAtEpochMs = :updatedAtEpochMs WHERE id = :id"
+    )
+    abstract suspend fun updatePipelineStatus(
+        id: String,
+        status: String,
+        progress: Float,
+        errorMessage: String?,
+        updatedAtEpochMs: Long,
+    )
+
+    @Query(
         "UPDATE pdf_documents SET ocrLastStartedPage = :page, extractionStatus = :status, " +
             "updatedAtEpochMs = :updatedAtEpochMs WHERE id = :id"
     )

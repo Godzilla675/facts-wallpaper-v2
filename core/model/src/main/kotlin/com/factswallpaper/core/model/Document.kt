@@ -29,6 +29,7 @@ data class Document(
     val updatedAtEpochMs: Long = createdAtEpochMs,
     val lessonCount: Int = 0,
     val factCount: Int = 0,
+    val pipelineProgress: Float = 0f,
 ) {
     val scannedPageCount: Int get() = (pageCount - pagesWithText).coerceAtLeast(0)
     val isFullyTextExtractable: Boolean get() = pageCount > 0 && pagesWithText >= pageCount
@@ -50,6 +51,8 @@ data class DocumentSettings(
     val includeDiagrams: Boolean = true,
     val autoVerifyFormulas: Boolean = true,
     val preferredProviderProfileId: String? = null,
+    val autoProcessMode: AutoProcessMode = AutoProcessMode.OUTLINE_ONLY,
+    val documentInputMode: DocumentInputMode = DocumentInputMode.AUTO,
 )
 
 @Serializable

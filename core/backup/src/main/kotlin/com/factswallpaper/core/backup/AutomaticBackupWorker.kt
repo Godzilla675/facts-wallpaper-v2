@@ -7,6 +7,7 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import com.factswallpaper.core.common.AppResult
+import com.factswallpaper.core.data.pipeline.PipelineNotifier
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.flow.first
@@ -17,6 +18,7 @@ class AutomaticBackupWorker @AssistedInject constructor(
     @Assisted params: WorkerParameters,
     private val backupManager: BackupManager,
     private val destinationStore: BackupDestinationStore,
+    private val pipelineNotifier: PipelineNotifier,
 ) : CoroutineWorker(appContext, params) {
 
     override suspend fun doWork(): Result {
@@ -34,9 +36,19 @@ class AutomaticBackupWorker @AssistedInject constructor(
             return Result.failure(workDataOf(KEY_ERROR to "Backup destination is not configured."))
         }
 
+        runCatching {
+            setForeground(
+                pipelineNotifier.pipelineForeground(
+                    documentId = "backup",
+                    documentTitle = "Facts Wallpaper",
+                    stageText = "Creating encrypted backup…",
+                    progressFraction = null,
+                ),
+            )
+        }
         setProgress(workDataOf(KEY_STATUS to "Creating encrypted backup"))
-        return when (
-            val result = backupManager.createBackupToUri(
+        val result = when (
+            val backupResult = backupManager.createBackupToUri(
                 destination = Uri.parse(configuration.uri),
                 passphrase = configuration.passphrase,
                 options = configuration.options,
@@ -46,17 +58,19 @@ class AutomaticBackupWorker @AssistedInject constructor(
                 destinationStore.recordResult(succeeded = true)
                 Result.success(
                     workDataOf(
-                        KEY_DOCUMENT_COUNT to result.value.documentCount,
-                        KEY_FACT_COUNT to result.value.factCount,
+                        KEY_DOCUMENT_COUNT to backupResult.value.documentCount,
+                        KEY_FACT_COUNT to backupResult.value.factCount,
                     ),
                 )
             }
             is AppResult.Failure -> {
-                val detail = result.error.cause?.message ?: result.error.message
+                val detail = backupResult.error.cause?.message ?: backupResult.error.message
                 destinationStore.recordResult(false, detail)
                 Result.failure(workDataOf(KEY_ERROR to detail))
             }
         }
+        pipelineNotifier.cancelNotification("backup")
+        return result
     }
 
     companion object {

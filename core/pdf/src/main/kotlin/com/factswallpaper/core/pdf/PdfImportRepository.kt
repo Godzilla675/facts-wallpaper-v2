@@ -214,6 +214,7 @@ class DefaultPdfImportRepository @Inject constructor(
             ocrLastStartedPage = 0,
             ocrLastCompletedPage = 0,
             extractionStatus = ExtractionStatus.IMPORTED,
+            pipelineProgress = 0f,
             lastErrorMessage = null,
             includedInRotation = existing?.includedInRotation ?: true,
             createdAtEpochMs = existing?.createdAtEpochMs ?: now,
@@ -234,6 +235,8 @@ class DefaultPdfImportRepository @Inject constructor(
             includeDiagrams = true,
             autoVerifyFormulas = true,
             preferredProviderProfileId = options.preferredProviderProfileId,
+            autoProcessMode = options.autoProcessMode,
+            documentInputMode = options.documentInputMode,
         )
 
         try {

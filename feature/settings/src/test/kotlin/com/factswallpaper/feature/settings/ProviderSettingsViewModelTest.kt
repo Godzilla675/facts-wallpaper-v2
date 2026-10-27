@@ -11,6 +11,8 @@ import com.factswallpaper.core.datastore.AppPreferences
 import com.factswallpaper.core.datastore.SettingsRepository
 import com.factswallpaper.core.model.AiRequestLogEntry
 import com.factswallpaper.core.model.AiTask
+import com.factswallpaper.core.model.AutoProcessMode
+import com.factswallpaper.core.model.DocumentInputMode
 import com.factswallpaper.core.model.ProviderKeyStatus
 import com.factswallpaper.core.model.ProviderProfile
 import com.factswallpaper.core.model.ProviderType
@@ -241,6 +243,15 @@ private class FakeSettingsRepository : SettingsRepository {
     override suspend fun setEnableAiDiagnosticsLog(enabled: Boolean) {}
     override suspend fun setEnableDoubleTapWallpaperAdvance(enabled: Boolean) {}
     override suspend fun setAiCostGuardThresholdUsd(thresholdUsd: Double) {}
+    override suspend fun setDefaultAutoProcessMode(mode: AutoProcessMode) {
+        preferencesFlow.value = preferencesFlow.value.copy(defaultAutoProcessMode = mode)
+    }
+    override suspend fun setDefaultDocumentInputMode(mode: DocumentInputMode) {
+        preferencesFlow.value = preferencesFlow.value.copy(defaultDocumentInputMode = mode)
+    }
+    override suspend fun setMaxImagesPerRequest(maxImages: Int) {
+        preferencesFlow.value = preferencesFlow.value.copy(maxImagesPerRequest = maxImages)
+    }
 }
 
 private class FakeDiagnosticsRepository : DiagnosticsRepository {

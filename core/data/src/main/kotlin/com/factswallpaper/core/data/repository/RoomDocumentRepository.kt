@@ -122,6 +122,33 @@ class RoomDocumentRepository @Inject constructor(
         }
     }
 
+    override suspend fun updatePipelineProgress(documentId: String, progress: Float) {
+        withContext(dispatchers.io) {
+            documentDao.updatePipelineProgress(
+                id = documentId,
+                progress = progress.coerceIn(0f, 1f),
+                updatedAtEpochMs = System.currentTimeMillis(),
+            )
+        }
+    }
+
+    override suspend fun updatePipelineStatus(
+        documentId: String,
+        status: ExtractionStatus,
+        progress: Float,
+        errorMessage: String?,
+    ) {
+        withContext(dispatchers.io) {
+            documentDao.updatePipelineStatus(
+                id = documentId,
+                status = status.name,
+                progress = progress.coerceIn(0f, 1f),
+                errorMessage = errorMessage,
+                updatedAtEpochMs = System.currentTimeMillis(),
+            )
+        }
+    }
+
     override suspend fun deleteDocument(documentId: String): AppResult<Unit> =
         withContext(dispatchers.io) {
             val document = try {

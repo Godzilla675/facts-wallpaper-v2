@@ -64,6 +64,12 @@
     <string name="document_status_error">Processing error</string>
     <string name="document_status_ready">Ready</string>
 
+    <string name="stage_extracting_text">Extracting text&#8230;</string>
+    <string name="stage_outline_generating">Generating outline&#8230;</string>
+    <string name="stage_outline_ready">Outline ready</string>
+    <string name="stage_facts_generating">Generating facts&#8230;</string>
+    <string name="stage_completed">Ready</string>
+
     <string name="lesson_pages">pp. %1$d&#8211;%2$d</string>
     <string name="lesson_fact_count">%1$d facts</string>
     <string name="lesson_edit">Edit lesson</string>

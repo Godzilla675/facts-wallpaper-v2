@@ -28,6 +28,8 @@ data class Fact(
     val favorite: Boolean = false,
     val createdAtEpochMs: Long,
     val updatedAtEpochMs: Long = createdAtEpochMs,
+    val reviewGotItCount: Int = 0,
+    val reviewAgainCount: Int = 0,
 ) {
     val hasFormula: Boolean get() = requiresLatex || templateType == CardTemplateType.FORMULA || !latex.isNullOrBlank()
     val hasDiagram: Boolean get() = diagramType != DiagramKind.NONE

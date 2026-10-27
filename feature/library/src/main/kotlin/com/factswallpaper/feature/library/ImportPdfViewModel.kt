@@ -5,7 +5,9 @@ import androidx.lifecycle.viewModelScope
 import com.factswallpaper.core.data.repository.DocumentRepository
 import com.factswallpaper.core.data.repository.ProviderProfileRepository
 import com.factswallpaper.core.datastore.SettingsRepository
+import com.factswallpaper.core.model.AutoProcessMode
 import com.factswallpaper.core.model.Document
+import com.factswallpaper.core.model.DocumentInputMode
 import com.factswallpaper.core.model.DocumentSettings
 import com.factswallpaper.core.model.OcrExecutionMode
 import com.factswallpaper.core.ocr.OcrLanguageCatalog
@@ -66,6 +68,8 @@ data class ImportPdfUiState(
     val overrideOcrLimit: Boolean = false,
     val languageCode: String = "eng",
     val ocrPageLimit: Int = 20,
+    val autoProcessMode: AutoProcessMode = AutoProcessMode.OUTLINE_ONLY,
+    val documentInputMode: DocumentInputMode = DocumentInputMode.AUTO,
     val modelStates: List<OcrModelState> = emptyList(),
     val decision: PdfRouteDecision? = null,
     val cost: PdfCostEstimate? = null,
@@ -139,7 +143,11 @@ class ImportPdfViewModel @Inject constructor(
         viewModelScope.launch {
             settingsRepository.observePreferences().collect { preferences ->
                 _uiState.update { state ->
-                    val updated = state.copy(ocrPageLimit = preferences.defaultOcrPageLimit)
+                    val updated = state.copy(
+                        ocrPageLimit = preferences.defaultOcrPageLimit,
+                        autoProcessMode = preferences.defaultAutoProcessMode,
+                        documentInputMode = preferences.defaultDocumentInputMode,
+                    )
                     recompute(updated)
                 }
             }
@@ -222,8 +230,8 @@ class ImportPdfViewModel @Inject constructor(
                     } else {
                         null
                     }
-                    _uiState.update { state ->
-                        if (state.isWorking) state.copy(downloadProgress = progress) else state
+                    _uiState.update { current ->
+                        if (current.isWorking) current.copy(downloadProgress = progress) else current
                     }
                 },
             )
@@ -233,65 +241,9 @@ class ImportPdfViewModel @Inject constructor(
 
     fun resolveDuplicate(policy: DuplicatePolicy) {
         val prompt = _uiState.value.duplicatePrompt ?: return
-        _uiState.update { it.copy(isWorking = true, failure = null) }
         viewModelScope.launch {
-            when (val result = importRepository.resolveDuplicate(prompt.stagedId, policy)) {
-                is PdfImportResult.Ready -> {
-                    _uiState.update { state ->
-                        recompute(
-                            state.copy(
-                                staged = result.staged,
-                                duplicatePrompt = null,
-                                isWorking = false,
-                                downloadProgress = null,
-                                pageStart = "1",
-                                pageEnd = result.staged.pageCount.toString(),
-                            ),
-                        )
-                    }
-                    showMessage(
-                        if (policy == DuplicatePolicy.REPLACE_EXISTING) {
-                            R.string.import_duplicate_replace_ready
-                        } else {
-                            R.string.import_ready
-                        },
-                    )
-                }
-
-                is PdfImportResult.Existing -> {
-                    _uiState.update {
-                        it.copy(
-                            staged = null,
-                            duplicatePrompt = null,
-                            isWorking = false,
-                            downloadProgress = null,
-                            openDocumentId = result.documentId,
-                        )
-                    }
-                    showMessage(R.string.import_duplicate_opened)
-                }
-
-                is PdfImportResult.Duplicate -> {
-                    _uiState.update {
-                        it.copy(
-                            duplicatePrompt = prompt,
-                            isWorking = false,
-                            downloadProgress = null,
-                        )
-                    }
-                }
-
-                is PdfImportResult.Failure -> {
-                    _uiState.update {
-                        it.copy(
-                            duplicatePrompt = null,
-                            isWorking = false,
-                            downloadProgress = null,
-                            failure = result.error.toFailure(),
-                        )
-                    }
-                }
-            }
+            val result = importRepository.resolveDuplicate(prompt.stagedId, policy)
+            applyStageResult(result)
         }
     }
 
@@ -338,6 +290,20 @@ class ImportPdfViewModel @Inject constructor(
         _uiState.update { state -> recompute(state.copy(overrideOcrLimit = enabled)) }
     }
 
+    fun setAutoProcessMode(mode: AutoProcessMode) {
+        _uiState.update { it.copy(autoProcessMode = mode) }
+        viewModelScope.launch {
+            settingsRepository.setDefaultAutoProcessMode(mode)
+        }
+    }
+
+    fun setDocumentInputMode(mode: DocumentInputMode) {
+        _uiState.update { it.copy(documentInputMode = mode) }
+        viewModelScope.launch {
+            settingsRepository.setDefaultDocumentInputMode(mode)
+        }
+    }
+
     fun setLanguage(code: String) {
         _uiState.update { state -> recompute(state.copy(languageCode = code)) }
     }
@@ -378,6 +344,8 @@ class ImportPdfViewModel @Inject constructor(
             ocrLanguageCode = language.code,
             ocrExecutionMode = OcrExecutionMode.BACKGROUND,
             preferredProviderProfileId = state.providerProfileId,
+            autoProcessMode = state.autoProcessMode,
+            documentInputMode = state.documentInputMode,
         )
         _uiState.update { it.copy(isCommitting = true, failure = null) }
         viewModelScope.launch {
@@ -626,6 +594,8 @@ class ImportPdfViewModel @Inject constructor(
             ocrLanguageCode = language.code,
             ocrExecutionMode = OcrExecutionMode.BACKGROUND,
             preferredProviderProfileId = state.providerProfileId,
+            autoProcessMode = state.autoProcessMode,
+            documentInputMode = state.documentInputMode,
         )
         val decision = classifier.classify(
             metadata = staged.metadata,
@@ -642,16 +612,19 @@ class ImportPdfViewModel @Inject constructor(
             pricing = state.pricing,
         )
         return state.copy(
-            pageRange = decision.pageRange,
+            pageRange = range,
             decision = decision,
             cost = cost,
         )
     }
 
-    private fun PdfImportError.toFailure() = ImportFailure(code, detail)
+    private fun PdfImportError.toFailure(): ImportFailure = ImportFailure(
+        code = code,
+        detail = detail,
+    )
 
     companion object {
-        private const val KEY_SHARED_URI = "sharedUri"
-        private const val KEY_COMMITTED_DOCUMENT_ID = "committedDocumentId"
+        const val KEY_SHARED_URI = "shared_uri"
+        const val KEY_COMMITTED_DOCUMENT_ID = "committed_document_id"
     }
 }

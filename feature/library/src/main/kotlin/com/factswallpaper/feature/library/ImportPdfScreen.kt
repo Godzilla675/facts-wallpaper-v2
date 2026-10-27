@@ -66,6 +66,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.factswallpaper.core.designsystem.theme.LocalSpacing
+import com.factswallpaper.core.model.AutoProcessMode
 import com.factswallpaper.core.model.Document
 import com.factswallpaper.core.model.ExtractionStatus
 import com.factswallpaper.core.model.PdfProcessingRoute
@@ -252,6 +253,7 @@ fun ImportPdfScreen(
                             onOverrideChange = viewModel::setOverrideOcrLimit,
                             onLanguageSelected = viewModel::setLanguage,
                             onDownloadLanguage = viewModel::downloadLanguage,
+                            onAutoProcessModeChange = viewModel::setAutoProcessMode,
                         )
                     }
                     if (state.decision != null && state.cost != null && state.pageRange != null) {
@@ -467,6 +469,7 @@ private fun ProcessingOptionsCard(
     onOverrideChange: (Boolean) -> Unit,
     onLanguageSelected: (String) -> Unit,
     onDownloadLanguage: (String) -> Unit,
+    onAutoProcessModeChange: (AutoProcessMode) -> Unit,
 ) {
     val spacing = LocalSpacing.current
     val staged = state.staged ?: return
@@ -521,6 +524,38 @@ private fun ProcessingOptionsCard(
             checked = state.overrideOcrLimit,
             onCheckedChange = onOverrideChange,
         )
+        HorizontalDivider(modifier = Modifier.padding(vertical = spacing.sm))
+        Text(
+            text = stringResource(R.string.import_auto_process_title),
+            style = MaterialTheme.typography.titleSmall,
+        )
+        Text(
+            text = stringResource(R.string.import_auto_process_helper),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = spacing.xxs),
+        )
+        Spacer(modifier = Modifier.height(spacing.sm))
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(spacing.xs),
+            verticalArrangement = Arrangement.spacedBy(spacing.xs),
+        ) {
+            FilterChip(
+                selected = state.autoProcessMode == AutoProcessMode.OUTLINE_ONLY,
+                onClick = { onAutoProcessModeChange(AutoProcessMode.OUTLINE_ONLY) },
+                label = { Text(stringResource(R.string.import_auto_process_outline)) },
+            )
+            FilterChip(
+                selected = state.autoProcessMode == AutoProcessMode.OUTLINE_AND_GENERATE_ALL,
+                onClick = { onAutoProcessModeChange(AutoProcessMode.OUTLINE_AND_GENERATE_ALL) },
+                label = { Text(stringResource(R.string.import_auto_process_all)) },
+            )
+            FilterChip(
+                selected = state.autoProcessMode == AutoProcessMode.ASK_ME,
+                onClick = { onAutoProcessModeChange(AutoProcessMode.ASK_ME) },
+                label = { Text(stringResource(R.string.import_auto_process_ask)) },
+            )
+        }
         HorizontalDivider(modifier = Modifier.padding(vertical = spacing.sm))
         Text(
             text = stringResource(R.string.import_language_title),
@@ -786,6 +821,50 @@ private fun ImportSessionCard(
                             color = MaterialTheme.colorScheme.tertiary,
                         )
                     }
+                }
+
+                ExtractionStatus.EXTRACTING_TEXT -> {
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                    Spacer(modifier = Modifier.height(spacing.xs))
+                    Text(
+                        text = stringResource(R.string.import_session_text_running),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.tertiary,
+                    )
+                }
+
+                ExtractionStatus.OUTLINE_IN_PROGRESS -> {
+                    LinearProgressIndicator(
+                        progress = { document.pipelineProgress.takeIf { it > 0f } ?: 0.4f },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Spacer(modifier = Modifier.height(spacing.xs))
+                    Text(
+                        text = "Generating chapter outline…",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.tertiary,
+                    )
+                }
+
+                ExtractionStatus.FACTS_IN_PROGRESS -> {
+                    LinearProgressIndicator(
+                        progress = { document.pipelineProgress.takeIf { it > 0f } ?: 0.7f },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Spacer(modifier = Modifier.height(spacing.xs))
+                    Text(
+                        text = "Generating wallpaper facts…",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.tertiary,
+                    )
+                }
+
+                ExtractionStatus.COMPLETED -> {
+                    Text(
+                        text = "All processing complete. Ready for wallpaper rotation.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
                 }
 
                 ExtractionStatus.OCR_PAUSED -> {

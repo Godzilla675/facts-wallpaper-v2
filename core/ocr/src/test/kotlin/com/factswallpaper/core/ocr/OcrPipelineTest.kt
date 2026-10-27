@@ -392,4 +392,10 @@ private class FakeOcrDocumentRepository(
             extractionStatus = status,
         )
     }
+    override suspend fun updatePipelineProgress(documentId: String, progress: Float) {
+        document = document?.copy(pipelineProgress = progress)
+    }
+    override suspend fun updatePipelineStatus(documentId: String, status: ExtractionStatus, progress: Float, errorMessage: String?) {
+        document = document?.copy(extractionStatus = status, pipelineProgress = progress, lastErrorMessage = errorMessage)
+    }
 }

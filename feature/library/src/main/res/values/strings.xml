@@ -135,4 +135,25 @@
     <string name="import_error_too_large">The PDF exceeds the 100 MB import limit.</string>
     <string name="import_error_inspection">The PDF could not be inspected.</string>
     <string name="import_error_storage">The PDF could not be saved on this device.</string>
+
+    <string name="import_auto_process_title">Process automatically</string>
+    <string name="import_auto_process_helper">Choose how far background processing should proceed automatically after import.</string>
+    <string name="import_auto_process_outline">Outline only</string>
+    <string name="import_auto_process_outline_only">Outline only</string>
+    <string name="import_auto_process_outline_only_desc">Extract text and build chapter outline automatically.</string>
+    <string name="import_auto_process_all">Outline + generate all</string>
+    <string name="import_auto_process_all_desc">Extract, generate outline, generate all facts, and render cards.</string>
+    <string name="import_auto_process_ask">Ask me</string>
+    <string name="import_auto_process_ask_desc">Extract text and wait for manual outline generation.</string>
+
+    <string name="library_sort_by">Sort by</string>
+    <string name="library_sort_recent">Recently updated</string>
+    <string name="library_sort_name">Title (A-Z)</string>
+    <string name="library_sort_progress">Pipeline progress</string>
+    <string name="library_multi_delete_title">Delete %1$d documents?</string>
+    <string name="library_multi_delete_body">Selected documents, their lessons, and generated facts will be permanently deleted.</string>
+    <string name="library_multi_delete_confirm">Delete all selected</string>
+    <string name="library_selected_count">%1$d selected</string>
+    <string name="library_select_all">Select all</string>
+    <string name="library_clear_selection">Clear</string>
 </resources>

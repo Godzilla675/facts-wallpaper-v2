@@ -259,3 +259,13 @@ No screen pretends these features work.
   maintenance, while Apps Script's six-minute execution limit constrains long
   books; it provides no benefit over on-device PDF extraction followed by
   direct provider calls from the app.
+
+## Phase P8.1 — Automatic End-to-End Background Processing and Pipeline Chaining
+
+- WorkManager background jobs (`PdfProcessingWorker`, `OutlineGenerationWorker`, `FactsGenerationWorker`, `CardPreRenderWorker`, `AutomaticBackupWorker`) run with Android foreground service type `dataSync` so that extraction, OCR, outline, fact generation, and pre-rendering survive app exit and low-memory kills.
+- Notifications keep the user informed with stage progress (0..100%), pause/cancel controls, and error alerts with retry triggers.
+- Introduced `PipelineScheduler` / `DocumentProcessingScheduler` which automates stage transitions based on `AutoProcessMode`:
+  - `OUTLINE_ONLY`: Extraction -> Outline -> Wait for user selection.
+  - `OUTLINE_AND_GENERATE_ALL`: Extraction -> Outline -> Automatic Facts Generation for selected lessons -> Pre-render cards into rotation pool.
+  - `ASK_ME`: Extraction -> Analyzed (user prompted to start outline).
+- Persisted Room schema version 5 adding `pipeline_progress`, `auto_process_mode`, `document_input_mode` with migration `MIGRATION_4_5`.

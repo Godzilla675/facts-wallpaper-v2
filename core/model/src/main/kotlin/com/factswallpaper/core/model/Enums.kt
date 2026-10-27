@@ -72,6 +72,20 @@ enum class AiTask {
     TEMPLATE_GENERATION
 }
 
+@Serializable
+enum class AutoProcessMode {
+    OUTLINE_ONLY,
+    OUTLINE_AND_GENERATE_ALL,
+    ASK_ME
+}
+
+@Serializable
+enum class DocumentInputMode {
+    TEXT,
+    VISION,
+    AUTO
+}
+
 /** Lifecycle of a document as it moves through inspection, OCR, outline and fact extraction. */
 @Serializable
 enum class ExtractionStatus {
@@ -82,9 +96,16 @@ enum class ExtractionStatus {
     OCR_DONE,
     OUTLINE_READY,
     FACTS_READY,
-    ERROR;
+    ERROR,
+    EXTRACTING_TEXT,
+    OUTLINE_IN_PROGRESS,
+    FACTS_IN_PROGRESS,
+    COMPLETED;
 
     val isOcrActive: Boolean get() = this == OCR_IN_PROGRESS || this == OCR_PAUSED
+    val isPipelineActive: Boolean
+        get() = this == IMPORTED || this == EXTRACTING_TEXT || this == OCR_IN_PROGRESS ||
+            this == OUTLINE_IN_PROGRESS || this == FACTS_IN_PROGRESS
 
     companion object {
         fun fromStorage(value: String): ExtractionStatus =

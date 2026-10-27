@@ -133,6 +133,8 @@ data class PdfProcessingOptions(
     val ocrExecutionMode: OcrExecutionMode = OcrExecutionMode.BACKGROUND,
     val factDensity: FactDensity = FactDensity.BALANCED,
     val preferredProviderProfileId: String? = null,
+    val autoProcessMode: com.factswallpaper.core.model.AutoProcessMode = com.factswallpaper.core.model.AutoProcessMode.OUTLINE_ONLY,
+    val documentInputMode: com.factswallpaper.core.model.DocumentInputMode = com.factswallpaper.core.model.DocumentInputMode.AUTO,
 )
 
 /** How an already-imported document with the same SHA-256 should be handled (F2). */

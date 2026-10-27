@@ -30,6 +30,7 @@ data class PdfDocumentEntity(
     val includedInRotation: Boolean = true,
     val createdAtEpochMs: Long,
     val updatedAtEpochMs: Long = createdAtEpochMs,
+    val pipelineProgress: Float = 0f,
 )
 
 /** 2. Per-document extraction and generation settings. */
@@ -59,6 +60,8 @@ data class DocumentSettingsEntity(
     val includeDiagrams: Boolean = true,
     val autoVerifyFormulas: Boolean = true,
     val preferredProviderProfileId: String? = null,
+    val autoProcessMode: String = "OUTLINE_ONLY",
+    val documentInputMode: String = "AUTO",
 )
 
 /** 3. Per-page extracted / OCR text chunks (checkpointed after each page). */

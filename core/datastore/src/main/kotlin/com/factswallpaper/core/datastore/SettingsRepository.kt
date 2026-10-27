@@ -1,6 +1,8 @@
 package com.factswallpaper.core.datastore
 
 import com.factswallpaper.core.model.AiTask
+import com.factswallpaper.core.model.AutoProcessMode
+import com.factswallpaper.core.model.DocumentInputMode
 import com.factswallpaper.core.model.RoutingStrategy
 import com.factswallpaper.core.model.ThemeMode
 import kotlinx.coroutines.flow.Flow
@@ -24,4 +26,7 @@ interface SettingsRepository {
     suspend fun setEnableAiDiagnosticsLog(enabled: Boolean)
     suspend fun setEnableDoubleTapWallpaperAdvance(enabled: Boolean)
     suspend fun setAiCostGuardThresholdUsd(thresholdUsd: Double)
+    suspend fun setDefaultAutoProcessMode(mode: AutoProcessMode)
+    suspend fun setDefaultDocumentInputMode(mode: DocumentInputMode)
+    suspend fun setMaxImagesPerRequest(maxImages: Int)
 }

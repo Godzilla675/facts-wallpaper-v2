@@ -5,15 +5,16 @@ import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
+import com.factswallpaper.core.ai.FactDraft
 import com.factswallpaper.core.ai.StructuredAiService
 import com.factswallpaper.core.common.CardPreRenderNotifier
+import com.factswallpaper.core.data.pipeline.PipelineNotifier
+import com.factswallpaper.core.data.pipeline.PipelineScheduler
+import com.factswallpaper.core.data.repository.CollectionRepository
 import com.factswallpaper.core.data.repository.DocumentRepository
 import com.factswallpaper.core.data.repository.DocumentTextRepository
 import com.factswallpaper.core.data.repository.FactRepository
 import com.factswallpaper.core.data.repository.LessonRepository
-import com.factswallpaper.core.data.repository.CollectionRepository
-import com.factswallpaper.core.ai.FactDraft
-import com.factswallpaper.core.data.ai.GenerationLessonRequest
 import com.factswallpaper.core.model.CardTemplateType
 import com.factswallpaper.core.model.DiagramKind
 import com.factswallpaper.core.model.ExtractionStatus
@@ -24,6 +25,7 @@ import com.factswallpaper.core.model.VerificationStatus
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import java.util.UUID
+import kotlin.math.roundToInt
 import kotlinx.coroutines.flow.first
 
 object FactsWork {
@@ -47,7 +49,7 @@ object FactsWork {
  * Durable per-lesson fact generation from spec §11.5. Each lesson is persisted
  * as soon as it completes, so cancellation or a later failure keeps partial
  * success. Dedupe runs against facts already stored for the document, which also
- * covers earlier lessons in the same job.
+ * covers earlier lessons in the same job. Promoted to foreground dataSync service.
  */
 @HiltWorker
 class FactsGenerationWorker @AssistedInject constructor(
@@ -61,6 +63,8 @@ class FactsGenerationWorker @AssistedInject constructor(
     private val structuredAiService: StructuredAiService,
     private val generationOrchestrator: GenerationOrchestrator,
     private val preRenderNotifier: CardPreRenderNotifier,
+    private val pipelineNotifier: PipelineNotifier,
+    private val pipelineScheduler: PipelineScheduler,
 ) : CoroutineWorker(appContext, params) {
 
     override suspend fun doWork(): Result {
@@ -80,6 +84,22 @@ class FactsGenerationWorker @AssistedInject constructor(
             return Result.failure(workDataOf(FactsWork.KEY_MESSAGE to "Lessons not found."))
         }
 
+        runCatching {
+            setForeground(
+                pipelineNotifier.pipelineForeground(
+                    documentId = documentId,
+                    documentTitle = document.title,
+                    stageText = "Generating facts…",
+                    progressFraction = 0f,
+                ),
+            )
+        }
+        documentRepository.updatePipelineStatus(
+            documentId = documentId,
+            status = ExtractionStatus.FACTS_IN_PROGRESS,
+            progress = 0f,
+        )
+
         val warnings = mutableListOf<String>()
         var created = 0
         var estimated = 0.0
@@ -88,6 +108,16 @@ class FactsGenerationWorker @AssistedInject constructor(
         val generatedFactIds = mutableListOf<String>()
 
         lessons.forEachIndexed { index, lesson ->
+            val fraction = (index.toFloat() / lessons.size.toFloat()).coerceIn(0f, 1f)
+            runCatching {
+                documentRepository.updatePipelineProgress(documentId, fraction)
+                pipelineNotifier.notifyProgress(
+                    documentId = documentId,
+                    documentTitle = document.title,
+                    stageText = "Generating facts: ${lesson.title} (${index + 1}/${lessons.size})",
+                    progressFraction = fraction,
+                )
+            }
             setProgress(
                 progress(
                     phase = "generating",
@@ -97,6 +127,18 @@ class FactsGenerationWorker @AssistedInject constructor(
                     factsCreated = created,
                 ),
             )
+
+            // Idempotency: if lesson already has generated facts from an earlier run, reuse them
+            val existingLessonFacts = factRepository
+                .observeFacts(FactFilter(documentId = documentId, lessonId = lesson.id))
+                .first()
+            if (existingLessonFacts.isNotEmpty() && lesson.factCount > 0) {
+                generatedFactIds += existingLessonFacts.map { it.id }
+                created += existingLessonFacts.size
+                completedLessons++
+                return@forEachIndexed
+            }
+
             val pages = documentTextRepository.getPages(documentId, lesson.startPage, lesson.endPage)
             if (pages.isEmpty()) {
                 warnings += "${lesson.title}: no extracted text on pages ${lesson.startPage}–${lesson.endPage}."
@@ -108,15 +150,15 @@ class FactsGenerationWorker @AssistedInject constructor(
                     .first()
                 val result = generationOrchestrator.generateLesson(
                     request = GenerationLessonRequest(
-                    documentId = documentId,
-                    lessonTitle = lesson.title,
-                    lessonPages = pages,
-                    documentPageCount = document.pageCount,
-                    density = settings?.factDensity ?: com.factswallpaper.core.model.FactDensity.BALANCED,
-                    includeFormulas = settings?.includeFormulas ?: true,
-                    includeDiagrams = settings?.includeDiagrams ?: true,
-                    manualProfileId = manualProfileId ?: settings?.preferredProviderProfileId,
-                    existingFactTexts = existingFacts.map { it.text },
+                        documentId = documentId,
+                        lessonTitle = lesson.title,
+                        lessonPages = pages,
+                        documentPageCount = document.pageCount,
+                        density = settings?.factDensity ?: com.factswallpaper.core.model.FactDensity.BALANCED,
+                        includeFormulas = settings?.includeFormulas ?: true,
+                        includeDiagrams = settings?.includeDiagrams ?: true,
+                        manualProfileId = manualProfileId ?: settings?.preferredProviderProfileId,
+                        existingFactTexts = existingFacts.map { it.text },
                     ),
                     pageProvider = { start, end ->
                         documentTextRepository.getPages(documentId, start, end)
@@ -189,15 +231,27 @@ class FactsGenerationWorker @AssistedInject constructor(
         }
 
         if (completedLessons == 0) {
+            val failureMsg = warnings.firstOrNull() ?: "Fact generation failed for every selected lesson."
+            documentRepository.updatePipelineStatus(
+                documentId = documentId,
+                status = ExtractionStatus.ERROR,
+                progress = 0f,
+                errorMessage = failureMsg,
+            )
+            pipelineNotifier.notifyError(documentId, document.title, failureMsg)
             return Result.failure(
                 workDataOf(
-                    FactsWork.KEY_MESSAGE to
-                        (warnings.firstOrNull() ?: "Fact generation failed for every selected lesson."),
+                    FactsWork.KEY_MESSAGE to failureMsg,
                     FactsWork.KEY_WARNINGS to warnings.joinToString("\n").take(2_000),
                 ),
             )
         }
-        documentRepository.updateExtractionStatus(documentId, ExtractionStatus.FACTS_READY)
+
+        documentRepository.updatePipelineStatus(
+            documentId = documentId,
+            status = ExtractionStatus.FACTS_READY,
+            progress = 1f,
+        )
         if (generatedFactIds.isNotEmpty()) {
             val selectionName = when (lessons.size) {
                 1 -> lessons.single().title
@@ -210,6 +264,10 @@ class FactsGenerationWorker @AssistedInject constructor(
             collectionRepository.setCollectionFacts(collection.id, generatedFactIds.distinct())
         }
         preRenderNotifier.enqueue()
+
+        pipelineScheduler.onFactsCompleted(documentId, created)
+        pipelineNotifier.notifyCompletion(documentId, document.title, created)
+
         return Result.success(
             workDataOf(
                 FactsWork.KEY_FACTS_CREATED to created,
@@ -325,5 +383,4 @@ class FactsGenerationWorker @AssistedInject constructor(
     private fun parseDiagram(value: String): DiagramKind =
         runCatching { DiagramKind.valueOf(value.uppercase()) }
             .getOrDefault(DiagramKind.NONE)
-
 }

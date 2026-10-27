@@ -32,8 +32,8 @@ import com.factswallpaper.core.model.PdfProcessingRoute
 import com.factswallpaper.core.ui.R
 
 /**
- * Library card with route badge, counts, rotation switch, live OCR checkpoint
- * progress and the resume/retry controls required by spec F5.
+ * Library card with route badge, counts, rotation switch, live pipeline/OCR
+ * progress and the resume/retry controls.
  */
 @Composable
 fun DocumentCard(
@@ -110,92 +110,105 @@ fun DocumentCard(
                 MetricPill(value = stringResource(R.string.document_lessons, document.lessonCount))
                 MetricPill(value = stringResource(R.string.document_facts, document.factCount))
                 MetricPill(value = routeLabel(document.processingRoute))
+                stageChipLabel(document.extractionStatus)?.let { stage ->
+                    MetricPill(value = stage)
+                }
             }
 
-            when (document.extractionStatus) {
-                ExtractionStatus.OCR_IN_PROGRESS -> {
-                    Spacer(modifier = Modifier.height(spacing.sm))
+            if (document.extractionStatus.isPipelineActive) {
+                Spacer(modifier = Modifier.height(spacing.sm))
+                if (document.pipelineProgress > 0f) {
+                    LinearProgressIndicator(
+                        progress = { document.pipelineProgress },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                } else if (document.extractionStatus == ExtractionStatus.OCR_IN_PROGRESS) {
                     LinearProgressIndicator(
                         progress = { completedInRange.toFloat() / totalPages.toFloat() },
                         modifier = Modifier.fillMaxWidth(),
                     )
-                    Spacer(modifier = Modifier.height(spacing.xs))
-                    Text(
-                        text = stringResource(
+                } else {
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                }
+                Spacer(modifier = Modifier.height(spacing.xs))
+                Text(
+                    text = when (document.extractionStatus) {
+                        ExtractionStatus.IMPORTED -> stringResource(R.string.document_status_processing)
+                        ExtractionStatus.ANALYZED,
+                        ExtractionStatus.EXTRACTING_TEXT -> stringResource(R.string.stage_extracting_text)
+                        ExtractionStatus.OCR_IN_PROGRESS -> stringResource(
                             R.string.document_ocr_active,
                             nextPage,
                             safeEnd,
                             completedInRange,
-                        ),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.tertiary,
-                    )
+                        )
+                        ExtractionStatus.OUTLINE_IN_PROGRESS -> stringResource(R.string.stage_outline_generating)
+                        ExtractionStatus.FACTS_IN_PROGRESS -> stringResource(R.string.stage_facts_generating)
+                        else -> stringResource(R.string.document_status_processing)
+                    },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.tertiary,
+                )
+                if (document.extractionStatus == ExtractionStatus.OCR_IN_PROGRESS) {
                     TextButton(onClick = onPauseOcr) {
                         Text(stringResource(R.string.document_ocr_pause))
                     }
                 }
-
-                ExtractionStatus.OCR_PAUSED -> {
-                    Spacer(modifier = Modifier.height(spacing.sm))
-                    Text(
-                        text = stringResource(
-                            R.string.document_ocr_paused,
-                            nextPage,
-                            safeEnd,
-                        ),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.tertiary,
-                    )
-                    Text(
-                        text = if (completedInRange > 0) {
-                            stringResource(
-                                R.string.document_ocr_saved_pages,
-                                safeStart,
-                                document.ocrLastCompletedPage.coerceAtMost(safeEnd),
-                            )
-                        } else {
-                            stringResource(R.string.document_ocr_no_saved_pages)
-                        },
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    TextButton(onClick = onResumeOcr) {
-                        Text(stringResource(R.string.document_ocr_resume, nextPage))
+            } else {
+                when (document.extractionStatus) {
+                    ExtractionStatus.OCR_PAUSED -> {
+                        Spacer(modifier = Modifier.height(spacing.sm))
+                        Text(
+                            text = stringResource(
+                                R.string.document_ocr_paused,
+                                nextPage,
+                                safeEnd,
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.tertiary,
+                        )
+                        Text(
+                            text = if (completedInRange > 0) {
+                                stringResource(
+                                    R.string.document_ocr_saved_pages,
+                                    safeStart,
+                                    document.ocrLastCompletedPage.coerceAtMost(safeEnd),
+                                )
+                            } else {
+                                stringResource(R.string.document_ocr_no_saved_pages)
+                            },
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        TextButton(onClick = onResumeOcr) {
+                            Text(stringResource(R.string.document_ocr_resume, nextPage))
+                        }
                     }
-                }
 
-                ExtractionStatus.ERROR -> {
-                    Spacer(modifier = Modifier.height(spacing.sm))
-                    Text(
-                        text = document.lastErrorMessage
-                            ?: stringResource(R.string.document_status_error),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error,
-                    )
-                    TextButton(onClick = onRetry) {
-                        Text(stringResource(R.string.document_retry))
+                    ExtractionStatus.ERROR -> {
+                        Spacer(modifier = Modifier.height(spacing.sm))
+                        Text(
+                            text = document.lastErrorMessage
+                                ?: stringResource(R.string.document_status_error),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                        TextButton(onClick = onRetry) {
+                            Text(stringResource(R.string.document_retry))
+                        }
                     }
-                }
 
-                ExtractionStatus.IMPORTED -> {
-                    Spacer(modifier = Modifier.height(spacing.sm))
-                    Text(
-                        text = stringResource(R.string.document_status_processing),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.tertiary,
-                    )
-                }
+                    ExtractionStatus.OCR_DONE -> {
+                        Spacer(modifier = Modifier.height(spacing.sm))
+                        Text(
+                            text = stringResource(R.string.document_status_ocr_done, completedInRange),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.tertiary,
+                        )
+                    }
 
-                ExtractionStatus.OCR_DONE -> {
-                    Spacer(modifier = Modifier.height(spacing.sm))
-                    Text(
-                        text = stringResource(R.string.document_status_ocr_done, completedInRange),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.tertiary,
-                    )
+                    else -> Unit
                 }
-
-                else -> Unit
             }
 
             Spacer(modifier = Modifier.height(spacing.xs))
@@ -217,6 +230,17 @@ fun DocumentCard(
             }
         }
     }
+}
+
+@Composable
+private fun stageChipLabel(status: ExtractionStatus): String? = when (status) {
+    ExtractionStatus.EXTRACTING_TEXT -> stringResource(R.string.stage_extracting_text)
+    ExtractionStatus.OCR_IN_PROGRESS -> "OCR"
+    ExtractionStatus.OUTLINE_IN_PROGRESS -> stringResource(R.string.stage_outline_generating)
+    ExtractionStatus.OUTLINE_READY -> stringResource(R.string.stage_outline_ready)
+    ExtractionStatus.FACTS_IN_PROGRESS -> stringResource(R.string.stage_facts_generating)
+    ExtractionStatus.COMPLETED -> stringResource(R.string.stage_completed)
+    else -> null
 }
 
 @Composable

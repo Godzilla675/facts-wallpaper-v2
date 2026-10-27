@@ -12,6 +12,8 @@ dependencies {
     implementation(project(":core:common"))
     implementation(project(":core:data"))
     implementation(project(":core:ocr"))
+    implementation(project(":core:ai"))
+    implementation(project(":core:datastore"))
 
     implementation(libs.pdfbox.android)
     implementation(libs.okhttp)
@@ -25,4 +27,5 @@ dependencies {
     testImplementation(libs.robolectric)
     testImplementation(libs.androidx.test.core)
     testImplementation(libs.androidx.room.testing)
+    testImplementation(libs.androidx.work.testing)
 }

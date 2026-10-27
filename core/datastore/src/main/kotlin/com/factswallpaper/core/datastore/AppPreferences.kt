@@ -1,6 +1,8 @@
 package com.factswallpaper.core.datastore
 
 import com.factswallpaper.core.model.AiTask
+import com.factswallpaper.core.model.AutoProcessMode
+import com.factswallpaper.core.model.DocumentInputMode
 import com.factswallpaper.core.model.RoutingStrategy
 import com.factswallpaper.core.model.ThemeMode
 
@@ -23,4 +25,7 @@ data class AppPreferences(
     val enableAiDiagnosticsLog: Boolean = true,
     val enableDoubleTapWallpaperAdvance: Boolean = false,
     val aiCostGuardThresholdUsd: Double = 0.50,
+    val defaultAutoProcessMode: AutoProcessMode = AutoProcessMode.OUTLINE_ONLY,
+    val defaultDocumentInputMode: DocumentInputMode = DocumentInputMode.AUTO,
+    val maxImagesPerRequest: Int = 10,
 )

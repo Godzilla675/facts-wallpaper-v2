@@ -203,6 +203,15 @@ private class FakeLibraryRepository(
         errorMessage: String?,
     ) = Unit
 
+    override suspend fun updatePipelineProgress(documentId: String, progress: Float) = Unit
+
+    override suspend fun updatePipelineStatus(
+        documentId: String,
+        status: ExtractionStatus,
+        progress: Float,
+        errorMessage: String?,
+    ) = Unit
+
     override suspend fun deleteDocument(documentId: String): AppResult<Unit> {
         documents.value = documents.value.filterNot { it.id == documentId }
         return AppResult.Success(Unit)

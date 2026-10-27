@@ -166,6 +166,8 @@ class FormulaVerificationServiceTest {
         override suspend fun markOcrPageStarted(documentId: String, page: Int) = Unit
         override suspend fun commitOcrPage(documentId: String, page: Int, text: String, confidence: Float?) = Unit
         override suspend fun updateCompiledText(documentId: String, compiledTextPath: String, status: ExtractionStatus) = Unit
+        override suspend fun updatePipelineProgress(documentId: String, progress: Float) = Unit
+        override suspend fun updatePipelineStatus(documentId: String, status: ExtractionStatus, progress: Float, errorMessage: String?) = Unit
     }
 
     private class FakeFactRepository : FactRepository {

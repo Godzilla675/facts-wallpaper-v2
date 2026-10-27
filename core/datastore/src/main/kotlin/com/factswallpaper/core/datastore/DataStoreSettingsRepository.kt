@@ -9,6 +9,8 @@ import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.factswallpaper.core.model.AiTask
+import com.factswallpaper.core.model.AutoProcessMode
+import com.factswallpaper.core.model.DocumentInputMode
 import com.factswallpaper.core.model.RoutingStrategy
 import com.factswallpaper.core.model.ThemeMode
 import java.io.IOException
@@ -112,6 +114,18 @@ class DataStoreSettingsRepository @Inject constructor(
     override suspend fun setAiCostGuardThresholdUsd(thresholdUsd: Double) {
         dataStore.edit { it[Keys.AI_COST_GUARD_THRESHOLD_USD] = thresholdUsd.coerceIn(0.0, 100.0) }
     }
+
+    override suspend fun setDefaultAutoProcessMode(mode: AutoProcessMode) {
+        dataStore.edit { it[Keys.DEFAULT_AUTO_PROCESS_MODE] = mode.name }
+    }
+
+    override suspend fun setDefaultDocumentInputMode(mode: DocumentInputMode) {
+        dataStore.edit { it[Keys.DEFAULT_DOCUMENT_INPUT_MODE] = mode.name }
+    }
+
+    override suspend fun setMaxImagesPerRequest(maxImages: Int) {
+        dataStore.edit { it[Keys.MAX_IMAGES_PER_REQUEST] = maxImages.coerceIn(1, 50) }
+    }
 }
 
 private object Keys {
@@ -128,6 +142,9 @@ private object Keys {
     val ENABLE_AI_DIAGNOSTICS_LOG = booleanPreferencesKey("enable_ai_diagnostics_log")
     val ENABLE_DOUBLE_TAP_ADVANCE = booleanPreferencesKey("enable_double_tap_wallpaper_advance")
     val AI_COST_GUARD_THRESHOLD_USD = doublePreferencesKey("ai_cost_guard_threshold_usd")
+    val DEFAULT_AUTO_PROCESS_MODE = stringPreferencesKey("default_auto_process_mode")
+    val DEFAULT_DOCUMENT_INPUT_MODE = stringPreferencesKey("default_document_input_mode")
+    val MAX_IMAGES_PER_REQUEST = intPreferencesKey("max_images_per_request")
 }
 
 private fun Preferences.toAppPreferences(
@@ -147,6 +164,9 @@ private fun Preferences.toAppPreferences(
     enableAiDiagnosticsLog = this[Keys.ENABLE_AI_DIAGNOSTICS_LOG] ?: true,
     enableDoubleTapWallpaperAdvance = this[Keys.ENABLE_DOUBLE_TAP_ADVANCE] ?: false,
     aiCostGuardThresholdUsd = (this[Keys.AI_COST_GUARD_THRESHOLD_USD] ?: 0.50).coerceIn(0.0, 100.0),
+    defaultAutoProcessMode = this[Keys.DEFAULT_AUTO_PROCESS_MODE].toEnum(AutoProcessMode.OUTLINE_ONLY),
+    defaultDocumentInputMode = this[Keys.DEFAULT_DOCUMENT_INPUT_MODE].toEnum(DocumentInputMode.AUTO),
+    maxImagesPerRequest = (this[Keys.MAX_IMAGES_PER_REQUEST] ?: 10).coerceIn(1, 50),
 )
 
 private inline fun <reified T : Enum<T>> String?.toEnum(default: T): T =

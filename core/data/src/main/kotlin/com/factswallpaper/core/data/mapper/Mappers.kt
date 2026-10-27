@@ -14,6 +14,7 @@ import com.factswallpaper.core.database.entity.UserFolderEntity
 import com.factswallpaper.core.database.entity.WallpaperStateEntity
 import com.factswallpaper.core.model.AiRequestLogEntry
 import com.factswallpaper.core.model.AiTask
+import com.factswallpaper.core.model.AutoProcessMode
 import com.factswallpaper.core.model.CardTemplate
 import com.factswallpaper.core.model.CardTemplateType
 import com.factswallpaper.core.model.Collection
@@ -21,6 +22,7 @@ import com.factswallpaper.core.model.CollectionSource
 import com.factswallpaper.core.model.DiagramKind
 import com.factswallpaper.core.model.Document
 import com.factswallpaper.core.model.DocumentChunk
+import com.factswallpaper.core.model.DocumentInputMode
 import com.factswallpaper.core.model.DocumentSettings
 import com.factswallpaper.core.model.ExtractionStatus
 import com.factswallpaper.core.model.Fact
@@ -83,6 +85,7 @@ fun PdfDocumentEntity.toDomain(lessonCount: Int = 0, factCount: Int = 0): Docume
     updatedAtEpochMs = updatedAtEpochMs,
     lessonCount = lessonCount,
     factCount = factCount,
+    pipelineProgress = pipelineProgress,
 )
 
 fun Document.toEntity(): PdfDocumentEntity = PdfDocumentEntity(
@@ -105,6 +108,7 @@ fun Document.toEntity(): PdfDocumentEntity = PdfDocumentEntity(
     includedInRotation = includedInRotation,
     createdAtEpochMs = createdAtEpochMs,
     updatedAtEpochMs = updatedAtEpochMs,
+    pipelineProgress = pipelineProgress,
 )
 
 fun DocumentChunkEntity.toDomain(): DocumentChunk = DocumentChunk(
@@ -142,6 +146,8 @@ fun DocumentSettingsEntity.toDomain(): DocumentSettings = DocumentSettings(
     includeDiagrams = includeDiagrams,
     autoVerifyFormulas = autoVerifyFormulas,
     preferredProviderProfileId = preferredProviderProfileId,
+    autoProcessMode = enumOrDefault(autoProcessMode, AutoProcessMode.OUTLINE_ONLY),
+    documentInputMode = enumOrDefault(documentInputMode, DocumentInputMode.AUTO),
 )
 
 fun DocumentSettings.toEntity(): DocumentSettingsEntity = DocumentSettingsEntity(
@@ -159,6 +165,8 @@ fun DocumentSettings.toEntity(): DocumentSettingsEntity = DocumentSettingsEntity
     includeDiagrams = includeDiagrams,
     autoVerifyFormulas = autoVerifyFormulas,
     preferredProviderProfileId = preferredProviderProfileId,
+    autoProcessMode = autoProcessMode.name,
+    documentInputMode = documentInputMode.name,
 )
 
 fun LessonEntity.toDomain(): Lesson = Lesson(
@@ -212,6 +220,8 @@ fun FactItemEntity.toDomain(): Fact = Fact(
     favorite = favorite,
     createdAtEpochMs = createdAtEpochMs,
     updatedAtEpochMs = updatedAtEpochMs,
+    reviewGotItCount = reviewGotItCount,
+    reviewAgainCount = reviewAgainCount,
 )
 
 fun Fact.toEntity(): FactItemEntity = FactItemEntity(
@@ -239,6 +249,8 @@ fun Fact.toEntity(): FactItemEntity = FactItemEntity(
     favorite = favorite,
     createdAtEpochMs = createdAtEpochMs,
     updatedAtEpochMs = updatedAtEpochMs,
+    reviewGotItCount = reviewGotItCount,
+    reviewAgainCount = reviewAgainCount,
 )
 
 fun CollectionEntity.toDomain(factCount: Int = 0): Collection = Collection(

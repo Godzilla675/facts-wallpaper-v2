@@ -172,4 +172,56 @@ class FactsDatabaseMigrationTest {
             helper.close()
         }
     }
+
+    @Test
+    fun versionFourToFiveMigrationAddsNewColumns() {
+        val migration = FactsDatabase.MIGRATIONS.singleOrNull {
+            it.startVersion == 4 && it.endVersion == 5
+        } ?: throw AssertionError("Expected a version 4 to 5 migration.")
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val helper = FrameworkSQLiteOpenHelperFactory().create(
+            SupportSQLiteOpenHelper.Configuration.builder(context)
+                .name(null)
+                .callback(
+                    object : SupportSQLiteOpenHelper.Callback(4) {
+                        override fun onCreate(db: SupportSQLiteDatabase) {
+                            db.execSQL("CREATE TABLE pdf_documents (id TEXT NOT NULL PRIMARY KEY)")
+                            db.execSQL("CREATE TABLE document_settings (documentId TEXT NOT NULL PRIMARY KEY)")
+                            db.execSQL("CREATE TABLE facts (id TEXT NOT NULL PRIMARY KEY)")
+                        }
+
+                        override fun onUpgrade(
+                            db: SupportSQLiteDatabase,
+                            oldVersion: Int,
+                            newVersion: Int,
+                        ) = Unit
+                    },
+                )
+                .build(),
+        )
+        try {
+            val database = helper.writableDatabase
+            database.execSQL("INSERT INTO pdf_documents (id) VALUES ('doc-1')")
+            database.execSQL("INSERT INTO document_settings (documentId) VALUES ('doc-1')")
+            database.execSQL("INSERT INTO facts (id) VALUES ('fact-1')")
+            migration.migrate(database)
+
+            database.query("SELECT pipelineProgress FROM pdf_documents WHERE id = 'doc-1'").use { cursor ->
+                assertThat(cursor.moveToFirst()).isTrue()
+                assertThat(cursor.getFloat(0)).isEqualTo(0f)
+            }
+            database.query("SELECT autoProcessMode, documentInputMode FROM document_settings WHERE documentId = 'doc-1'").use { cursor ->
+                assertThat(cursor.moveToFirst()).isTrue()
+                assertThat(cursor.getString(0)).isEqualTo("OUTLINE_ONLY")
+                assertThat(cursor.getString(1)).isEqualTo("AUTO")
+            }
+            database.query("SELECT reviewGotItCount, reviewAgainCount FROM facts WHERE id = 'fact-1'").use { cursor ->
+                assertThat(cursor.moveToFirst()).isTrue()
+                assertThat(cursor.getInt(0)).isEqualTo(0)
+                assertThat(cursor.getInt(1)).isEqualTo(0)
+            }
+        } finally {
+            helper.close()
+        }
+    }
 }
