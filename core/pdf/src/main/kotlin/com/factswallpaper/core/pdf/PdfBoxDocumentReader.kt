@@ -3,7 +3,9 @@ package com.factswallpaper.core.pdf
 import android.content.Context
 import com.factswallpaper.core.common.FactsDispatchers
 import com.tom_roush.pdfbox.pdmodel.PDDocument
+import com.tom_roush.pdfbox.pdmodel.PDPage
 import com.tom_roush.pdfbox.pdmodel.encryption.InvalidPasswordException
+import com.tom_roush.pdfbox.pdmodel.interactive.documentnavigation.outline.PDOutlineNode
 import com.tom_roush.pdfbox.text.PDFTextStripper
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
@@ -59,6 +61,35 @@ class PdfBoxDocumentReader @Inject constructor(
                 PdfExtractionResult(pages = pages, range = safeRange)
             }
         }
+
+    suspend fun readBookmarks(file: File): List<PdfBookmark> = withContext(dispatchers.io) {
+        runtime.initialize()
+        open(file).use { document ->
+            val outline = document.documentCatalog.documentOutline ?: return@use emptyList()
+            val pageNumbers = HashMap<PDPage, Int>(document.numberOfPages)
+            for (index in 0 until document.numberOfPages) {
+                pageNumbers[document.getPage(index)] = index + 1
+            }
+            val bookmarks = mutableListOf<PdfBookmark>()
+            fun visit(node: PDOutlineNode, level: Int) {
+                var item = node.firstChild
+                while (item != null) {
+                    val destinationPage = runCatching {
+                        item.findDestinationPage(document)
+                    }.getOrNull()
+                    bookmarks += PdfBookmark(
+                        title = item.title.orEmpty().trim(),
+                        pageNumber = destinationPage?.let(pageNumbers::get),
+                        level = level,
+                    )
+                    visit(item, level + 1)
+                    item = item.nextSibling
+                }
+            }
+            visit(outline, 0)
+            bookmarks.filter { it.title.isNotBlank() && it.pageNumber != null }
+        }
+    }
 
     private fun open(file: File): PDDocument = try {
         PDDocument.load(file)

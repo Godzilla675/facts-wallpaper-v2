@@ -213,3 +213,26 @@ No screen pretends these features work.
   requested snippets. It flags credential-like values without persisting API
   keys in a separate store; the existing secure API-key field remains the
   supported place for credentials.
+
+## Phase P7.3 — Document-to-Wallpaper Generation
+
+- Lesson rows now carry an optional `chapterTitle` in Room schema version 4.
+  PDF bookmarks are read locally and used to seed/skip outline inference when
+  they yield multiple usable lessons; otherwise the existing extracted-page
+  pipeline runs chunked outline requests followed by a bounded merge/clean
+  request when its summary fits the selected profile's context window.
+- The outline screen groups lessons by chapter, lets the user toggle a chapter
+  or the whole book, retains the existing cost estimate/guard, and labels the
+  primary action "Generate wallpapers".
+- `GenerationOrchestrator` enforces page bounds and page-call limits for
+  tool-capable generation clients, verifies/fixes claims and render failures,
+  retries render repair twice, and falls back to a plain-text card or drops it
+  with a warning. The current structured HTTP clients do not expose tool-call
+  conversation messages, so their adapter intentionally uses the existing
+  bounded lesson-page input path; provider-native `get_pages` calls remain
+  unavailable until those client protocols expose tool calls.
+- Successfully rendered generated cards are assigned to a collection named
+  for the book and selection; that collection follows the existing default of
+  being accepted and included in wallpaper rotation. The existing pre-render
+  worker is then enqueued. WorkManager progress remains available in the
+  outline/facts screens, and its unique work can be cancelled by the user.

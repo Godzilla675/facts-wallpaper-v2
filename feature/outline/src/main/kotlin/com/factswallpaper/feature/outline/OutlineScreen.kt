@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -116,6 +117,7 @@ fun OutlineScreen(
             is OutlineUiState.Content -> OutlineContent(
                 state = value,
                 onSetLessonSelected = viewModel::setLessonSelected,
+                onSetChapterSelected = viewModel::setChapterSelected,
                 onEditLesson = { editingLesson = it },
                 onAddLesson = { addingLesson = true },
                 onSelectAll = { viewModel.setAllSelected(true) },
@@ -201,6 +203,7 @@ fun OutlineScreen(
 private fun OutlineContent(
     state: OutlineUiState.Content,
     onSetLessonSelected: (String, Boolean) -> Unit,
+    onSetChapterSelected: (String, Boolean) -> Unit,
     onEditLesson: (Lesson) -> Unit,
     onAddLesson: () -> Unit,
     onSelectAll: () -> Unit,
@@ -325,13 +328,24 @@ private fun OutlineContent(
                 }
             }
         }
-        items(state.lessons, key = { it.id }) { lesson ->
-            LessonSelectionRow(
-                lesson = lesson,
-                lessonNumber = state.lessons.indexOf(lesson) + 1,
-                onSelectedChange = { checked -> onSetLessonSelected(lesson.id, checked) },
-                onEdit = { onEditLesson(lesson) },
-            )
+        state.lessons.groupBy { it.chapterTitle?.takeIf(String::isNotBlank) }.forEach { (chapter, lessons) ->
+            if (chapter != null) {
+                item(key = "chapter:$chapter") {
+                    ChapterSelectionRow(
+                        title = chapter,
+                        lessons = lessons,
+                        onSelectedChange = { selected -> onSetChapterSelected(chapter, selected) },
+                    )
+                }
+            }
+            items(lessons, key = { it.id }) { lesson ->
+                LessonSelectionRow(
+                    lesson = lesson,
+                    lessonNumber = state.lessons.indexOf(lesson) + 1,
+                    onSelectedChange = { checked -> onSetLessonSelected(lesson.id, checked) },
+                    onEdit = { onEditLesson(lesson) },
+                )
+            }
         }
         item {
             DensitySettingsCard(
@@ -377,15 +391,26 @@ private fun OutlineContent(
                         )
                     }
                 }
-                Row(
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = spacing.md),
-                    horizontalArrangement = Arrangement.spacedBy(spacing.sm),
+                    verticalArrangement = Arrangement.spacedBy(spacing.sm),
                 ) {
+                    Button(
+                        onClick = onGenerateFacts,
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = selected.isNotEmpty() && state.online && !state.generation.isRunning,
+                    ) {
+                        Icon(Icons.Filled.AutoAwesome, contentDescription = null)
+                        Text(
+                            text = stringResource(R.string.outline_generate_wallpapers),
+                            modifier = Modifier.padding(start = spacing.xs),
+                        )
+                    }
                     OutlinedButton(
                         onClick = onReDetect,
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.fillMaxWidth(),
                         enabled = state.online && !state.generation.isRunning,
                     ) {
                         Icon(Icons.Filled.Refresh, contentDescription = null)
@@ -394,19 +419,38 @@ private fun OutlineContent(
                             modifier = Modifier.padding(start = spacing.xs),
                         )
                     }
-                    Button(
-                        onClick = onGenerateFacts,
-                        modifier = Modifier.weight(1f),
-                        enabled = selected.isNotEmpty() && state.online && !state.generation.isRunning,
-                    ) {
-                        Icon(Icons.Filled.Replay, contentDescription = null)
-                        Text(
-                            text = stringResource(R.string.outline_generate_facts),
-                            modifier = Modifier.padding(start = spacing.xs),
-                        )
-                    }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun ChapterSelectionRow(
+    title: String,
+    lessons: List<Lesson>,
+    onSelectedChange: (Boolean) -> Unit,
+) {
+    val selectedCount = lessons.count { it.selected }
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Checkbox(
+            checked = selectedCount == lessons.size,
+            onCheckedChange = onSelectedChange,
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.titleSmall)
+            Text(
+                text = stringResource(
+                    R.string.outline_chapter_selection_count,
+                    selectedCount,
+                    lessons.size,
+                ),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }

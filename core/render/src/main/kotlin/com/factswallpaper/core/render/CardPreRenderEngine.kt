@@ -1,5 +1,6 @@
 package com.factswallpaper.core.render
 
+import com.factswallpaper.core.common.GeneratedCardRenderResult
 import com.factswallpaper.core.data.repository.RotationPoolRepository
 import com.factswallpaper.core.datastore.SettingsRepository
 import com.factswallpaper.core.data.repository.TemplateRepository
@@ -40,6 +41,54 @@ class CardPreRenderEngine @Inject constructor(
     private val renderCoordinator: CardRenderCoordinator,
     private val renderSizeStore: RenderSizeStore,
 ) {
+
+    suspend fun renderGeneratedFact(fact: Fact): GeneratedCardRenderResult {
+        templateSeeder.ensureSeeded()
+        val wallpaperState = wallpaperRepository.getState()
+        val template = resolveTemplate(wallpaperState.activeTemplateId)
+        val spec = CardTemplateCodec.fromCardTemplate(template)
+            ?: BuiltInTemplates.spec(BuiltInTemplates.DEFAULT_TEMPLATE_ID)
+            ?: return GeneratedCardRenderResult(
+                rendered = false,
+                error = "No compatible card template is available.",
+            )
+        val size = renderSizeStore.current()
+        return try {
+            val outcome = renderCoordinator.render(
+                CardRenderRequest(
+                    fact = fact,
+                    template = template,
+                    spec = spec,
+                    options = CardRenderOptions(
+                        width = size.widthPx,
+                        height = size.heightPx,
+                        targetSurface = wallpaperState.target,
+                        themeMode = wallpaperState.wallpaperThemeMode,
+                        sourceReferenceMode = wallpaperState.sourceReferenceMode,
+                    ),
+                    allowWebViewStage = false,
+                ),
+            )
+            when {
+                outcome == null -> GeneratedCardRenderResult(
+                    rendered = false,
+                    error = "The offline card renderer could not store its bitmap.",
+                )
+                outcome.missingStage -> GeneratedCardRenderResult(
+                    rendered = false,
+                    missingStage = true,
+                    error = "The formula or diagram stage did not compile in the offline renderer.",
+                )
+                else -> GeneratedCardRenderResult(rendered = true)
+            }
+        } catch (exception: Throwable) {
+            if (exception is kotlinx.coroutines.CancellationException) throw exception
+            GeneratedCardRenderResult(
+                rendered = false,
+                error = exception.message ?: "Offline card rendering failed.",
+            )
+        }
+    }
 
     suspend fun preRenderNext(limitOverride: Int? = null): PreRenderReport {
         templateSeeder.ensureSeeded()

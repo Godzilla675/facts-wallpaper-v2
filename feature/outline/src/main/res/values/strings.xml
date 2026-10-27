@@ -10,14 +10,15 @@
     <string name="outline_not_in_rotation">Not in wallpaper rotation</string>
     <string name="outline_scanned_pages">%1$d scanned pages need OCR before facts are generated.</string>
     <string name="outline_retry">Retry</string>
-    <string name="outline_select_all">Select all</string>
+    <string name="outline_select_all">Whole book</string>
     <string name="outline_clear_all">Clear</string>
     <string name="outline_add_lesson">Add</string>
     <string name="outline_merge">Merge</string>
     <string name="outline_empty_title">No lessons yet</string>
     <string name="outline_empty_body">Add a lesson range manually, or re-detect the outline with AI.</string>
     <string name="outline_redetect">Re-detect outline</string>
-    <string name="outline_generate_facts">Generate facts</string>
+    <string name="outline_generate_wallpapers">Generate wallpapers</string>
+    <string name="outline_chapter_selection_count">%1$d of %2$d lessons selected</string>
     <string name="outline_view_facts">View extracted facts (%1$d)</string>
     <string name="outline_estimate_title">Fact &amp; cost estimate</string>
     <string name="outline_estimate_helper">The selected lessons and density bound what the fact engine will produce.</string>

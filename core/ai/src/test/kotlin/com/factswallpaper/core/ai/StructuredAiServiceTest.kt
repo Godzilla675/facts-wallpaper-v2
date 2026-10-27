@@ -197,10 +197,10 @@ class StructuredAiServiceTest {
         val profile = testProfile(context = 10_000)
         val (service, _, _) = buildService(profile) {
             calls++
-            val lessons = if (calls == 1) {
-                """{"lessons":[{"title":"Thermodynamics","summary":"First half.","startPage":1,"endPage":1}]}"""
-            } else {
-                """{"lessons":[{"title":"Thermodynamics","summary":"Second half.","startPage":1,"endPage":2}]}"""
+            val lessons = when (calls) {
+                1 -> """{"lessons":[{"title":"Thermodynamics","summary":"First half.","startPage":1,"endPage":1}]}"""
+                2 -> """{"lessons":[{"title":"Thermodynamics","summary":"Second half.","startPage":1,"endPage":2}]}"""
+                else -> """{"lessons":[{"title":"Thermodynamics","summary":"First half. Second half.","startPage":1,"endPage":2}]}"""
             }
             respond(
                 content = chatEnvelope(lessons),
@@ -219,7 +219,7 @@ class StructuredAiServiceTest {
             pdfPageCount = 2,
         )
 
-        assertThat(calls).isGreaterThan(1)
+        assertThat(calls).isEqualTo(3)
         assertThat(result.lessons).hasSize(1)
         assertThat(result.lessons.first().endPage).isEqualTo(2)
         assertThat(result.lessons.first().summary).contains("First half.")

@@ -11,6 +11,9 @@ import com.factswallpaper.core.data.repository.DocumentRepository
 import com.factswallpaper.core.data.repository.DocumentTextRepository
 import com.factswallpaper.core.data.repository.FactRepository
 import com.factswallpaper.core.data.repository.LessonRepository
+import com.factswallpaper.core.data.repository.CollectionRepository
+import com.factswallpaper.core.ai.FactDraft
+import com.factswallpaper.core.data.ai.GenerationLessonRequest
 import com.factswallpaper.core.model.CardTemplateType
 import com.factswallpaper.core.model.DiagramKind
 import com.factswallpaper.core.model.ExtractionStatus
@@ -54,7 +57,9 @@ class FactsGenerationWorker @AssistedInject constructor(
     private val documentTextRepository: DocumentTextRepository,
     private val lessonRepository: LessonRepository,
     private val factRepository: FactRepository,
+    private val collectionRepository: CollectionRepository,
     private val structuredAiService: StructuredAiService,
+    private val generationOrchestrator: GenerationOrchestrator,
     private val preRenderNotifier: CardPreRenderNotifier,
 ) : CoroutineWorker(appContext, params) {
 
@@ -80,6 +85,7 @@ class FactsGenerationWorker @AssistedInject constructor(
         var estimated = 0.0
         var actual = 0.0
         var completedLessons = 0
+        val generatedFactIds = mutableListOf<String>()
 
         lessons.forEachIndexed { index, lesson ->
             setProgress(
@@ -100,69 +106,71 @@ class FactsGenerationWorker @AssistedInject constructor(
                 val existingFacts = factRepository
                     .observeFacts(FactFilter(documentId = documentId))
                     .first()
-                val result = structuredAiService.generateFacts(
+                val result = generationOrchestrator.generateLesson(
+                    request = GenerationLessonRequest(
                     documentId = documentId,
                     lessonTitle = lesson.title,
-                    pages = pages,
+                    lessonPages = pages,
                     documentPageCount = document.pageCount,
                     density = settings?.factDensity ?: com.factswallpaper.core.model.FactDensity.BALANCED,
                     includeFormulas = settings?.includeFormulas ?: true,
                     includeDiagrams = settings?.includeDiagrams ?: true,
                     manualProfileId = manualProfileId ?: settings?.preferredProviderProfileId,
                     existingFactTexts = existingFacts.map { it.text },
+                    ),
+                    pageProvider = { start, end ->
+                        documentTextRepository.getPages(documentId, start, end)
+                    },
                 )
                 estimated += result.estimatedCostUsd
                 actual += result.actualCostUsd
                 warnings += result.warnings
 
+                val sourceMaterial = pages.joinToString("\n") {
+                    "[PAGE ${it.pageNumber}]\n${it.text}"
+                }
                 val verify = settings?.autoVerifyFormulas ?: true
-                val newFacts = result.facts.map { draft ->
-                    val template = runCatching {
-                        CardTemplateType.valueOf(draft.templateType.uppercase())
-                    }.getOrDefault(CardTemplateType.TEXT)
-                    val diagram = runCatching {
-                        DiagramKind.valueOf(draft.diagramType.uppercase())
-                    }.getOrDefault(DiagramKind.NONE)
-                    var verification = VerificationStatus.UNVERIFIED
-                    var effectiveTemplate = template
-                    if (verify && (draft.requiresLatex || diagram != DiagramKind.NONE)) {
-                        val source = draft.latex ?: draft.diagramSource ?: draft.text
-                        val verdict = runCatching {
-                            structuredAiService.verifyFormula(source, manualProfileId)
-                        }.getOrNull()
-                        if (verdict?.value?.valid == true) {
-                            verification = VerificationStatus.VERIFIED
-                        } else {
-                            verification = VerificationStatus.FAILED
-                            effectiveTemplate = CardTemplateType.TEXT
-                        }
-                    }
-                    Fact(
-                        id = UUID.randomUUID().toString(),
+                val newFacts = result.facts.mapNotNull { draft ->
+                    createVerifiedFact(
+                        draft = draft,
                         documentId = documentId,
-                        lessonId = lesson.id,
-                        text = draft.text,
-                        latex = draft.latex,
-                        requiresLatex = draft.requiresLatex,
-                        templateType = effectiveTemplate,
-                        diagramType = diagram,
-                        diagramSource = draft.diagramSource,
-                        sourceBookTitle = document.title,
-                        sourceLessonTitle = draft.sourceLessonTitle ?: lesson.title,
-                        sourcePage = draft.sourcePage ?: lesson.startPage,
-                        tags = draft.tags,
-                        confidence = draft.confidence,
-                        verificationStatus = verification,
-                        active = true,
-                        createdAtEpochMs = System.currentTimeMillis(),
+                        documentTitle = document.title,
+                        lesson = lesson,
+                        pages = pages,
+                        sourceMaterial = sourceMaterial,
+                        verify = verify,
+                        manualProfileId = manualProfileId ?: settings?.preferredProviderProfileId,
+                        warnings = warnings,
                     )
                 }
                 if (newFacts.isNotEmpty()) {
                     factRepository.saveFacts(newFacts)
-                    created += newFacts.size
+                    newFacts.forEach { fact ->
+                        val renderResult = generationOrchestrator.renderWithFixes(
+                            fact = fact,
+                            sourceMaterial = sourceMaterial,
+                            profileId = manualProfileId ?: settings?.preferredProviderProfileId,
+                        )
+                        warnings += renderResult.warnings.map { "${lesson.title}: $it" }
+                        if (renderResult.fact != null) {
+                            if (renderResult.fact != fact) factRepository.saveFact(renderResult.fact)
+                            generatedFactIds += renderResult.fact.id
+                            created++
+                        } else {
+                            val deletion = factRepository.deleteFact(fact.id)
+                            if (!deletion.isSuccess) {
+                                warnings += "${lesson.title}: failed to remove an unrenderable card from storage."
+                            }
+                        }
+                    }
                 }
                 lessonRepository.upsert(
-                    lesson.copy(factCount = existingFacts.count { it.lessonId == lesson.id } + newFacts.size),
+                    lesson.copy(
+                        factCount = existingFacts.count { it.lessonId == lesson.id } +
+                            generatedFactIds.count { id ->
+                                newFacts.any { it.id == id && it.lessonId == lesson.id }
+                            },
+                    ),
                 )
                 completedLessons++
             } catch (exception: Throwable) {
@@ -190,6 +198,17 @@ class FactsGenerationWorker @AssistedInject constructor(
             )
         }
         documentRepository.updateExtractionStatus(documentId, ExtractionStatus.FACTS_READY)
+        if (generatedFactIds.isNotEmpty()) {
+            val selectionName = when (lessons.size) {
+                1 -> lessons.single().title
+                else -> "Selected lessons"
+            }
+            val collection = collectionRepository.createCollection(
+                name = "${document.title} — $selectionName",
+                description = "Generated study cards for ${lessons.joinToString { it.title }}.",
+            )
+            collectionRepository.setCollectionFacts(collection.id, generatedFactIds.distinct())
+        }
         preRenderNotifier.enqueue()
         return Result.success(
             workDataOf(
@@ -217,4 +236,94 @@ class FactsGenerationWorker @AssistedInject constructor(
         FactsWork.KEY_CURRENT_LESSON to currentLesson,
         FactsWork.KEY_FACTS_CREATED to factsCreated,
     )
+
+    private suspend fun createVerifiedFact(
+        draft: FactDraft,
+        documentId: String,
+        documentTitle: String,
+        lesson: Lesson,
+        pages: List<com.factswallpaper.core.ai.PageText>,
+        sourceMaterial: String,
+        verify: Boolean,
+        manualProfileId: String?,
+        warnings: MutableList<String>,
+    ): Fact? {
+        var candidate = draft
+        var status = VerificationStatus.UNVERIFIED
+        val sourcePage = candidate.sourcePage?.let { page ->
+            pages.firstOrNull { it.pageNumber == page }?.let { "[PAGE $page]\n${it.text}" }
+        } ?: sourceMaterial
+        if (verify) {
+            val verified = try {
+                generationOrchestrator.verifyAndFixDraft(
+                    draft = candidate,
+                    sourceMaterial = sourcePage,
+                    lessonTitle = lesson.title,
+                    profileId = manualProfileId,
+                )
+            } catch (exception: Throwable) {
+                if (exception is kotlinx.coroutines.CancellationException) throw exception
+                warnings += "${lesson.title}: fact verification failed: ${exception.message ?: "unknown error"}"
+                null
+            } ?: run {
+                warnings += "${lesson.title}: unsupported card was dropped after verifier correction."
+                return null
+            }
+            candidate = verified.draft
+            status = verified.status
+        }
+
+        var template = parseTemplate(candidate.templateType)
+        var diagram = parseDiagram(candidate.diagramType)
+        var latex = candidate.latex
+        var requiresLatex = candidate.requiresLatex
+        var diagramSource = candidate.diagramSource
+        if (verify && (requiresLatex || diagram != DiagramKind.NONE)) {
+            val markup = latex ?: diagramSource ?: candidate.text
+            val renderVerdict = try {
+                structuredAiService.verifyFormula(markup, manualProfileId)
+            } catch (exception: Throwable) {
+                if (exception is kotlinx.coroutines.CancellationException) throw exception
+                warnings += "${lesson.title}: formula/diagram verification failed."
+                null
+            }
+            if (renderVerdict?.value?.valid == false) {
+                status = VerificationStatus.FAILED
+                template = CardTemplateType.TEXT
+                diagram = DiagramKind.NONE
+                latex = null
+                requiresLatex = false
+                diagramSource = null
+                warnings += "${lesson.title}: invalid formula/diagram markup was converted to a text card."
+            }
+        }
+        return Fact(
+            id = UUID.randomUUID().toString(),
+            documentId = documentId,
+            lessonId = lesson.id,
+            text = candidate.text,
+            latex = latex,
+            requiresLatex = requiresLatex,
+            templateType = template,
+            diagramType = diagram,
+            diagramSource = diagramSource,
+            sourceBookTitle = documentTitle,
+            sourceLessonTitle = candidate.sourceLessonTitle ?: lesson.title,
+            sourcePage = candidate.sourcePage ?: lesson.startPage,
+            tags = candidate.tags,
+            confidence = candidate.confidence,
+            verificationStatus = status,
+            active = true,
+            createdAtEpochMs = System.currentTimeMillis(),
+        )
+    }
+
+    private fun parseTemplate(value: String): CardTemplateType =
+        runCatching { CardTemplateType.valueOf(value.uppercase()) }
+            .getOrDefault(CardTemplateType.TEXT)
+
+    private fun parseDiagram(value: String): DiagramKind =
+        runCatching { DiagramKind.valueOf(value.uppercase()) }
+            .getOrDefault(DiagramKind.NONE)
+
 }

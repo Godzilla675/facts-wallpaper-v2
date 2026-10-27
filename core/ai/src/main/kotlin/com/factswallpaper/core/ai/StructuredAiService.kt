@@ -142,6 +142,15 @@ interface StructuredAiService {
         manualProfileId: String? = null,
     ): ValidationResult<VerificationEnvelope>
 
+    suspend fun verifyFact(
+        fact: String,
+        sourceMaterial: String,
+        manualProfileId: String? = null,
+    ): ValidationResult<VerificationEnvelope> = verifyFormula(
+        source = "Fact:\n$fact\n\nSource pages:\n$sourceMaterial",
+        manualProfileId = manualProfileId,
+    )
+
     suspend fun generateDiagram(
         description: String,
         kindHint: String? = null,
@@ -190,23 +199,13 @@ class DefaultStructuredAiService @Inject constructor(
         progress: ((completed: Int, total: Int) -> Unit)?,
     ): OutlineGenerationResult {
         val pageCount = pdfPageCount ?: pages.maxOfOrNull { it.pageNumber } ?: 0
-        val baseRequest = outlineRequest(
-            userPrompt = "",
-            pdfBytes = pdfBytes,
-            pdfFileName = pdfFileName,
-        )
+        val baseRequest = outlineRequest(userPrompt = "")
         val profile = callService.resolveProfile(
             request = baseRequest,
-            requireDirectPdf = pdfBytes != null,
             manualProfileId = manualProfileId,
         )
         val initialOutputBudget = profile.initialOutputTokenBudget()
-        val directPdf = pdfBytes != null && profile.supportsPdfInput
-        val chunks: List<TextChunk?> = if (directPdf) {
-            listOf(null)
-        } else {
-            TextChunker.chunk(pages, profile.maxContextTokens)
-        }
+        val chunks = TextChunker.chunk(pages, profile.maxContextTokens)
         if (chunks.isEmpty()) {
             throw AiException(
                 AiErrorKind.INVALID_REQUEST,
@@ -217,7 +216,7 @@ class DefaultStructuredAiService @Inject constructor(
         val estimate = estimateOutlineCostUsd(
             profile = profile,
             pages = pages,
-            pdfPageCount = if (directPdf) pageCount else null,
+            pdfPageCount = null,
         )
         val warnings = mutableListOf<String>()
         val lessons = mutableListOf<OutlineDraft>()
@@ -226,23 +225,12 @@ class DefaultStructuredAiService @Inject constructor(
         var validChunks = 0
 
         chunks.forEachIndexed { index, chunk ->
-            val request = if (directPdf) {
-                baseRequest.copy(
-                    userPrompt = "Partition the attached PDF into lessons. " +
-                        "Use exact 1-indexed PDF page numbers.\n" +
-                        "Return JSON with a \"lessons\" array.",
-                    maxOutputTokens = initialOutputBudget,
-                )
-            } else {
-                outlineRequest(
-                    userPrompt = AiPrompts.outlineUserPromptFromText(chunk!!.text),
-                ).copy(maxOutputTokens = initialOutputBudget)
-            }
+            val request = outlineRequest(
+                userPrompt = AiPrompts.outlineUserPromptFromText(chunk.text),
+            ).copy(maxOutputTokens = initialOutputBudget)
             var outcome = callService.execute(
                 request = request,
                 documentId = documentId,
-                requireDirectPdf = directPdf,
-                pdfPageCount = pageCount,
                 manualProfileId = manualProfileId,
             )
             usedFailover = usedFailover || outcome.usedFailover
@@ -298,8 +286,48 @@ class DefaultStructuredAiService @Inject constructor(
                 "The provider returned no usable lessons after a budget retry and one repair attempt.",
             )
         }
+        var mergedLessons = mergeOutline(lessons)
+        if (chunks.size > 1 && mergedLessons.isNotEmpty()) {
+            val mergePrompt = AiPrompts.outlineMergeUserPrompt(mergedLessons)
+            val mergeInputTokens = CostEstimator.estimateTextTokens(
+                AiPrompts.OutlineSystemPrompt + mergePrompt,
+            )
+            if (mergeInputTokens < (profile.maxContextTokens * 0.75).toInt()) {
+                val mergeRequest = outlineRequest(mergePrompt)
+                    .copy(maxOutputTokens = initialOutputBudget)
+                try {
+                    var outcome = callService.execute(
+                        request = mergeRequest,
+                        documentId = documentId,
+                        manualProfileId = manualProfileId,
+                    )
+                    usedFailover = usedFailover || outcome.usedFailover
+                    actualCost += outcomeCost(outcome)
+                    var validation = validator.validateOutline(outcome.response.text, pageCount)
+                    if (!validation.isValid) {
+                        val retry = retryTruncatedJson(
+                            outcome = outcome,
+                            request = mergeRequest,
+                            documentId = documentId,
+                        ) { raw -> validator.validateOutline(raw, pageCount).isValid }
+                        if (retry != null) {
+                            outcome = retry
+                            actualCost += outcomeCost(retry)
+                            validation = validator.validateOutline(retry.response.text, pageCount)
+                        }
+                    }
+                    validation.value?.let { mergedLessons = mergeOutline(it) }
+                        ?: warnings.add("Outline merge pass was unusable; kept the validated chunk outlines.")
+                } catch (exception: Throwable) {
+                    if (exception is kotlinx.coroutines.CancellationException) throw exception
+                    warnings += "Outline merge pass failed; kept the validated chunk outlines."
+                }
+            } else {
+                warnings += "Outline merge pass exceeded the profile context budget; kept the validated chunk outlines."
+            }
+        }
         return OutlineGenerationResult(
-            lessons = mergeOutline(lessons),
+            lessons = mergedLessons,
             warnings = warnings.distinct().take(20),
             profile = profile,
             usedFailover = usedFailover,
@@ -519,6 +547,28 @@ class DefaultStructuredAiService @Inject constructor(
             jsonSchema = AiSchemas.FormulaVerificationJsonSchema,
             temperature = 0.0,
         )
+        return validateVerification(request, manualProfileId)
+    }
+
+    override suspend fun verifyFact(
+        fact: String,
+        sourceMaterial: String,
+        manualProfileId: String?,
+    ): ValidationResult<VerificationEnvelope> {
+        val request = AiRequest(
+            task = AiTask.FORMULA_VERIFICATION,
+            systemPrompt = AiPrompts.FactVerificationSystemPrompt,
+            userPrompt = AiPrompts.factVerificationUserPrompt(fact, sourceMaterial),
+            jsonSchema = AiSchemas.FormulaVerificationJsonSchema,
+            temperature = 0.0,
+        )
+        return validateVerification(request, manualProfileId)
+    }
+
+    private suspend fun validateVerification(
+        request: AiRequest,
+        manualProfileId: String?,
+    ): ValidationResult<VerificationEnvelope> {
         val budgetedRequest = withInitialOutputBudget(request, manualProfileId)
         var outcome = callService.execute(
             request = budgetedRequest,
@@ -952,6 +1002,7 @@ class DefaultStructuredAiService @Inject constructor(
             if (last != null && overlaps) {
                 merged[merged.lastIndex] = last.copy(
                     endPage = max(last.endPage, draft.endPage),
+                    chapterTitle = draft.chapterTitle ?: last.chapterTitle,
                     summary = listOf(last.summary, draft.summary)
                         .filter { it.isNotBlank() }
                         .distinct()

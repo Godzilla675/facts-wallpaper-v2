@@ -14,6 +14,7 @@ data class OutlineDraft(
     val startPage: Int,
     val endPage: Int,
     val sortOrder: Int,
+    val chapterTitle: String? = null,
 )
 
 data class ValidationResult<T>(
@@ -32,6 +33,7 @@ data class OutlineLessonJson(
     val summary: String = "",
     val startPage: Int? = null,
     val endPage: Int? = null,
+    val chapterTitle: String? = null,
 )
 
 @Serializable
@@ -129,6 +131,7 @@ class SchemaValidator {
                     startPage = start,
                     endPage = end,
                     sortOrder = 0,
+                    chapterTitle = lesson.chapterTitle?.trim()?.takeIf { it.isNotEmpty() },
                 )
             }
         }

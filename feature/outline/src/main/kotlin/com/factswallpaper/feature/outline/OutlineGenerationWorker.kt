@@ -11,8 +11,10 @@ import com.factswallpaper.core.data.repository.DocumentTextRepository
 import com.factswallpaper.core.data.repository.LessonRepository
 import com.factswallpaper.core.model.ExtractionStatus
 import com.factswallpaper.core.model.Lesson
+import com.factswallpaper.core.pdf.PdfBoxDocumentReader
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
+import java.io.File
 import java.util.UUID
 
 object OutlineWork {
@@ -44,6 +46,7 @@ class OutlineGenerationWorker @AssistedInject constructor(
     private val documentTextRepository: DocumentTextRepository,
     private val lessonRepository: LessonRepository,
     private val structuredAiService: StructuredAiService,
+    private val pdfBoxDocumentReader: PdfBoxDocumentReader,
 ) : CoroutineWorker(appContext, params) {
 
     override suspend fun doWork(): Result {
@@ -67,31 +70,52 @@ class OutlineGenerationWorker @AssistedInject constructor(
 
         setProgress(progress(phase = "starting", completed = 0, total = pages.size))
         return try {
-            val result = structuredAiService.generateOutline(
-                documentId = documentId,
-                pages = pages,
-                manualProfileId = manualProfileId ?: settings?.preferredProviderProfileId,
-                progress = { completed, total ->
-                    setProgressAsync(
-                        progress(
-                            phase = "detecting",
-                            completed = completed,
-                            total = total,
-                            estimatedCostUsd = null,
-                        ),
-                    )
-                },
-            )
+            val bookmarkWarnings = mutableListOf<String>()
+            val bookmarkLessons = try {
+                BookmarkOutlineMapper.map(
+                    bookmarks = pdfBoxDocumentReader.readBookmarks(File(document.localFilePath)),
+                    pageRangeStart = startPage,
+                    pageRangeEnd = endPage,
+                )
+            } catch (exception: Throwable) {
+                if (exception is kotlinx.coroutines.CancellationException) throw exception
+                bookmarkWarnings += "Could not read embedded PDF bookmarks; using AI outline detection."
+                emptyList()
+            }
+            val result = if (bookmarkLessons.size >= 2) {
+                null
+            } else {
+                structuredAiService.generateOutline(
+                    documentId = documentId,
+                    pages = pages,
+                    manualProfileId = manualProfileId ?: settings?.preferredProviderProfileId,
+                    progress = { completed, total ->
+                        setProgressAsync(
+                            progress(
+                                phase = "detecting",
+                                completed = completed,
+                                total = total,
+                                estimatedCostUsd = null,
+                            ),
+                        )
+                    },
+                )
+            }
+            val detectedLessons = result?.lessons ?: bookmarkLessons
+            val warnings = bookmarkWarnings + result?.warnings.orEmpty()
+            val estimatedCost = result?.estimatedCostUsd ?: 0.0
+            val actualCost = result?.actualCostUsd ?: 0.0
+            val providerName = result?.profile?.name ?: "PDF bookmarks"
             setProgress(
                 progress(
                     phase = "saving",
                     completed = pages.size,
                     total = pages.size,
-                    estimatedCostUsd = result.estimatedCostUsd,
+                    estimatedCostUsd = estimatedCost,
                 ),
             )
             val existing = lessonRepository.getLessons(documentId)
-            val lessons = result.lessons.map { draft ->
+            val lessons = detectedLessons.map { draft ->
                 val match = existing.firstOrNull {
                     it.startPage == draft.startPage && it.endPage == draft.endPage
                 }
@@ -100,6 +124,7 @@ class OutlineGenerationWorker @AssistedInject constructor(
                     documentId = documentId,
                     title = draft.title,
                     summary = draft.summary,
+                    chapterTitle = draft.chapterTitle,
                     startPage = draft.startPage,
                     endPage = draft.endPage,
                     selected = match?.selected ?: true,
@@ -112,12 +137,12 @@ class OutlineGenerationWorker @AssistedInject constructor(
             Result.success(
                 workDataOf(
                     OutlineWork.KEY_LESSON_COUNT to lessons.size,
-                    OutlineWork.KEY_ESTIMATED_COST to result.estimatedCostUsd,
-                    OutlineWork.KEY_ACTUAL_COST to result.actualCostUsd,
-                    OutlineWork.KEY_PROVIDER to result.profile.name,
-                    OutlineWork.KEY_WARNINGS to result.warnings.joinToString("\n").take(2_000),
+                    OutlineWork.KEY_ESTIMATED_COST to estimatedCost,
+                    OutlineWork.KEY_ACTUAL_COST to actualCost,
+                    OutlineWork.KEY_PROVIDER to providerName,
+                    OutlineWork.KEY_WARNINGS to warnings.joinToString("\n").take(2_000),
                     OutlineWork.KEY_MESSAGE to
-                        "Detected ${lessons.size} lessons with ${result.profile.name}.",
+                        "Detected ${lessons.size} lessons with $providerName.",
                 ),
             )
         } catch (exception: Throwable) {

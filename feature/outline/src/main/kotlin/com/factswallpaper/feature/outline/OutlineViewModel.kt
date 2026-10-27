@@ -205,6 +205,15 @@ class OutlineViewModel @Inject constructor(
         viewModelScope.launch { lessonRepository.setAllSelected(documentId, selected) }
     }
 
+    fun setChapterSelected(chapterTitle: String, selected: Boolean) {
+        val content = uiState.value as? OutlineUiState.Content ?: return
+        viewModelScope.launch {
+            content.lessons
+                .filter { it.chapterTitle == chapterTitle }
+                .forEach { lessonRepository.setSelected(it.id, selected) }
+        }
+    }
+
     fun saveLesson(lessonId: String?, title: String, summary: String, startPage: Int, endPage: Int) {
         val content = uiState.value as? OutlineUiState.Content ?: return
         val trimmedTitle = title.trim()

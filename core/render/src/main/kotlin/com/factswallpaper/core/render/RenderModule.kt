@@ -1,6 +1,7 @@
 package com.factswallpaper.core.render
 
 import com.factswallpaper.core.common.CardPreRenderNotifier
+import com.factswallpaper.core.common.GeneratedCardRenderer
 import com.factswallpaper.core.render.diagram.AndroidWebViewDiagramRenderer
 import com.factswallpaper.core.render.diagram.OfflineWebViewDiagramRenderer
 import com.factswallpaper.core.render.verify.FormulaAiVerifier
@@ -40,4 +41,10 @@ abstract class RenderModule {
     abstract fun bindCardPreRenderNotifier(
         scheduler: CardPreRenderScheduler,
     ): CardPreRenderNotifier
+
+    @Binds
+    @Singleton
+    abstract fun bindGeneratedCardRenderer(
+        renderer: OfflineGeneratedCardRenderer,
+    ): GeneratedCardRenderer
 }

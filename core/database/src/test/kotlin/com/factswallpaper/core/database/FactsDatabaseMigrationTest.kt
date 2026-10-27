@@ -115,4 +115,61 @@ class FactsDatabaseMigrationTest {
             helper.close()
         }
     }
+
+    @Test
+    fun `version three lessons receive an optional chapter title`() {
+        val migration = FactsDatabase.MIGRATIONS.singleOrNull {
+            it.startVersion == 3 && it.endVersion == 4
+        } ?: throw AssertionError("Expected a version 3 to 4 migration.")
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val helper = FrameworkSQLiteOpenHelperFactory().create(
+            SupportSQLiteOpenHelper.Configuration.builder(context)
+                .name(null)
+                .callback(
+                    object : SupportSQLiteOpenHelper.Callback(3) {
+                        override fun onCreate(db: SupportSQLiteDatabase) {
+                            db.execSQL(
+                                """
+                                    CREATE TABLE lessons (
+                                        id TEXT NOT NULL PRIMARY KEY,
+                                        documentId TEXT NOT NULL,
+                                        title TEXT NOT NULL,
+                                        summary TEXT NOT NULL,
+                                        startPage INTEGER NOT NULL,
+                                        endPage INTEGER NOT NULL,
+                                        selected INTEGER NOT NULL,
+                                        sortOrder INTEGER NOT NULL,
+                                        factCount INTEGER NOT NULL
+                                    )
+                                    """.trimIndent(),
+                            )
+                        }
+
+                        override fun onUpgrade(
+                            db: SupportSQLiteDatabase,
+                            oldVersion: Int,
+                            newVersion: Int,
+                        ) = Unit
+                    },
+                )
+                .build(),
+        )
+        try {
+            val database = helper.writableDatabase
+            database.execSQL(
+                """
+                    INSERT INTO lessons (
+                        id, documentId, title, summary, startPage, endPage, selected, sortOrder, factCount
+                    ) VALUES ('lesson-1', 'doc-1', 'Lesson', 'Summary', 1, 2, 1, 1, 0)
+                    """.trimIndent(),
+            )
+            migration.migrate(database)
+            database.query("SELECT chapterTitle FROM lessons WHERE id = 'lesson-1'").use { cursor ->
+                assertThat(cursor.moveToFirst()).isTrue()
+                assertThat(cursor.isNull(0)).isTrue()
+            }
+        } finally {
+            helper.close()
+        }
+    }
 }
