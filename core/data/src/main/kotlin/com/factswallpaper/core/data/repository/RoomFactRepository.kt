@@ -70,10 +70,21 @@ class RoomFactRepository @Inject constructor(
     override suspend fun recordReview(factId: String, gotIt: Boolean) {
         withContext(dispatchers.io) {
             val now = System.currentTimeMillis()
+            val current = factDao.getById(factId)
+            val currentGotIt = current?.reviewGotItCount ?: 0
             if (gotIt) {
-                factDao.incrementGotItCount(factId, now)
+                val intervalDays = when (currentGotIt) {
+                    0 -> 1L
+                    1 -> 3L
+                    2 -> 7L
+                    3 -> 14L
+                    else -> 30L
+                }
+                val nextDue = now + intervalDays * 24L * 60L * 60L * 1000L
+                factDao.recordGotIt(factId, nextDue, now)
             } else {
-                factDao.incrementAgainCount(factId, now)
+                val nextDue = now + 10L * 60L * 1000L
+                factDao.recordAgain(factId, nextDue, now)
             }
         }
     }
@@ -96,6 +107,7 @@ class RoomFactRepository @Inject constructor(
     override fun observeSmartViewCounts(): Flow<SmartViewCounts> =
         factDao.observeAll().map { entities ->
             val facts = entities.map { it.toDomain() }
+            val now = System.currentTimeMillis()
             SmartViewCounts(
                 total = facts.size,
                 active = facts.count { it.active },
@@ -104,6 +116,9 @@ class RoomFactRepository @Inject constructor(
                     it.hasFormula || it.templateType == CardTemplateType.FORMULA
                 },
                 diagrams = facts.count { it.hasDiagram },
+                dueForReview = facts.count { fact ->
+                    fact.active && (fact.nextReviewDueEpochMs?.let { due -> due <= now } ?: true)
+                },
             )
         }
 

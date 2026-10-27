@@ -22,6 +22,8 @@ import com.factswallpaper.core.model.FactStatusFilter
 import com.factswallpaper.core.model.FactTag
 import com.factswallpaper.core.model.SourceReferenceMode
 import com.factswallpaper.core.render.CardPreRenderScheduler
+import com.factswallpaper.core.render.export.CardExportFormat
+import com.factswallpaper.core.render.export.CardExportService
 import com.factswallpaper.core.ui.FeatureViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.io.OutputStreamWriter
@@ -60,14 +62,13 @@ sealed interface FactsUiState {
         val documents: List<Document>,
         val tags: List<FactTag>,
         val filter: FactFilter,
-        val isOnline: Boolean = true,
-        val isRegenerating: Boolean = false,
-        val regeneratingFactId: String? = null,
+        val isOnline: Boolean,
+        val isRegenerating: Boolean,
+        val regeneratingFactId: String?,
         val generationWork: FactsWorkUi = FactsWorkUi.Idle,
     ) : FactsUiState
 }
 
-@OptIn(ExperimentalCoroutinesApi::class)
 private data class FactDataTuple(
     val facts: List<Fact>,
     val documents: List<Document>,
@@ -85,6 +86,7 @@ class FactsViewModel @Inject constructor(
     private val networkMonitor: NetworkMonitor,
     private val workManager: WorkManager,
     private val preRenderScheduler: CardPreRenderScheduler,
+    private val cardExportService: CardExportService? = null,
 ) : FeatureViewModel() {
 
     private val initialDocumentId: String? = savedStateHandle["documentId"]
@@ -103,8 +105,8 @@ class FactsViewModel @Inject constructor(
         ),
     )
 
-    private val regeneratingFactId = MutableStateFlow<String?>(null)
     private val retrySignal = MutableStateFlow(0)
+    private val regeneratingFactId = MutableStateFlow<String?>(null)
 
     private val workUi = filter
         .map { it.documentId }
@@ -318,24 +320,32 @@ class FactsViewModel @Inject constructor(
         }
     }
 
-    fun exportFacts(destinationUri: Uri, context: Context) {
+    fun exportFacts(
+        destinationUri: Uri,
+        context: Context,
+        format: CardExportFormat = CardExportFormat.MARKDOWN,
+    ) {
         val content = uiState.value as? FactsUiState.Content ?: return
         viewModelScope.launch(Dispatchers.IO) {
             val result = runCatching {
                 context.contentResolver.openOutputStream(destinationUri, "wt")?.use { out ->
-                    OutputStreamWriter(out).use { writer ->
-                        writer.write("# Facts Study Export\n\n")
-                        writer.write("Exported ${content.facts.size} study cards.\n\n")
-                        content.facts.forEachIndexed { idx, fact ->
-                            writer.write("## ${idx + 1}. [${fact.templateType}] ${fact.sourceLessonTitle ?: "Study Card"}\n\n")
-                            writer.write("${fact.text}\n\n")
-                            if (!fact.latex.isNullOrBlank()) {
-                                writer.write("```latex\n${fact.latex}\n```\n\n")
+                    if (cardExportService != null) {
+                        cardExportService.export(content.facts, format, out)
+                    } else {
+                        OutputStreamWriter(out).use { writer ->
+                            writer.write("# Facts Study Export\n\n")
+                            writer.write("Exported ${content.facts.size} study cards.\n\n")
+                            content.facts.forEachIndexed { idx, fact ->
+                                writer.write("## ${idx + 1}. [${fact.templateType}] ${fact.sourceLessonTitle ?: "Study Card"}\n\n")
+                                writer.write("${fact.text}\n\n")
+                                if (!fact.latex.isNullOrBlank()) {
+                                    writer.write("```latex\n${fact.latex}\n```\n\n")
+                                }
+                                if (fact.tags.isNotEmpty()) {
+                                    writer.write("Tags: ${fact.tags.joinToString(", ")}\n\n")
+                                }
+                                writer.write("Reviews: ${fact.reviewGotItCount} got it / ${fact.reviewAgainCount} again\n\n---\n\n")
                             }
-                            if (fact.tags.isNotEmpty()) {
-                                writer.write("Tags: ${fact.tags.joinToString(", ")}\n\n")
-                            }
-                            writer.write("Reviews: ${fact.reviewGotItCount} got it / ${fact.reviewAgainCount} again\n\n---\n\n")
                         }
                     }
                 } ?: error("Failed to open output stream")

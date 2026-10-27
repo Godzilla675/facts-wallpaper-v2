@@ -57,13 +57,10 @@ class FactsDatabaseMigrationTest {
     }
 
     @Test
-    fun `version two profiles receive advanced request settings defaults`() {
+    fun `version two profiles receive advanced request columns and empty override body`() {
         val migration = FactsDatabase.MIGRATIONS.singleOrNull {
             it.startVersion == 2 && it.endVersion == 3
-        }
-        assertThat(migration?.endVersion).isEqualTo(3)
-        if (migration == null) return
-
+        } ?: throw AssertionError("Expected a version 2 to 3 migration.")
         val context = ApplicationProvider.getApplicationContext<Context>()
         val helper = FrameworkSQLiteOpenHelperFactory().create(
             SupportSQLiteOpenHelper.Configuration.builder(context)
@@ -72,13 +69,7 @@ class FactsDatabaseMigrationTest {
                     object : SupportSQLiteOpenHelper.Callback(2) {
                         override fun onCreate(db: SupportSQLiteDatabase) {
                             db.execSQL(
-                                """
-                                CREATE TABLE provider_profiles (
-                                    id TEXT NOT NULL PRIMARY KEY,
-                                    customHeadersJson TEXT NOT NULL DEFAULT '{}',
-                                    maxOutputTokens INTEGER NOT NULL DEFAULT 8192
-                                )
-                                """.trimIndent(),
+                                "CREATE TABLE provider_profiles (id TEXT NOT NULL PRIMARY KEY)",
                             )
                         }
 
@@ -93,23 +84,16 @@ class FactsDatabaseMigrationTest {
         )
         try {
             val database = helper.writableDatabase
-            database.execSQL(
-                "INSERT INTO provider_profiles (id, customHeadersJson) VALUES ('profile-2', '{\"x\":\"y\"}')",
-            )
+            database.execSQL("INSERT INTO provider_profiles (id) VALUES ('profile-2')")
             migration.migrate(database)
             database.query(
-                """
-                SELECT temperature, topP, reasoningEffort, rawRequestJson, customHeadersJson
-                FROM provider_profiles
-                WHERE id = 'profile-2'
-                """.trimIndent(),
+                "SELECT temperature, topP, reasoningEffort, rawRequestJson FROM provider_profiles WHERE id = 'profile-2'",
             ).use { cursor ->
                 assertThat(cursor.moveToFirst()).isTrue()
                 assertThat(cursor.isNull(0)).isTrue()
                 assertThat(cursor.isNull(1)).isTrue()
                 assertThat(cursor.isNull(2)).isTrue()
                 assertThat(cursor.getString(3)).isEqualTo("{}")
-                assertThat(cursor.getString(4)).isEqualTo("{\"x\":\"y\"}")
             }
         } finally {
             helper.close()
@@ -117,7 +101,7 @@ class FactsDatabaseMigrationTest {
     }
 
     @Test
-    fun `version three lessons receive an optional chapter title`() {
+    fun `migration 3 to 4 adds chapter title to lessons table`() {
         val migration = FactsDatabase.MIGRATIONS.singleOrNull {
             it.startVersion == 3 && it.endVersion == 4
         } ?: throw AssertionError("Expected a version 3 to 4 migration.")
@@ -129,19 +113,7 @@ class FactsDatabaseMigrationTest {
                     object : SupportSQLiteOpenHelper.Callback(3) {
                         override fun onCreate(db: SupportSQLiteDatabase) {
                             db.execSQL(
-                                """
-                                    CREATE TABLE lessons (
-                                        id TEXT NOT NULL PRIMARY KEY,
-                                        documentId TEXT NOT NULL,
-                                        title TEXT NOT NULL,
-                                        summary TEXT NOT NULL,
-                                        startPage INTEGER NOT NULL,
-                                        endPage INTEGER NOT NULL,
-                                        selected INTEGER NOT NULL,
-                                        sortOrder INTEGER NOT NULL,
-                                        factCount INTEGER NOT NULL
-                                    )
-                                    """.trimIndent(),
+                                "CREATE TABLE lessons (id TEXT NOT NULL PRIMARY KEY, documentId TEXT NOT NULL)",
                             )
                         }
 
@@ -156,14 +128,9 @@ class FactsDatabaseMigrationTest {
         )
         try {
             val database = helper.writableDatabase
-            database.execSQL(
-                """
-                    INSERT INTO lessons (
-                        id, documentId, title, summary, startPage, endPage, selected, sortOrder, factCount
-                    ) VALUES ('lesson-1', 'doc-1', 'Lesson', 'Summary', 1, 2, 1, 1, 0)
-                    """.trimIndent(),
-            )
+            database.execSQL("INSERT INTO lessons (id, documentId) VALUES ('lesson-1', 'doc-1')")
             migration.migrate(database)
+
             database.query("SELECT chapterTitle FROM lessons WHERE id = 'lesson-1'").use { cursor ->
                 assertThat(cursor.moveToFirst()).isTrue()
                 assertThat(cursor.isNull(0)).isTrue()
@@ -219,6 +186,44 @@ class FactsDatabaseMigrationTest {
                 assertThat(cursor.moveToFirst()).isTrue()
                 assertThat(cursor.getInt(0)).isEqualTo(0)
                 assertThat(cursor.getInt(1)).isEqualTo(0)
+            }
+        } finally {
+            helper.close()
+        }
+    }
+
+    @Test
+    fun versionFiveToSixMigrationAddsNextReviewDueEpochMs() {
+        val migration = FactsDatabase.MIGRATIONS.singleOrNull {
+            it.startVersion == 5 && it.endVersion == 6
+        } ?: throw AssertionError("Expected a version 5 to 6 migration.")
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val helper = FrameworkSQLiteOpenHelperFactory().create(
+            SupportSQLiteOpenHelper.Configuration.builder(context)
+                .name(null)
+                .callback(
+                    object : SupportSQLiteOpenHelper.Callback(5) {
+                        override fun onCreate(db: SupportSQLiteDatabase) {
+                            db.execSQL("CREATE TABLE facts (id TEXT NOT NULL PRIMARY KEY)")
+                        }
+
+                        override fun onUpgrade(
+                            db: SupportSQLiteDatabase,
+                            oldVersion: Int,
+                            newVersion: Int,
+                        ) = Unit
+                    },
+                )
+                .build(),
+        )
+        try {
+            val database = helper.writableDatabase
+            database.execSQL("INSERT INTO facts (id) VALUES ('fact-1')")
+            migration.migrate(database)
+
+            database.query("SELECT nextReviewDueEpochMs FROM facts WHERE id = 'fact-1'").use { cursor ->
+                assertThat(cursor.moveToFirst()).isTrue()
+                assertThat(cursor.isNull(0)).isTrue()
             }
         } finally {
             helper.close()

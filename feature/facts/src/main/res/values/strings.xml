@@ -69,6 +69,7 @@
     <string name="facts_status_favorites">Favorites</string>
     <string name="facts_status_formulas">Formulas</string>
     <string name="facts_status_diagrams">Diagrams</string>
+    <string name="facts_status_due_for_review">Due for review</string>
 
     <string name="facts_template_text">Text</string>
     <string name="facts_template_quote">Quote</string>
@@ -80,11 +81,28 @@
     <string name="facts_template_timeline">Timeline</string>
 
     <string name="facts_study_mode">Study Mode</string>
-    <string name="facts_study_got_it">Got it (%1$d)</string>
-    <string name="facts_study_again">Review again (%1$d)</string>
+    <string name="facts_study_got_it">Got it</string>
+    <string name="facts_study_again">Review again</string>
     <string name="facts_study_done">All cards reviewed in this session!</string>
     <string name="facts_study_card_counter">%1$d of %2$d</string>
+    <string name="facts_study_due_only">Due for review (%1$d)</string>
+    <string name="facts_study_show_all">Showing all cards</string>
+    <string name="facts_study_empty_due">No cards are currently due for review!</string>
+    <string name="facts_study_empty_due_action">Study all cards</string>
+    <string name="facts_study_empty_all">No cards found to study.</string>
+    <string name="facts_study_tap_hint">Tap card to flip details</string>
+    <string name="facts_study_details_title">Card Details</string>
+    <string name="facts_study_next_due_label">Next review due: %1$s</string>
+    <string name="facts_study_due_now">Due now</string>
+    <string name="facts_study_not_scheduled">Not scheduled yet</string>
+    <string name="facts_study_session_summary">Session complete: %1$d got it \u00B7 %2$d to review again</string>
+    <string name="facts_study_restart">Study again</string>
+    <string name="facts_study_finish">Done</string>
     <string name="facts_export">Export cards</string>
+    <string name="facts_export_dialog_title">Export Cards</string>
+    <string name="facts_export_zip">ZIP archive (PNG card images)</string>
+    <string name="facts_export_pdf">PDF document (multi-page)</string>
+    <string name="facts_export_md">Markdown text (.md)</string>
     <string name="facts_export_success">Cards exported successfully.</string>
     <string name="facts_export_failed">Failed to export cards.</string>
 </resources>

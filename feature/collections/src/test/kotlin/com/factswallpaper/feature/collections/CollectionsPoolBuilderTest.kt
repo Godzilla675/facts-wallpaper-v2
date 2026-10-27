@@ -29,7 +29,12 @@ class CollectionsPoolBuilderTest {
                 diagramType = DiagramKind.MERMAID,
                 diagramSource = "graph TD; A-->B",
             ),
-            sampleFact(id = "f4", active = false, favorite = true),
+            sampleFact(
+                id = "f4",
+                active = false,
+                favorite = true,
+                nextReviewDueEpochMs = System.currentTimeMillis() + 100_000_000L,
+            ),
         )
 
         val counts = SmartViewCounts(
@@ -38,6 +43,7 @@ class CollectionsPoolBuilderTest {
             favorites = facts.count { it.favorite },
             formulas = facts.count { it.hasFormula },
             diagrams = facts.count { it.hasDiagram },
+            dueForReview = facts.count { it.isDueForReview },
         )
 
         assertThat(counts.total).isEqualTo(4)
@@ -45,6 +51,7 @@ class CollectionsPoolBuilderTest {
         assertThat(counts.favorites).isEqualTo(2)
         assertThat(counts.formulas).isEqualTo(1)
         assertThat(counts.diagrams).isEqualTo(1)
+        assertThat(counts.dueForReview).isEqualTo(3)
     }
 
     @Test
@@ -98,6 +105,7 @@ class CollectionsPoolBuilderTest {
         templateType: CardTemplateType = CardTemplateType.TEXT,
         diagramType: DiagramKind = DiagramKind.NONE,
         diagramSource: String? = null,
+        nextReviewDueEpochMs: Long? = null,
     ): Fact = Fact(
         id = id,
         documentId = "doc-1",
@@ -108,16 +116,10 @@ class CollectionsPoolBuilderTest {
         templateType = templateType,
         diagramType = diagramType,
         diagramSource = diagramSource,
-        diagramAssetId = null,
-        verificationStatus = VerificationStatus.VERIFIED,
-        sourceBookTitle = "Physics",
-        sourceLessonTitle = null,
-        sourcePage = 1,
-        sourceReferenceModeOverride = null,
+        sourceBookTitle = "Physics 101",
         active = active,
         favorite = favorite,
-        tags = listOf("physics"),
+        nextReviewDueEpochMs = nextReviewDueEpochMs,
         createdAtEpochMs = 1L,
-        updatedAtEpochMs = 1L,
     )
 }

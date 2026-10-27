@@ -30,9 +30,12 @@ data class Fact(
     val updatedAtEpochMs: Long = createdAtEpochMs,
     val reviewGotItCount: Int = 0,
     val reviewAgainCount: Int = 0,
+    val nextReviewDueEpochMs: Long? = null,
 ) {
     val hasFormula: Boolean get() = requiresLatex || templateType == CardTemplateType.FORMULA || !latex.isNullOrBlank()
     val hasDiagram: Boolean get() = diagramType != DiagramKind.NONE
+    val isDueForReview: Boolean
+        get() = active && (nextReviewDueEpochMs?.let { it <= System.currentTimeMillis() } ?: true)
 }
 
 /** Immutable filter state for the facts list. Pure logic so it is unit-testable. */
@@ -68,6 +71,7 @@ data class FactFilter(
         FactStatusFilter.FAVORITES -> fact.favorite
         FactStatusFilter.FORMULAS -> fact.hasFormula
         FactStatusFilter.DIAGRAMS -> fact.hasDiagram
+        FactStatusFilter.DUE_FOR_REVIEW -> fact.isDueForReview
     }
 }
 
@@ -79,6 +83,7 @@ data class SmartViewCounts(
     val favorites: Int = 0,
     val formulas: Int = 0,
     val diagrams: Int = 0,
+    val dueForReview: Int = 0,
 )
 
 @Serializable

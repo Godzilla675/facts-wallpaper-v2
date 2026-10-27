@@ -183,6 +183,8 @@
     <string name="advanced_backup_choose_location_first">Choose a backup location before enabling or starting backup.</string>
     <string name="advanced_backup_schedule_failed">Could not schedule automatic backup.</string>
     <string name="advanced_restore">Restore Backup</string>
+    <string name="advanced_restore_from_file">Restore from file…</string>
+    <string name="advanced_restore_file_selected">Restoring from: %1$s</string>
     <string name="advanced_backup_title">Create Encrypted Backup</string>
     <string name="advanced_backup_passphrase_label">Passphrase (min 8 characters)</string>
     <string name="advanced_backup_include_assets">Include pre-rendered cards &amp; diagrams</string>

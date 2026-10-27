@@ -13,6 +13,15 @@
     <string name="collections_smart_favorites">Favorites</string>
     <string name="collections_smart_formulas">Formulas</string>
     <string name="collections_smart_diagrams">Diagrams</string>
+    <string name="collections_smart_due_review">Due for review</string>
+    <string name="collections_study">Study</string>
+    <string name="collections_export">Export</string>
+    <string name="collections_export_dialog_title">Export Collection</string>
+    <string name="collections_export_zip">ZIP of PNG Cards</string>
+    <string name="collections_export_pdf">Multi-page PDF</string>
+    <string name="collections_export_markdown">Markdown</string>
+    <string name="collections_export_success">Collection exported successfully.</string>
+    <string name="collections_export_failed">Failed to export collection.</string>
     <string name="collections_suggestions_title">Suggested collections</string>
     <string name="collections_suggestions_helper">Suggestions are grouped from shared fact tags and stay private until you accept them.</string>
     <string name="collections_section_collections">Collections</string>

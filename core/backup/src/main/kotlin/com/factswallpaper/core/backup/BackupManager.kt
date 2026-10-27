@@ -26,4 +26,9 @@ interface BackupManager {
         sourceFile: File,
         passphrase: String,
     ): AppResult<BackupManifest>
+
+    suspend fun restoreBackupFromUri(
+        sourceUri: Uri,
+        passphrase: String,
+    ): AppResult<BackupManifest>
 }

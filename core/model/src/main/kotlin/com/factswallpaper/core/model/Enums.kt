@@ -121,5 +121,6 @@ enum class FactStatusFilter {
     IGNORED,
     FAVORITES,
     FORMULAS,
-    DIAGRAMS
+    DIAGRAMS,
+    DUE_FOR_REVIEW
 }

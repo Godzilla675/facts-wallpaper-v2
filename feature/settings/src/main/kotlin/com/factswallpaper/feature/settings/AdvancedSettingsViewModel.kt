@@ -350,6 +350,24 @@ class AdvancedSettingsViewModel @Inject constructor(
         }
     }
 
+    fun restoreBackupFromUri(
+        uri: Uri,
+        passphrase: String,
+        onSuccess: (Int, Int) -> Unit,
+    ) {
+        viewModelScope.launch {
+            when (val result = backupManager.restoreBackupFromUri(uri, passphrase)) {
+                is AppResult.Success -> {
+                    refreshStorage()
+                    onSuccess(result.value.documentCount, result.value.factCount)
+                }
+                is AppResult.Failure -> {
+                    showMessage(R.string.advanced_restore_failed)
+                }
+            }
+        }
+    }
+
     fun sqlCipherInfo() {
         showMessage(R.string.advanced_sqlcipher_info)
     }

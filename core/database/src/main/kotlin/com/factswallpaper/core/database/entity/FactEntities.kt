@@ -13,25 +13,26 @@ import androidx.room.PrimaryKey
             entity = PdfDocumentEntity::class,
             parentColumns = ["id"],
             childColumns = ["documentId"],
-            onDelete = ForeignKey.CASCADE
+            onDelete = ForeignKey.CASCADE,
         ),
         ForeignKey(
             entity = LessonEntity::class,
             parentColumns = ["id"],
             childColumns = ["lessonId"],
-            onDelete = ForeignKey.SET_NULL
-        )
+            onDelete = ForeignKey.SET_NULL,
+        ),
     ],
     indices = [
         Index("documentId"),
         Index("lessonId"),
         Index("active"),
         Index("favorite"),
-        Index("templateType")
-    ]
+        Index("templateType"),
+    ],
 )
 data class FactItemEntity(
-    @PrimaryKey val id: String,
+    @PrimaryKey
+    val id: String,
     val documentId: String,
     val lessonId: String?,
     val text: String,
@@ -57,6 +58,7 @@ data class FactItemEntity(
     val updatedAtEpochMs: Long = createdAtEpochMs,
     val reviewGotItCount: Int = 0,
     val reviewAgainCount: Int = 0,
+    val nextReviewDueEpochMs: Long? = null,
 )
 
 /** 6. Normalized fact tag cross-reference for multi-tag filtering. */
@@ -68,10 +70,10 @@ data class FactItemEntity(
             entity = FactItemEntity::class,
             parentColumns = ["id"],
             childColumns = ["factId"],
-            onDelete = ForeignKey.CASCADE
-        )
+            onDelete = ForeignKey.CASCADE,
+        ),
     ],
-    indices = [Index("tag"), Index("factId")]
+    indices = [Index("tag"), Index("factId")],
 )
 data class FactTagEntity(
     val factId: String,

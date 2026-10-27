@@ -31,6 +31,14 @@ sealed interface AppRoute {
     ) : AppRoute
 
     @Serializable
+    data class Study(
+        val collectionId: String? = null,
+        val documentId: String? = null,
+        val tag: String? = null,
+        val dueOnly: Boolean = false,
+    ) : AppRoute
+
+    @Serializable
     data object Collections : AppRoute
 
     @Serializable

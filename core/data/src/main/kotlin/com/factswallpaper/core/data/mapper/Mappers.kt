@@ -222,6 +222,7 @@ fun FactItemEntity.toDomain(): Fact = Fact(
     updatedAtEpochMs = updatedAtEpochMs,
     reviewGotItCount = reviewGotItCount,
     reviewAgainCount = reviewAgainCount,
+    nextReviewDueEpochMs = nextReviewDueEpochMs,
 )
 
 fun Fact.toEntity(): FactItemEntity = FactItemEntity(
@@ -251,6 +252,7 @@ fun Fact.toEntity(): FactItemEntity = FactItemEntity(
     updatedAtEpochMs = updatedAtEpochMs,
     reviewGotItCount = reviewGotItCount,
     reviewAgainCount = reviewAgainCount,
+    nextReviewDueEpochMs = nextReviewDueEpochMs,
 )
 
 fun CollectionEntity.toDomain(factCount: Int = 0): Collection = Collection(

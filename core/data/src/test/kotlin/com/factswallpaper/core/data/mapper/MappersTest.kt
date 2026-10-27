@@ -69,6 +69,9 @@ class MappersTest {
             favorite = true,
             createdAtEpochMs = 1_000L,
             updatedAtEpochMs = 2_000L,
+            reviewGotItCount = 3,
+            reviewAgainCount = 1,
+            nextReviewDueEpochMs = 123_456L,
         )
 
         val entity = fact.toEntity()

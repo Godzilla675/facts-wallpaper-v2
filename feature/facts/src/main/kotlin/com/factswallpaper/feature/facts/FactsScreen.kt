@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -72,6 +73,7 @@ import com.factswallpaper.core.model.Fact
 import com.factswallpaper.core.model.FactFilter
 import com.factswallpaper.core.model.FactStatusFilter
 import com.factswallpaper.core.model.SourceReferenceMode
+import com.factswallpaper.core.render.export.CardExportFormat
 import com.factswallpaper.core.ui.UiMessageEffect
 import com.factswallpaper.core.ui.component.BannerSeverity
 import com.factswallpaper.core.ui.component.EmptyStatePanel
@@ -86,6 +88,7 @@ import com.factswallpaper.core.ui.component.SourceBadge
 fun FactsScreen(
     onOpenLibrary: () -> Unit,
     onOpenTemplates: () -> Unit,
+    onOpenStudy: (documentId: String?) -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: FactsViewModel = hiltViewModel(),
 ) {
@@ -95,13 +98,20 @@ fun FactsScreen(
     val context = LocalContext.current
     var editingFact by remember { mutableStateOf<Fact?>(null) }
     var regeneratingFact by remember { mutableStateOf<Fact?>(null) }
-    var isStudyModeOpen by remember { mutableStateOf(false) }
+    var showExportFormatDialog by remember { mutableStateOf(false) }
+    var selectedExportFormat by remember { mutableStateOf(CardExportFormat.MARKDOWN) }
 
     val exportLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.CreateDocument("text/markdown"),
+        contract = ActivityResultContracts.CreateDocument(
+            when (selectedExportFormat) {
+                CardExportFormat.ZIP -> "application/zip"
+                CardExportFormat.PDF -> "application/pdf"
+                CardExportFormat.MARKDOWN -> "text/markdown"
+            },
+        ),
     ) { uri ->
         if (uri != null) {
-            viewModel.exportFacts(uri, context)
+            viewModel.exportFacts(uri, context, selectedExportFormat)
         }
     }
 
@@ -115,17 +125,13 @@ fun FactsScreen(
                 actions = {
                     val content = state as? FactsUiState.Content
                     if (content != null && content.facts.isNotEmpty()) {
-                        IconButton(onClick = { isStudyModeOpen = true }) {
+                        IconButton(onClick = { onOpenStudy(content.filter.documentId) }) {
                             Icon(
                                 imageVector = Icons.Filled.School,
                                 contentDescription = stringResource(R.string.facts_study_mode),
                             )
                         }
-                        IconButton(
-                            onClick = {
-                                exportLauncher.launch("facts_export_${System.currentTimeMillis()}.md")
-                            },
-                        ) {
+                        IconButton(onClick = { showExportFormatDialog = true }) {
                             Icon(
                                 imageVector = Icons.Filled.FileDownload,
                                 contentDescription = stringResource(R.string.facts_export),
@@ -172,6 +178,53 @@ fun FactsScreen(
         }
     }
 
+    if (showExportFormatDialog) {
+        AlertDialog(
+            onDismissRequest = { showExportFormatDialog = false },
+            title = { Text(stringResource(R.string.facts_export_dialog_title)) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(
+                        onClick = {
+                            selectedExportFormat = CardExportFormat.ZIP
+                            showExportFormatDialog = false
+                            exportLauncher.launch("facts_export_${System.currentTimeMillis()}.zip")
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(stringResource(R.string.facts_export_zip), modifier = Modifier.fillMaxWidth())
+                    }
+                    TextButton(
+                        onClick = {
+                            selectedExportFormat = CardExportFormat.PDF
+                            showExportFormatDialog = false
+                            exportLauncher.launch("facts_export_${System.currentTimeMillis()}.pdf")
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(stringResource(R.string.facts_export_pdf), modifier = Modifier.fillMaxWidth())
+                    }
+                    TextButton(
+                        onClick = {
+                            selectedExportFormat = CardExportFormat.MARKDOWN
+                            showExportFormatDialog = false
+                            exportLauncher.launch("facts_export_${System.currentTimeMillis()}.md")
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(stringResource(R.string.facts_export_md), modifier = Modifier.fillMaxWidth())
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showExportFormatDialog = false }) {
+                    Text(stringResource(R.string.facts_cancel))
+                }
+            },
+        )
+    }
+
     editingFact?.let { fact ->
         FactEditorSheet(
             fact = fact,
@@ -207,19 +260,6 @@ fun FactsScreen(
             },
         )
     }
-
-    if (isStudyModeOpen) {
-        val content = state as? FactsUiState.Content
-        if (content != null && content.facts.isNotEmpty()) {
-            StudyModeSheet(
-                facts = content.facts,
-                onDismiss = { isStudyModeOpen = false },
-                onRecordReview = viewModel::recordReview,
-            )
-        } else {
-            isStudyModeOpen = false
-        }
-    }
 }
 
 @Composable
@@ -249,14 +289,18 @@ private fun FactsContent(
             InlineBanner(
                 message = stringResource(R.string.facts_offline_banner),
                 severity = BannerSeverity.WARNING,
-                modifier = Modifier.padding(horizontal = spacing.lg, vertical = spacing.xs),
+                modifier = Modifier.padding(
+                    start = spacing.lg,
+                    end = spacing.lg,
+                    top = spacing.sm,
+                ),
             )
         }
 
         when (val work = state.generationWork) {
             is FactsWorkUi.Running -> {
-                SectionGroupCard(
-                    title = if (work.totalLessons > 0) {
+                InlineBanner(
+                    message = if (work.totalLessons > 0) {
                         stringResource(
                             R.string.facts_work_running,
                             work.completedLessons,
@@ -266,182 +310,203 @@ private fun FactsContent(
                     } else {
                         stringResource(R.string.facts_work_preparing)
                     },
-                    modifier = Modifier.padding(horizontal = spacing.lg, vertical = spacing.xs),
-                ) {
-                    if (work.totalLessons > 0) {
-                        LinearProgressIndicator(
-                            progress = { (work.completedLessons.toFloat() / work.totalLessons.toFloat()).coerceIn(0f, 1f) },
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                    } else {
-                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                    }
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = spacing.sm),
-                        horizontalArrangement = Arrangement.End,
-                    ) {
-                        TextButton(onClick = onCancelWork) {
-                            Text(stringResource(R.string.facts_work_cancel))
-                        }
-                    }
-                }
+                    severity = BannerSeverity.INFO,
+                    actionLabel = stringResource(R.string.facts_work_cancel),
+                    onAction = onCancelWork,
+                    modifier = Modifier.padding(
+                        start = spacing.lg,
+                        end = spacing.lg,
+                        top = spacing.sm,
+                    ),
+                )
             }
             is FactsWorkUi.Failed -> {
                 InlineBanner(
                     message = work.message ?: stringResource(R.string.facts_work_failed),
                     severity = BannerSeverity.ERROR,
-                    modifier = Modifier.padding(horizontal = spacing.lg, vertical = spacing.xs),
+                    modifier = Modifier.padding(
+                        start = spacing.lg,
+                        end = spacing.lg,
+                        top = spacing.sm,
+                    ),
                 )
             }
             is FactsWorkUi.Succeeded -> {
-                InlineBanner(
-                    message = work.message ?: stringResource(R.string.facts_work_succeeded),
-                    severity = BannerSeverity.INFO,
-                    modifier = Modifier.padding(horizontal = spacing.lg, vertical = spacing.xs),
-                )
+                work.message?.let {
+                    InlineBanner(
+                        message = it,
+                        severity = BannerSeverity.INFO,
+                        modifier = Modifier.padding(
+                            start = spacing.lg,
+                            end = spacing.lg,
+                            top = spacing.sm,
+                        ),
+                    )
+                }
             }
             FactsWorkUi.Idle -> Unit
         }
 
-        OutlinedTextField(
-            value = filter.query,
-            onValueChange = onQueryChange,
-            placeholder = { Text(stringResource(R.string.facts_search_placeholder)) },
-            leadingIcon = {
-                Icon(Icons.Filled.Search, contentDescription = null)
-            },
-            trailingIcon = {
-                if (filter.query.isNotEmpty()) {
-                    IconButton(onClick = onClearQuery) {
-                        Icon(
-                            imageVector = Icons.Filled.Close,
-                            contentDescription = stringResource(R.string.facts_clear_search),
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(spacing.lg),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            ),
+        ) {
+            Column(
+                modifier = Modifier.padding(spacing.md),
+                verticalArrangement = Arrangement.spacedBy(spacing.sm),
+            ) {
+                OutlinedTextField(
+                    value = filter.query,
+                    onValueChange = onQueryChange,
+                    placeholder = { Text(stringResource(R.string.facts_search_placeholder)) },
+                    leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+                    trailingIcon = {
+                        if (filter.query.isNotEmpty()) {
+                            IconButton(onClick = onClearQuery) {
+                                Icon(
+                                    Icons.Filled.Close,
+                                    contentDescription = stringResource(R.string.facts_clear_search),
+                                )
+                            }
+                        }
+                    },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(spacing.xs),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    item {
+                        FilterChip(
+                            selected = filter.documentId == null,
+                            onClick = { onDocumentChange(null) },
+                            label = { Text(stringResource(R.string.facts_all_documents)) },
+                        )
+                    }
+                    items(state.documents, key = { it.id }) { doc ->
+                        FilterChip(
+                            selected = filter.documentId == doc.id,
+                            onClick = { onDocumentChange(doc.id) },
+                            label = { Text(doc.title) },
                         )
                     }
                 }
-            },
-            singleLine = true,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = spacing.lg, vertical = spacing.sm),
-        )
 
-        LazyRow(
-            contentPadding = PaddingValues(horizontal = spacing.lg),
-            horizontalArrangement = Arrangement.spacedBy(spacing.sm),
-        ) {
-            items(FactStatusFilter.entries) { status ->
-                FilterChip(
-                    selected = filter.status == status,
-                    onClick = { onStatusChange(status) },
-                    label = { Text(statusLabel(status)) },
-                )
-            }
-        }
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(spacing.xs),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    items(FactStatusFilter.entries, key = { it.name }) { status ->
+                        FilterChip(
+                            selected = filter.status == status,
+                            onClick = { onStatusChange(status) },
+                            label = { Text(statusLabel(status)) },
+                        )
+                    }
+                }
 
-        if (state.tags.isNotEmpty()) {
-            LazyRow(
-                contentPadding = PaddingValues(horizontal = spacing.lg, vertical = spacing.xs),
-                horizontalArrangement = Arrangement.spacedBy(spacing.sm),
-            ) {
-                items(state.tags, key = { it.tag }) { tag ->
-                    FilterChip(
-                        selected = filter.tag.equals(tag.tag, ignoreCase = true),
-                        onClick = {
-                            onTagChange(
-                                if (filter.tag.equals(tag.tag, ignoreCase = true)) null else tag.tag,
+                if (state.tags.isNotEmpty()) {
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(spacing.xs),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        items(state.tags, key = { it.tag }) { tag ->
+                            FilterChip(
+                                selected = filter.tag == tag.tag,
+                                onClick = { onTagChange(if (filter.tag == tag.tag) null else tag.tag) },
+                                label = {
+                                    Text(
+                                        stringResource(
+                                            R.string.facts_tag_chip,
+                                            tag.tag,
+                                            tag.factCount,
+                                        ),
+                                    )
+                                },
                             )
-                        },
-                        label = { Text(stringResource(R.string.facts_tag_chip, tag.tag, tag.factCount)) },
-                    )
+                        }
+                    }
                 }
-            }
-        }
 
-        if (state.documents.size > 1) {
-            LazyRow(
-                contentPadding = PaddingValues(horizontal = spacing.lg, vertical = spacing.xs),
-                horizontalArrangement = Arrangement.spacedBy(spacing.sm),
-            ) {
-                item {
-                    FilterChip(
-                        selected = filter.documentId == null,
-                        onClick = { onDocumentChange(null) },
-                        label = { Text(stringResource(R.string.facts_all_documents)) },
-                    )
+                if (filter.lessonId != null) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = stringResource(R.string.facts_lesson_filter_active),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        TextButton(onClick = onClearLesson) {
+                            Text(stringResource(R.string.facts_clear_lesson_filter))
+                        }
+                    }
                 }
-                items(state.documents, key = { it.id }) { document ->
-                    FilterChip(
-                        selected = filter.documentId == document.id,
-                        onClick = { onDocumentChange(document.id) },
-                        label = { Text(document.title) },
-                    )
-                }
-            }
-        }
 
-        if (filter.lessonId != null) {
-            InlineBanner(
-                message = stringResource(R.string.facts_lesson_filter_active),
-                severity = BannerSeverity.INFO,
-                actionLabel = stringResource(R.string.facts_clear_lesson_filter),
-                onAction = onClearLesson,
-                modifier = Modifier.padding(horizontal = spacing.lg, vertical = spacing.xs),
-            )
-        }
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = spacing.lg, vertical = spacing.xs),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = if (documentTitle != null) {
-                    stringResource(R.string.facts_count_in_document, state.facts.size, documentTitle)
-                } else {
-                    stringResource(R.string.facts_count, state.facts.size)
-                },
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            if (filter.hasActiveFilters) {
-                TextButton(onClick = onClearFilters) {
-                    Icon(Icons.Filled.FilterAlt, contentDescription = null)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                     Text(
-                        text = stringResource(R.string.facts_clear_filters),
-                        modifier = Modifier.padding(start = spacing.xs),
+                        text = if (documentTitle != null) {
+                            stringResource(
+                                R.string.facts_count_in_document,
+                                state.facts.size,
+                                documentTitle,
+                            )
+                        } else {
+                            stringResource(R.string.facts_count, state.facts.size)
+                        },
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                    if (filter.hasActiveFilters) {
+                        TextButton(onClick = onClearFilters) {
+                            Text(stringResource(R.string.facts_clear_filters))
+                        }
+                    }
                 }
             }
         }
 
         if (state.facts.isEmpty()) {
-            val filtered = filter.hasActiveFilters
-            EmptyStatePanel(
-                icon = Icons.Filled.Lightbulb,
-                title = stringResource(
-                    if (filtered) R.string.facts_no_matches_title
-                    else R.string.facts_empty_title,
-                ),
-                message = stringResource(
-                    if (filtered) R.string.facts_no_matches_body
-                    else R.string.facts_empty_body,
-                ),
-                actionLabel = if (filtered) {
-                    stringResource(R.string.facts_clear_filters)
-                } else {
-                    stringResource(R.string.facts_open_library)
-                },
-                onAction = if (filtered) onClearFilters else onOpenLibrary,
-                modifier = Modifier.weight(1f),
-            )
+            if (filter.hasActiveFilters) {
+                EmptyStatePanel(
+                    title = stringResource(R.string.facts_no_matches_title),
+                    message = stringResource(R.string.facts_no_matches_body),
+                    actionLabel = stringResource(R.string.facts_clear_filters),
+                    onAction = onClearFilters,
+                    icon = Icons.Filled.FilterAlt,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                )
+            } else {
+                EmptyStatePanel(
+                    title = stringResource(R.string.facts_empty_title),
+                    message = stringResource(R.string.facts_empty_body),
+                    actionLabel = stringResource(R.string.facts_open_library),
+                    onAction = onOpenLibrary,
+                    icon = Icons.Filled.Lightbulb,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                )
+            }
         } else {
             LazyColumn(
-                modifier = Modifier.weight(1f),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
                 contentPadding = PaddingValues(
                     start = spacing.lg,
                     end = spacing.lg,
@@ -459,139 +524,6 @@ private fun FactsContent(
                         onEdit = { onEdit(fact) },
                         onRegenerate = { onRegenerate(fact) },
                     )
-                }
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun StudyModeSheet(
-    facts: List<Fact>,
-    onDismiss: () -> Unit,
-    onRecordReview: (String, Boolean) -> Unit,
-) {
-    val spacing = LocalSpacing.current
-    var currentIndex by remember { mutableIntStateOf(0) }
-    var sessionGotIt by remember { mutableIntStateOf(0) }
-    var sessionAgain by remember { mutableIntStateOf(0) }
-
-    ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = spacing.lg)
-                .padding(bottom = spacing.xl),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = stringResource(R.string.facts_study_mode),
-                    style = MaterialTheme.typography.titleLarge,
-                )
-                IconButton(onClick = onDismiss) {
-                    Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.facts_cancel))
-                }
-            }
-            Spacer(modifier = Modifier.height(spacing.md))
-
-            if (currentIndex in facts.indices) {
-                val fact = facts[currentIndex]
-                Text(
-                    text = stringResource(
-                        R.string.facts_study_card_counter,
-                        currentIndex + 1,
-                        facts.size,
-                    ),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Spacer(modifier = Modifier.height(spacing.sm))
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                    ),
-                ) {
-                    Column(modifier = Modifier.padding(spacing.md)) {
-                        fact.sourceLessonTitle?.let { lesson ->
-                            Text(
-                                text = lesson,
-                                style = MaterialTheme.typography.titleSmall,
-                                color = MaterialTheme.colorScheme.primary,
-                            )
-                            Spacer(modifier = Modifier.height(spacing.xs))
-                        }
-                        Text(
-                            text = fact.text,
-                            style = MaterialTheme.typography.bodyLarge,
-                        )
-                        val latex = fact.latex
-                        if (!latex.isNullOrBlank()) {
-                            Spacer(modifier = Modifier.height(spacing.xs))
-                            Text(
-                                text = latex,
-                                fontFamily = FontFamily.Monospace,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.secondary,
-                            )
-                        }
-                        if (fact.tags.isNotEmpty()) {
-                            Spacer(modifier = Modifier.height(spacing.xs))
-                            Text(
-                                text = fact.tags.joinToString(", "),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-                }
-                Spacer(modifier = Modifier.height(spacing.lg))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(spacing.md),
-                ) {
-                    OutlinedButton(
-                        modifier = Modifier.weight(1f),
-                        onClick = {
-                            onRecordReview(fact.id, false)
-                            sessionAgain++
-                            currentIndex++
-                        },
-                    ) {
-                        Text(stringResource(R.string.facts_study_again, fact.reviewAgainCount))
-                    }
-                    Button(
-                        modifier = Modifier.weight(1f),
-                        onClick = {
-                            onRecordReview(fact.id, true)
-                            sessionGotIt++
-                            currentIndex++
-                        },
-                    ) {
-                        Text(stringResource(R.string.facts_study_got_it, fact.reviewGotItCount))
-                    }
-                }
-            } else {
-                Text(
-                    text = stringResource(R.string.facts_study_done),
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-                Spacer(modifier = Modifier.height(spacing.sm))
-                Text(
-                    text = "$sessionGotIt marked as got it \u00B7 $sessionAgain to review again",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Spacer(modifier = Modifier.height(spacing.lg))
-                Button(onClick = onDismiss) {
-                    Text(stringResource(R.string.facts_cancel))
                 }
             }
         }
@@ -877,6 +809,7 @@ private fun statusLabel(status: FactStatusFilter): String = stringResource(
         FactStatusFilter.FAVORITES -> R.string.facts_status_favorites
         FactStatusFilter.FORMULAS -> R.string.facts_status_formulas
         FactStatusFilter.DIAGRAMS -> R.string.facts_status_diagrams
+        FactStatusFilter.DUE_FOR_REVIEW -> R.string.facts_status_due_for_review
     },
 )
 

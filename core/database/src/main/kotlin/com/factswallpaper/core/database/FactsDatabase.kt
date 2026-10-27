@@ -75,7 +75,7 @@ abstract class FactsDatabase : RoomDatabase() {
 
     companion object {
         const val NAME = "facts_wallpaper.db"
-        const val VERSION = 5
+        const val VERSION = 6
 
         val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
@@ -122,6 +122,14 @@ abstract class FactsDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE facts ADD COLUMN nextReviewDueEpochMs INTEGER",
+                )
+            }
+        }
+
         /**
          * Registered migrations. Version 1 is the initial schema; every future
          * schema change must append a Migration here and bump [VERSION]. There is
@@ -132,6 +140,7 @@ abstract class FactsDatabase : RoomDatabase() {
             MIGRATION_2_3,
             MIGRATION_3_4,
             MIGRATION_4_5,
+            MIGRATION_5_6,
         )
     }
 }
