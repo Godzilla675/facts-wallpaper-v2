@@ -4,6 +4,7 @@ import androidx.room.Database
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import com.factswallpaper.core.database.dao.CollectionDao
 import com.factswallpaper.core.database.dao.DiagnosticsAndUsageDao
 import com.factswallpaper.core.database.dao.FactDao
@@ -74,13 +75,21 @@ abstract class FactsDatabase : RoomDatabase() {
 
     companion object {
         const val NAME = "facts_wallpaper.db"
-        const val VERSION = 1
+        const val VERSION = 2
+
+        val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE provider_profiles ADD COLUMN maxOutputTokens INTEGER NOT NULL DEFAULT 8192",
+                )
+            }
+        }
 
         /**
          * Registered migrations. Version 1 is the initial schema; every future
          * schema change must append a Migration here and bump [VERSION]. There is
          * deliberately no destructive fallback: local study data is precious.
          */
-        val MIGRATIONS: Array<Migration> = emptyArray()
+        val MIGRATIONS: Array<Migration> = arrayOf(MIGRATION_1_2)
     }
 }

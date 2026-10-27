@@ -182,14 +182,19 @@ class AnthropicClient(
             ?.get("input") as? JsonObject
         val text = toolInput?.toString()
             ?: content.firstOrNull { it.string("type") == "text" }?.string("text")
+        val reasoning = content.filter {
+            it.string("type") == "thinking" || it.string("type") == "redacted_thinking"
+        }.mapNotNull { it.string("thinking") ?: it.string("text") }
+        val parsed = ProviderReasoningParser.parse(text, reasoning)
         val finish = root.string("stop_reason")
         val usage = root.obj("usage")
         return AiResponse(
-            text = requireText(text, finish),
+            text = parsed.content,
             model = root.string("model") ?: profile.modelName,
             inputTokens = usage?.int("input_tokens") ?: 0,
             outputTokens = usage?.int("output_tokens") ?: 0,
             finishReason = finish,
+            reasoningText = parsed.reasoning,
         )
     }
 }

@@ -16,7 +16,6 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.add
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.put
 
 internal object ChatCompletionsSupport {
@@ -141,27 +140,30 @@ internal object ChatCompletionsSupport {
             ?: throw AiException(AiErrorKind.CONTENT, "Chat response was not a JSON object.")
         val choice = root.arr("choices")?.objects()?.firstOrNull()
         val message = choice?.obj("message")
-        val content = message?.get("content")
-        val text = when (content) {
-            is JsonPrimitive -> content.contentOrNull
-            is JsonArray -> content.objects().mapNotNull { it.string("text") }
-                .joinToString("\n")
-                .ifBlank { null }
-            else -> null
-        }
+        val content = ProviderReasoningParser.jsonText(message?.get("content"))
+        val reasoningFields = listOf(
+            message?.get("reasoning_content"),
+            message?.get("reasoning"),
+            choice?.get("reasoning_content"),
+            choice?.get("reasoning"),
+            root["reasoning_content"],
+            root["reasoning"],
+        ).mapNotNull(ProviderReasoningParser::jsonText)
+        val parsed = ProviderReasoningParser.parse(content, reasoningFields)
         val finish = choice?.string("finish_reason")
         val usage = root.obj("usage")
+        val completionTokens = usage?.int("completion_tokens") ?: 0
+        val reasoningTokens = usage?.obj("completion_tokens_details")?.int("reasoning_tokens")
+            ?: usage?.obj("output_tokens_details")?.int("reasoning_tokens")
+            ?: usage?.int("reasoning_tokens")
+            ?: 0
         return AiResponse(
-            text = text?.trim().orEmpty().ifEmpty {
-                throw AiException(
-                    AiErrorKind.CONTENT,
-                    "Chat response contained no text (finishReason=$finish).",
-                )
-            },
+            text = parsed.content,
             model = root.string("model") ?: profile.modelName,
             inputTokens = usage?.int("prompt_tokens") ?: 0,
-            outputTokens = usage?.int("completion_tokens") ?: 0,
+            outputTokens = maxOf(completionTokens, reasoningTokens),
             finishReason = finish,
+            reasoningText = parsed.reasoning,
         )
     }
 

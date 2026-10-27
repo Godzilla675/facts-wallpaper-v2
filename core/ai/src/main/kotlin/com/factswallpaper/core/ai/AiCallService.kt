@@ -145,6 +145,11 @@ class AiCallService @Inject constructor(
                 AiErrorKind.AUTHENTICATION,
                 "No API key is configured for ${profile.name}.",
             )
+        val effectiveRequest = request.copy(
+            maxOutputTokens = request.maxOutputTokens
+                .coerceAtLeast(MIN_OUTPUT_TOKENS)
+                .coerceAtMost(profile.outputTokenLimit()),
+        )
         redactor.register(apiKey)
         var currentProfile = profile
         val client = clientFactory.create(
@@ -164,14 +169,14 @@ class AiCallService @Inject constructor(
         )
         var response: AiResponse? = null
         val elapsed = measureTimeMillis {
-            response = retryPolicy.run { client.execute(request) }
+            response = retryPolicy.run { client.execute(effectiveRequest) }
         }
         val result = response ?: throw AiException(AiErrorKind.UNKNOWN, "Provider returned no response.")
         markKeyStatus(currentProfile, ProviderKeyStatus.VALID)
         if (recordTelemetry) {
             recordSuccess(
                 profile = currentProfile,
-                request = request,
+                request = effectiveRequest,
                 response = result,
                 documentId = documentId,
                 latencyMs = elapsed,
@@ -325,5 +330,6 @@ class AiCallService @Inject constructor(
                 ),
             )
         }
+
     }
 }

@@ -238,14 +238,31 @@ class OpenAiClient(
             .joinToString("\n")
             .trim()
         val text = direct.ifBlank { fromOutput }
+        val reasoning = root.arr("output")
+            ?.objects()
+            .orEmpty()
+            .filter { it.string("type") == "reasoning" }
+            .mapNotNull { item ->
+                item.string("reasoning")
+                    ?: item.string("summary_text")
+                    ?: ProviderReasoningParser.jsonText(item["summary"])
+            }
+        val parsed = ProviderReasoningParser.parse(
+            content = text,
+            reasoningFields = reasoning + listOf(
+                root.string("reasoning_content"),
+                root.string("reasoning"),
+            ),
+        )
         val usage = root.obj("usage")
         val finish = root.string("status")
         return AiResponse(
-            text = requireText(text, finish),
+            text = parsed.content,
             model = root.string("model") ?: profile.modelName,
             inputTokens = usage?.int("input_tokens") ?: 0,
             outputTokens = usage?.int("output_tokens") ?: 0,
             finishReason = finish,
+            reasoningText = parsed.reasoning,
         )
     }
 }

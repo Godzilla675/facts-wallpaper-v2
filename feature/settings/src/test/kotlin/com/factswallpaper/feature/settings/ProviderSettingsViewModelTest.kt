@@ -125,6 +125,22 @@ class ProviderSettingsViewModelTest {
     }
 
     @Test
+    fun `saveProfile persists configured maximum output tokens`() = testScope.runTest {
+        viewModel.saveProfile(
+            existing = null,
+            name = "Reasoning provider",
+            providerType = ProviderType.OPENAI_COMPATIBLE,
+            baseUrl = "https://integrate.api.nvidia.com/v1",
+            modelName = "nvidia/nemotron-3.5-super-vl-120b-a12b",
+            maxContextTokens = 128_000,
+            maxOutputTokens = 12_288,
+        )
+        advanceUntilIdle()
+
+        assertThat(fakeProfileRepo.profilesFlow.value.single().maxOutputTokens).isEqualTo(12_288)
+    }
+
+    @Test
     fun `deleteApiKey removes key and updates message`() = testScope.runTest {
         fakeApiKeyStore.keys["test-id"] = "test-key"
 

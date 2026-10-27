@@ -170,7 +170,7 @@ No screen pretends these features work.
 
 ### Testing
 - Added `JsonRepairServiceTest` covering the single repair pass, schema-bound
-  prompt construction, `temperature = 0.0`, the 512-token floor, larger token
+  prompt construction, `temperature = 0.0`, the 1,024-token floor, larger token
   budgets and `repairTriggered` log metadata.
 - Compose UI coverage remains Robolectric-based (`LibraryScreenTest` plus
   feature ViewModel tests). Roborazzi golden screenshots and the full
@@ -181,3 +181,16 @@ No screen pretends these features work.
 - Added `.github/workflows/android-ci.yml` with a tracked-file secret scanner
   for Google API keys, OpenAI-style keys and hardcoded bearer tokens, followed
   by `lintDebug testDebugUnitTest assembleDebug`.
+
+## Phase P7.1 — Reasoning Model Output Budgets
+
+- Provider profiles now persist a separate maximum output-token budget (default
+  8,192; minimum 1,024), independent of context-window size. Structured requests
+  start at half that budget and make one doubled-budget retry for truncated JSON
+  when the profile permits it.
+- Connection diagnostics request 1,024 output tokens and accept either normal
+  response text or parsed reasoning text. Empty responses ending in `length`
+  direct users to raise the output budget or disable thinking in advanced
+  parameters.
+- OpenAI-compatible responses keep `reasoning` fields and `<think>` blocks out
+  of structured content while including reported reasoning tokens in usage.

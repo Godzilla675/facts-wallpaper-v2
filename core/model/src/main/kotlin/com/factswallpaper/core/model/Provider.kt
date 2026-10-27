@@ -29,6 +29,7 @@ data class ProviderProfile(
     val supportsJsonMode: Boolean = true,
     val supportsJsonSchema: Boolean = true,
     val maxContextTokens: Int = 128_000,
+    val maxOutputTokens: Int = 8_192,
     val inputUsdPerMillion: Double = 0.15,
     val outputUsdPerMillion: Double = 0.60,
     val speedTier: Int = 2,

@@ -144,6 +144,36 @@ class WireFormatTest {
     }
 
     @Test
+    fun `chat response removes think blocks before returning structured content`() = runTest {
+        val client = mockHttpClient {
+            respond(
+                content = """
+                    {
+                      "choices": [{
+                        "message": {
+                          "content": "<think>private reasoning</think>\n{\"ok\":true}",
+                          "reasoning": "separate reasoning"
+                        },
+                        "finish_reason": "stop"
+                      }]
+                    }
+                """.trimIndent(),
+                status = HttpStatusCode.OK,
+                headers = jsonHeaders(),
+            )
+        }
+
+        val response = OpenAiClient(
+            testProfile(type = ProviderType.OPENAI),
+            "sk-test",
+            client,
+        ).execute(request(schema = null))
+
+        assertThat(response.text).isEqualTo("""{"ok":true}""")
+        assertThat(response.finishReason).isEqualTo("stop")
+    }
+
+    @Test
     fun `openai responses path is used for direct PDF`() = runTest {
         var captured: HttpRequestData? = null
         val client = mockHttpClient { data ->
@@ -173,6 +203,39 @@ class WireFormatTest {
             .startsWith("data:application/pdf;base64,")
         assertThat(response.inputTokens).isEqualTo(11)
         assertThat(response.outputTokens).isEqualTo(7)
+    }
+
+    @Test
+    fun `chat response with reasoning only remains available to connection diagnostics`() = runTest {
+        val client = mockHttpClient {
+            respond(
+                content = """
+                    {
+                      "choices": [{
+                        "message": { "content": null, "reasoning_content": "Model is thinking." },
+                        "finish_reason": "length"
+                      }],
+                      "usage": {
+                        "prompt_tokens": 2,
+                        "completion_tokens": 20,
+                        "completion_tokens_details": { "reasoning_tokens": 30 }
+                      }
+                    }
+                """.trimIndent(),
+                status = HttpStatusCode.OK,
+                headers = jsonHeaders(),
+            )
+        }
+
+        val response = OpenAiClient(
+            testProfile(type = ProviderType.OPENAI),
+            "sk-test",
+            client,
+        ).execute(request(schema = null))
+
+        assertThat(response.text).isEmpty()
+        assertThat(response.finishReason).isEqualTo("length")
+        assertThat(response.outputTokens).isEqualTo(30)
     }
 
     @Test

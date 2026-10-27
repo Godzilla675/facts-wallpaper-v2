@@ -69,20 +69,28 @@ class DefaultProviderDiagnosticsService @Inject constructor(
             systemPrompt = "You are a connectivity probe. Reply exactly as instructed.",
             userPrompt = "Reply with the JSON {\"ok\":true}",
             temperature = 0.0,
-            maxOutputTokens = 32,
+            maxOutputTokens = 1_024,
         )
         val started = System.currentTimeMillis()
         return try {
-            callService.executeOnProfile(
+            val outcome = callService.executeOnProfile(
                 profile = profile,
                 request = request,
                 recordTelemetry = false,
             )
             val elapsed = System.currentTimeMillis() - started
+            val hasResponse = outcome.response.text.isNotBlank() ||
+                outcome.response.reasoningText.isNotBlank()
+            val message = when {
+                hasResponse -> "Connected in ${elapsed} ms."
+                outcome.response.finishReason.equals("length", ignoreCase = true) ->
+                    "The model used its whole output budget on reasoning. Raise max output tokens or disable thinking in Advanced parameters, then test again."
+                else -> "The provider connected but returned no content."
+            }
             ConnectionTestResult(
-                success = true,
+                success = hasResponse,
                 latencyMs = elapsed,
-                message = "Connected in ${elapsed} ms.",
+                message = message,
                 keyStatus = ProviderKeyStatus.VALID,
             )
         } catch (exception: AiException) {

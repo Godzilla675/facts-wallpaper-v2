@@ -36,6 +36,8 @@
     <string name="provider_base_url_label">Base URL</string>
     <string name="provider_model_label">Model name</string>
     <string name="provider_context_label">Max context tokens</string>
+    <string name="provider_output_tokens_label">Max output tokens</string>
+    <string name="provider_output_tokens_helper">Reasoning models may need more output budget. Default: 8192; minimum: 1024.</string>
     <string name="provider_api_key_label">API key</string>
     <string name="provider_api_key_optional">API Key (optional)</string>
     <string name="provider_new_api_key_optional">New API Key (optional)</string>

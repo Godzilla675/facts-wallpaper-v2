@@ -3,6 +3,7 @@ package com.factswallpaper.core.data.mapper
 import com.factswallpaper.core.database.entity.DocumentSettingsEntity
 import com.factswallpaper.core.database.entity.FactItemEntity
 import com.factswallpaper.core.database.entity.PdfDocumentEntity
+import com.factswallpaper.core.database.entity.ProviderProfileEntity
 import com.factswallpaper.core.database.entity.WallpaperStateEntity
 import com.factswallpaper.core.model.CardTemplateType
 import com.factswallpaper.core.model.DiagramKind
@@ -11,6 +12,8 @@ import com.factswallpaper.core.model.ExtractionStatus
 import com.factswallpaper.core.model.Fact
 import com.factswallpaper.core.model.FactDensity
 import com.factswallpaper.core.model.PdfProcessingRoute
+import com.factswallpaper.core.model.ProviderProfile
+import com.factswallpaper.core.model.ProviderType
 import com.factswallpaper.core.model.RotationOrder
 import com.factswallpaper.core.model.SourceReferenceMode
 import com.factswallpaper.core.model.ThemeMode
@@ -153,6 +156,34 @@ class MappersTest {
 
         assertThat(document.scannedPageCount).isEqualTo(0)
         assertThat(document.isFullyTextExtractable).isTrue()
+    }
+
+    @Test
+    fun `provider profile output budget round trips through room entity`() {
+        val profile = ProviderProfile(
+            id = "profile-1",
+            name = "Reasoning provider",
+            providerType = ProviderType.OPENAI_COMPATIBLE,
+            baseUrl = "https://api.example.com/v1",
+            modelName = "reasoning-model",
+            maxOutputTokens = 16_384,
+        )
+
+        assertThat(profile.toEntity().toDomain()).isEqualTo(profile)
+        assertThat(
+            ProviderProfileEntity(
+                id = "profile-2",
+                name = "Default profile",
+                providerType = "OPENAI",
+                baseUrl = "https://api.example.com/v1",
+                modelName = "model",
+                supportsPdfInput = false,
+                supportsImageInput = false,
+                supportsJsonMode = true,
+                supportsJsonSchema = true,
+                maxContextTokens = 128_000,
+            ).toDomain().maxOutputTokens,
+        ).isEqualTo(8_192)
     }
 
     @Test

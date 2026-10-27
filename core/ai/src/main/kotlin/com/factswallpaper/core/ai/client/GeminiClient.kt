@@ -13,6 +13,7 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.add
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -162,18 +163,25 @@ class GeminiClient(
             )
         val candidate = root.arr("candidates")?.objects()?.firstOrNull()
         val parts = candidate?.obj("content")?.arr("parts")?.objects().orEmpty()
-        val text = parts.firstNotNullOfOrNull { it.string("text") }
+        val content = parts.filterNot {
+            (it["thought"] as? JsonPrimitive)?.booleanOrNull == true
+        }.mapNotNull { it.string("text") }.joinToString("\n")
+        val reasoning = parts.filter {
+            (it["thought"] as? JsonPrimitive)?.booleanOrNull == true
+        }.mapNotNull { it.string("text") }
+        val parsed = ProviderReasoningParser.parse(content, reasoning)
         val finish = candidate?.string("finishReason")
         val usage = root.obj("usageMetadata")
         val input = usage?.int("promptTokenCount") ?: 0
         val output = (usage?.int("candidatesTokenCount") ?: 0) +
             (usage?.int("thoughtsTokenCount") ?: 0)
         return AiResponse(
-            text = requireText(text, finish),
+            text = parsed.content,
             model = profile.modelName,
             inputTokens = input,
             outputTokens = output,
             finishReason = finish,
+            reasoningText = parsed.reasoning,
         )
     }
 

@@ -1,6 +1,7 @@
 package com.factswallpaper.core.ai
 
 import com.factswallpaper.core.model.AiTask
+import com.factswallpaper.core.model.ProviderProfile
 import kotlinx.serialization.Serializable
 
 /** Universal provider-agnostic AI client contract (spec §6.1). */
@@ -18,7 +19,7 @@ data class AiRequest(
     val imageMimeType: String? = null,
     val jsonSchema: String? = null,
     val temperature: Double? = 0.2,
-    val maxOutputTokens: Int = 4096,
+    val maxOutputTokens: Int = 8_192,
 ) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -57,4 +58,14 @@ data class AiResponse(
     val inputTokens: Int = 0,
     val outputTokens: Int = 0,
     val finishReason: String? = null,
+    val reasoningText: String = "",
 )
+
+internal const val MIN_OUTPUT_TOKENS = 1_024
+internal const val MAX_OUTPUT_TOKENS = 1_000_000
+
+internal fun ProviderProfile.outputTokenLimit(): Int =
+    maxOutputTokens.coerceIn(MIN_OUTPUT_TOKENS, MAX_OUTPUT_TOKENS)
+
+internal fun ProviderProfile.initialOutputTokenBudget(): Int =
+    (outputTokenLimit() / 2).coerceAtLeast(MIN_OUTPUT_TOKENS)

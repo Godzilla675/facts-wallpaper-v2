@@ -98,7 +98,7 @@ class JsonRepairServiceTest {
     }
 
     @Test
-    fun `repair clamps token budget to the 512 floor`() = runTest {
+    fun `repair clamps token budget to the 1024 floor`() = runTest {
         val profile = testProfile(type = ProviderType.OPENAI, model = "gpt-test")
         var capturedBody: String? = null
         val (service, _, _) = buildService(profile) { request ->
@@ -118,7 +118,7 @@ class JsonRepairServiceTest {
         )
 
         val body = json.parseToJsonElement(capturedBody!!).jsonObject
-        assertThat(body["max_completion_tokens"]!!.jsonPrimitive.content).isEqualTo("512")
+        assertThat(body["max_completion_tokens"]!!.jsonPrimitive.content).isEqualTo("1024")
     }
 
     @Test

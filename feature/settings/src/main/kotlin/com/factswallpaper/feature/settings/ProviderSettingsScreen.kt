@@ -137,8 +137,17 @@ fun ProviderSettingsScreen(
                 addingProfile = false
                 editingProfile = null
             },
-            onSave = { name, type, baseUrl, model, context, apiKey ->
-                viewModel.saveProfile(editingProfile, name, type, baseUrl, model, context, apiKey)
+            onSave = { name, type, baseUrl, model, context, outputTokens, apiKey ->
+                viewModel.saveProfile(
+                    existing = editingProfile,
+                    name = name,
+                    providerType = type,
+                    baseUrl = baseUrl,
+                    modelName = model,
+                    maxContextTokens = context,
+                    maxOutputTokens = outputTokens,
+                    apiKey = apiKey,
+                )
                 addingProfile = false
                 editingProfile = null
             },
@@ -487,7 +496,15 @@ private fun ApiKeyDialog(
 private fun ProfileEditorDialog(
     existing: ProviderProfile?,
     onDismiss: () -> Unit,
-    onSave: (name: String, type: ProviderType, baseUrl: String, model: String, context: Int, apiKey: String?) -> Unit,
+    onSave: (
+        name: String,
+        type: ProviderType,
+        baseUrl: String,
+        model: String,
+        context: Int,
+        outputTokens: Int,
+        apiKey: String?,
+    ) -> Unit,
 ) {
     var name by remember { mutableStateOf(existing?.name.orEmpty()) }
     var type by remember { mutableStateOf(existing?.providerType ?: ProviderType.OPENAI) }
@@ -497,6 +514,9 @@ private fun ProfileEditorDialog(
     var model by remember { mutableStateOf(existing?.modelName.orEmpty()) }
     var context by remember {
         mutableStateOf(existing?.maxContextTokens?.toString() ?: "128000")
+    }
+    var maxOutputTokens by remember {
+        mutableStateOf(existing?.maxOutputTokens?.toString() ?: "8192")
     }
     var apiKey by remember { mutableStateOf("") }
 
@@ -564,6 +584,17 @@ private fun ProfileEditorDialog(
                     modifier = Modifier.fillMaxWidth(),
                 )
                 OutlinedTextField(
+                    value = maxOutputTokens,
+                    onValueChange = { maxOutputTokens = it.filter(Char::isDigit) },
+                    label = { Text(stringResource(R.string.provider_output_tokens_label)) },
+                    supportingText = {
+                        Text(stringResource(R.string.provider_output_tokens_helper))
+                    },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
                     value = apiKey,
                     onValueChange = { apiKey = it },
                     label = {
@@ -597,6 +628,7 @@ private fun ProfileEditorDialog(
                         baseUrl,
                         model,
                         context.toIntOrNull() ?: 128_000,
+                        maxOutputTokens.toIntOrNull() ?: 8_192,
                         apiKey.takeIf { it.isNotBlank() },
                     )
                 },

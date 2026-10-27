@@ -117,6 +117,7 @@ class ProviderSettingsViewModel @Inject constructor(
         baseUrl: String,
         modelName: String,
         maxContextTokens: Int,
+        maxOutputTokens: Int = existing?.maxOutputTokens ?: 8_192,
         apiKey: String? = null,
     ) {
         if (name.isBlank() || modelName.isBlank() || baseUrl.isBlank()) {
@@ -132,6 +133,7 @@ class ProviderSettingsViewModel @Inject constructor(
                 baseUrl = baseUrl.trim(),
                 modelName = modelName.trim(),
                 maxContextTokens = maxContextTokens.coerceIn(1_000, 2_000_000),
+                maxOutputTokens = maxOutputTokens.coerceIn(1_024, 1_000_000),
             ) ?: ProviderProfile(
                 id = id,
                 name = name.trim(),
@@ -139,6 +141,7 @@ class ProviderSettingsViewModel @Inject constructor(
                 baseUrl = baseUrl.trim(),
                 modelName = modelName.trim(),
                 maxContextTokens = maxContextTokens.coerceIn(1_000, 2_000_000),
+                maxOutputTokens = maxOutputTokens.coerceIn(1_024, 1_000_000),
                 supportsPdfInput = providerType == ProviderType.GEMINI ||
                     providerType == ProviderType.OPENAI ||
                     providerType == ProviderType.ANTHROPIC,

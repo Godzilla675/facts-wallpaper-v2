@@ -22,7 +22,7 @@ class JsonRepairService @Inject constructor(
         profile: ProviderProfile,
         canonicalSchema: String,
         malformed: String,
-        maxOutputTokens: Int = 4096,
+        maxOutputTokens: Int = profile.initialOutputTokenBudget(),
     ): AiCallOutcome = callService.executeOnProfile(
         profile = profile,
         request = AiRequest(
@@ -31,7 +31,8 @@ class JsonRepairService @Inject constructor(
             userPrompt = AiPrompts.repairUserPrompt(canonicalSchema, malformed),
             jsonSchema = canonicalSchema,
             temperature = 0.0,
-            maxOutputTokens = maxOutputTokens.coerceAtLeast(512),
+            maxOutputTokens = maxOutputTokens.coerceAtLeast(MIN_OUTPUT_TOKENS)
+                .coerceAtMost(profile.outputTokenLimit()),
         ),
         repairTriggered = true,
     )
@@ -199,6 +200,7 @@ class DefaultStructuredAiService @Inject constructor(
             requireDirectPdf = pdfBytes != null,
             manualProfileId = manualProfileId,
         )
+        val initialOutputBudget = profile.initialOutputTokenBudget()
         val directPdf = pdfBytes != null && profile.supportsPdfInput
         val chunks: List<TextChunk?> = if (directPdf) {
             listOf(null)
@@ -229,13 +231,14 @@ class DefaultStructuredAiService @Inject constructor(
                     userPrompt = "Partition the attached PDF into lessons. " +
                         "Use exact 1-indexed PDF page numbers.\n" +
                         "Return JSON with a \"lessons\" array.",
+                    maxOutputTokens = initialOutputBudget,
                 )
             } else {
                 outlineRequest(
                     userPrompt = AiPrompts.outlineUserPromptFromText(chunk!!.text),
-                )
+                ).copy(maxOutputTokens = initialOutputBudget)
             }
-            val outcome = callService.execute(
+            var outcome = callService.execute(
                 request = request,
                 documentId = documentId,
                 requireDirectPdf = directPdf,
@@ -246,6 +249,18 @@ class DefaultStructuredAiService @Inject constructor(
             actualCost += outcomeCost(outcome)
 
             var validation = validator.validateOutline(outcome.response.text, pageCount)
+            if (!validation.isValid) {
+                val retry = retryTruncatedJson(
+                    outcome = outcome,
+                    request = request,
+                    documentId = documentId,
+                ) { raw -> validator.validateOutline(raw, pageCount).isValid }
+                if (retry != null) {
+                    outcome = retry
+                    actualCost += outcomeCost(retry)
+                    validation = validator.validateOutline(retry.response.text, pageCount)
+                }
+            }
             if (!validation.isValid) {
                 val repaired = runCatching {
                     repairService.repair(
@@ -280,7 +295,7 @@ class DefaultStructuredAiService @Inject constructor(
         if (validChunks == 0) {
             throw AiException(
                 AiErrorKind.CONTENT,
-                "The provider returned no usable lessons after one repair attempt.",
+                "The provider returned no usable lessons after a budget retry and one repair attempt.",
             )
         }
         return OutlineGenerationResult(
@@ -325,6 +340,7 @@ class DefaultStructuredAiService @Inject constructor(
             requireDirectPdf = false,
             manualProfileId = manualProfileId,
         )
+        val initialOutputBudget = profile.initialOutputTokenBudget()
         val chunks = TextChunker.chunk(pages, profile.maxContextTokens)
         val estimate = estimateFactsCostUsd(
             profile = profile,
@@ -349,8 +365,8 @@ class DefaultStructuredAiService @Inject constructor(
                 includeFormulas = includeFormulas,
                 includeDiagrams = includeDiagrams,
                 extraInstruction = extraInstruction,
-            )
-            val outcome = callService.execute(
+            ).copy(maxOutputTokens = initialOutputBudget)
+            var outcome = callService.execute(
                 request = request,
                 documentId = documentId,
                 pdfPageCount = documentPageCount,
@@ -364,6 +380,28 @@ class DefaultStructuredAiService @Inject constructor(
                 pageCount = documentPageCount,
                 maxFacts = density.maxFactsPerLesson * chunks.size,
             )
+            if (!validation.isValid) {
+                val retry = retryTruncatedJson(
+                    outcome = outcome,
+                    request = request,
+                    documentId = documentId,
+                ) { raw ->
+                    validator.validateFacts(
+                        raw = raw,
+                        pageCount = documentPageCount,
+                        maxFacts = density.maxFactsPerLesson * chunks.size,
+                    ).isValid
+                }
+                if (retry != null) {
+                    outcome = retry
+                    actualCost += outcomeCost(retry)
+                    validation = validator.validateFacts(
+                        raw = retry.response.text,
+                        pageCount = documentPageCount,
+                        maxFacts = density.maxFactsPerLesson * chunks.size,
+                    )
+                }
+            }
             if (!validation.isValid) {
                 repairUsed = true
                 val repaired = runCatching {
@@ -403,7 +441,7 @@ class DefaultStructuredAiService @Inject constructor(
         if (validChunks == 0) {
             throw AiException(
                 AiErrorKind.CONTENT,
-                "The provider returned no usable facts after one repair attempt.",
+                "The provider returned no usable facts after a budget retry and one repair attempt.",
             )
         }
         val deduplicated = TextChunker.deduplicate(
@@ -480,21 +518,31 @@ class DefaultStructuredAiService @Inject constructor(
             userPrompt = AiPrompts.formulaVerificationUserPrompt(source, "LATEX_OR_DIAGRAM"),
             jsonSchema = AiSchemas.FormulaVerificationJsonSchema,
             temperature = 0.0,
-            maxOutputTokens = 512,
         )
-        val outcome = callService.execute(
-            request = request,
+        val budgetedRequest = withInitialOutputBudget(request, manualProfileId)
+        var outcome = callService.execute(
+            request = budgetedRequest,
             documentId = null,
             manualProfileId = manualProfileId,
         )
         var validation = validator.validateVerification(outcome.response.text)
+        if (!validation.isValid) {
+            val retry = retryTruncatedJson(
+                outcome = outcome,
+                request = budgetedRequest,
+                documentId = null,
+            ) { raw -> validator.validateVerification(raw).isValid }
+            if (retry != null) {
+                outcome = retry
+                validation = validator.validateVerification(retry.response.text)
+            }
+        }
         if (!validation.isValid) {
             val repaired = runCatching {
                 repairService.repair(
                     profile = outcome.profile,
                     canonicalSchema = AiSchemas.FormulaVerificationJsonSchema,
                     malformed = outcome.response.text,
-                    maxOutputTokens = 512,
                 )
             }.getOrNull()
             if (repaired != null) {
@@ -515,22 +563,33 @@ class DefaultStructuredAiService @Inject constructor(
             userPrompt = AiPrompts.diagramUserPrompt(description, kindHint),
             jsonSchema = AiSchemas.DiagramJsonSchema,
             temperature = 0.3,
-            maxOutputTokens = 2048,
         )
-        val outcome = callService.execute(
-            request = request,
+        val budgetedRequest = withInitialOutputBudget(request, manualProfileId)
+        var outcome = callService.execute(
+            request = budgetedRequest,
             documentId = null,
             manualProfileId = manualProfileId,
         )
         var validation = validator.validateDiagram(outcome.response.text)
         var cost = outcomeCost(outcome)
         if (!validation.isValid) {
+            val retry = retryTruncatedJson(
+                outcome = outcome,
+                request = budgetedRequest,
+                documentId = null,
+            ) { raw -> validator.validateDiagram(raw).isValid }
+            if (retry != null) {
+                outcome = retry
+                cost += outcomeCost(retry)
+                validation = validator.validateDiagram(retry.response.text)
+            }
+        }
+        if (!validation.isValid) {
             val repaired = runCatching {
                 repairService.repair(
                     profile = outcome.profile,
                     canonicalSchema = AiSchemas.DiagramJsonSchema,
                     malformed = outcome.response.text,
-                    maxOutputTokens = 2048,
                 )
             }.getOrNull()
             if (repaired != null) {
@@ -559,22 +618,33 @@ class DefaultStructuredAiService @Inject constructor(
             userPrompt = AiPrompts.templateUserPrompt(description),
             jsonSchema = AiSchemas.TemplateJsonSchema,
             temperature = 0.4,
-            maxOutputTokens = 2048,
         )
-        val outcome = callService.execute(
-            request = request,
+        val budgetedRequest = withInitialOutputBudget(request, manualProfileId)
+        var outcome = callService.execute(
+            request = budgetedRequest,
             documentId = null,
             manualProfileId = manualProfileId,
         )
         var validation = validator.validateTemplate(outcome.response.text)
         var cost = outcomeCost(outcome)
         if (!validation.isValid) {
+            val retry = retryTruncatedJson(
+                outcome = outcome,
+                request = budgetedRequest,
+                documentId = null,
+            ) { raw -> validator.validateTemplate(raw).isValid }
+            if (retry != null) {
+                outcome = retry
+                cost += outcomeCost(retry)
+                validation = validator.validateTemplate(retry.response.text)
+            }
+        }
+        if (!validation.isValid) {
             val repaired = runCatching {
                 repairService.repair(
                     profile = outcome.profile,
                     canonicalSchema = AiSchemas.TemplateJsonSchema,
                     malformed = outcome.response.text,
-                    maxOutputTokens = 2048,
                 )
             }.getOrNull()
             if (repaired != null) {
@@ -625,10 +695,10 @@ class DefaultStructuredAiService @Inject constructor(
             userPrompt = userPrompt,
             jsonSchema = AiSchemas.FactsJsonSchema,
             temperature = 0.4,
-            maxOutputTokens = 2048,
         )
-        val outcome = callService.execute(
-            request = request,
+        val budgetedRequest = withInitialOutputBudget(request, manualProfileId)
+        var outcome = callService.execute(
+            request = budgetedRequest,
             documentId = null,
             manualProfileId = manualProfileId,
         )
@@ -638,12 +708,28 @@ class DefaultStructuredAiService @Inject constructor(
             maxFacts = 10,
         )
         if (!validation.isValid) {
+            val retry = retryTruncatedJson(
+                outcome = outcome,
+                request = budgetedRequest,
+                documentId = null,
+            ) { raw ->
+                validator.validateFacts(raw = raw, pageCount = 10_000, maxFacts = 10).isValid
+            }
+            if (retry != null) {
+                outcome = retry
+                validation = validator.validateFacts(
+                    raw = retry.response.text,
+                    pageCount = 10_000,
+                    maxFacts = 10,
+                )
+            }
+        }
+        if (!validation.isValid) {
             val repaired = runCatching {
                 repairService.repair(
                     profile = outcome.profile,
                     canonicalSchema = AiSchemas.FactsJsonSchema,
                     malformed = outcome.response.text,
-                    maxOutputTokens = 2048,
                 )
             }.getOrNull()
             if (repaired != null) {
@@ -676,21 +762,31 @@ class DefaultStructuredAiService @Inject constructor(
             userPrompt = AiPrompts.collectionsUserPrompt(facts),
             jsonSchema = AiSchemas.CollectionsJsonSchema,
             temperature = 0.3,
-            maxOutputTokens = 2048,
         )
-        val outcome = callService.execute(
-            request = request,
+        val budgetedRequest = withInitialOutputBudget(request, manualProfileId)
+        var outcome = callService.execute(
+            request = budgetedRequest,
             documentId = null,
             manualProfileId = manualProfileId,
         )
         var validation = validator.validateCollections(outcome.response.text, validFactIds)
+        if (!validation.isValid) {
+            val retry = retryTruncatedJson(
+                outcome = outcome,
+                request = budgetedRequest,
+                documentId = null,
+            ) { raw -> validator.validateCollections(raw, validFactIds).isValid }
+            if (retry != null) {
+                outcome = retry
+                validation = validator.validateCollections(retry.response.text, validFactIds)
+            }
+        }
         if (!validation.isValid) {
             val repaired = runCatching {
                 repairService.repair(
                     profile = outcome.profile,
                     canonicalSchema = AiSchemas.CollectionsJsonSchema,
                     malformed = outcome.response.text,
-                    maxOutputTokens = 2048,
                 )
             }.getOrNull()
             if (repaired != null) {
@@ -715,7 +811,6 @@ class DefaultStructuredAiService @Inject constructor(
         pdfFileName = pdfFileName,
         jsonSchema = AiSchemas.OutlineJsonSchema,
         temperature = 0.2,
-        maxOutputTokens = 8192,
     )
 
     private fun factsRequest(
@@ -745,7 +840,6 @@ class DefaultStructuredAiService @Inject constructor(
         },
         jsonSchema = AiSchemas.FactsJsonSchema,
         temperature = 0.3,
-        maxOutputTokens = 8192,
     )
 
     private fun estimateOutlineCostUsd(
@@ -760,7 +854,8 @@ class DefaultStructuredAiService @Inject constructor(
                 AiPrompts.OutlineSystemPrompt + TextChunker.formatPages(pages),
             )
         }
-        val outputTokens = (pages.size.coerceAtLeast(1) * 60).coerceIn(800, 8_000)
+        val outputTokens = (pages.size.coerceAtLeast(1) * 60)
+            .coerceIn(800, profile.outputTokenLimit())
         return AiCostEstimate(
             profile = profile,
             estimatedInputTokens = inputTokens,
@@ -789,12 +884,52 @@ class DefaultStructuredAiService @Inject constructor(
             CostEstimator.estimateTextTokens(promptPerChunk + it.text)
         }
         val outputPerChunk = density.maxFactsPerLesson * 140 + 300
-        val outputTokens = outputPerChunk * chunks.size.coerceAtLeast(1)
+        val outputTokens = minOf(outputPerChunk, profile.outputTokenLimit()) *
+            chunks.size.coerceAtLeast(1)
         return AiCostEstimate(
             profile = profile,
             estimatedInputTokens = inputTokens,
             estimatedOutputTokens = outputTokens,
             estimatedCostUsd = CostEstimator.estimateCostUsd(profile, inputTokens, outputTokens),
+        )
+    }
+
+    private suspend fun withInitialOutputBudget(
+        request: AiRequest,
+        manualProfileId: String?,
+    ): AiRequest {
+        val profile = callService.resolveProfile(
+            request = request,
+            manualProfileId = manualProfileId,
+        )
+        return request.copy(maxOutputTokens = profile.initialOutputTokenBudget())
+    }
+
+    private suspend fun retryTruncatedJson(
+        outcome: AiCallOutcome,
+        request: AiRequest,
+        documentId: String?,
+        isValidResponse: (String) -> Boolean,
+    ): AiCallOutcome? {
+        if (!outcome.response.finishReason.equals("length", ignoreCase = true) ||
+            isValidResponse(outcome.response.text)
+        ) {
+            return null
+        }
+
+        val profileLimit = outcome.profile.outputTokenLimit()
+        val initialBudget = request.maxOutputTokens
+            .coerceAtLeast(MIN_OUTPUT_TOKENS)
+            .coerceAtMost(profileLimit)
+        val retryBudget = (initialBudget.toLong() * 2)
+            .coerceAtMost(profileLimit.toLong())
+            .toInt()
+        if (retryBudget <= initialBudget) return null
+
+        return callService.executeOnProfile(
+            profile = outcome.profile,
+            request = request.copy(maxOutputTokens = retryBudget),
+            documentId = documentId,
         )
     }
 

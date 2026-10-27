@@ -8,6 +8,8 @@ import io.ktor.client.engine.mock.respond
 import io.ktor.client.engine.mock.toByteArray
 import io.ktor.http.HttpStatusCode
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Test
 
 class StructuredAiServiceTest {
@@ -29,12 +31,12 @@ class StructuredAiServiceTest {
         }
     """.trimIndent()
 
-    private fun chatEnvelope(content: String): String {
+    private fun chatEnvelope(content: String, finishReason: String = "stop"): String {
         val quoted = kotlinx.serialization.json.JsonPrimitive(content).toString()
         return """
             {
               "model": "gpt-test",
-              "choices": [{ "message": { "content": $quoted }, "finish_reason": "stop" }],
+              "choices": [{ "message": { "content": $quoted }, "finish_reason": "$finishReason" }],
               "usage": { "prompt_tokens": 100, "completion_tokens": 50 }
             }
         """.trimIndent()
@@ -122,6 +124,46 @@ class StructuredAiServiceTest {
         assertThat(usage.entries.first().documentId).isEqualTo("doc-1")
         assertThat(result.actualCostUsd).isAtLeast(0.0)
         assertThat(result.estimatedCostUsd).isAtLeast(0.0)
+    }
+
+    @Test
+    fun `truncated length response retries once with doubled output budget before repair`() = runTest {
+        var calls = 0
+        val budgets = mutableListOf<String>()
+        val profile = testProfile(context = 100_000)
+        val (service, usage, _) = buildService(profile) { request ->
+            calls++
+            val body = kotlinx.serialization.json.Json.parseToJsonElement(
+                request.body.toByteArray().decodeToString(),
+            ).jsonObject
+            budgets += body["max_completion_tokens"]!!.jsonPrimitive.content
+            val response = if (calls == 1) {
+                chatEnvelope("""{"facts":[{"text":"truncated""", finishReason = "length")
+            } else {
+                chatEnvelope(validFactJson())
+            }
+            respond(
+                content = response,
+                status = HttpStatusCode.OK,
+                headers = jsonHeaders(),
+            )
+        }
+
+        val result = service.generateFacts(
+            documentId = "doc-1",
+            lessonTitle = "Thermodynamics",
+            pages = listOf(PageText(1, "Entropy never decreases in an isolated system.")),
+            documentPageCount = 10,
+            density = FactDensity.BALANCED,
+            includeFormulas = true,
+            includeDiagrams = true,
+        )
+
+        assertThat(calls).isEqualTo(2)
+        assertThat(budgets).containsExactly("4096", "8192").inOrder()
+        assertThat(result.repairUsed).isFalse()
+        assertThat(result.facts).hasSize(1)
+        assertThat(usage.entries).hasSize(2)
     }
 
     @Test
