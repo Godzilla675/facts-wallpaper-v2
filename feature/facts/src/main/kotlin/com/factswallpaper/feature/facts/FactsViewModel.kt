@@ -30,6 +30,8 @@ import java.io.OutputStreamWriter
 import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.catch
@@ -107,6 +109,8 @@ class FactsViewModel @Inject constructor(
 
     private val retrySignal = MutableStateFlow(0)
     private val regeneratingFactId = MutableStateFlow<String?>(null)
+    private val pendingDeletedFactIds = MutableStateFlow<Set<String>>(emptySet())
+    private val deleteJobs = mutableMapOf<String, Job>()
 
     private val workUi = filter
         .map { it.documentId }
@@ -144,8 +148,9 @@ class FactsViewModel @Inject constructor(
                 documentRepository.observeDocuments(),
                 factRepository.observeTags(),
                 filter,
-            ) { facts, documents, tags, currentFilter ->
-                FactDataTuple(facts, documents, tags, currentFilter)
+                pendingDeletedFactIds,
+            ) { facts, documents, tags, currentFilter, pendingDeleted ->
+                FactDataTuple(facts.filter { it.id !in pendingDeleted }, documents, tags, currentFilter)
             },
             networkMonitor.observeOnline(),
             regeneratingFactId,
@@ -220,6 +225,57 @@ class FactsViewModel @Inject constructor(
     fun recordReview(factId: String, gotIt: Boolean) {
         viewModelScope.launch {
             factRepository.recordReview(factId, gotIt)
+        }
+    }
+
+    fun deleteFactWithUndo(factId: String, onUndoAvailable: (onUndo: () -> Unit) -> Unit) {
+        pendingDeletedFactIds.update { it + factId }
+        val job = viewModelScope.launch {
+            delay(5_000)
+            pendingDeletedFactIds.update { it - factId }
+            factRepository.deleteFact(factId)
+            deleteJobs.remove(factId)
+        }
+        deleteJobs[factId] = job
+        onUndoAvailable {
+            job.cancel()
+            deleteJobs.remove(factId)
+            pendingDeletedFactIds.update { it - factId }
+        }
+    }
+
+    fun shareCardAsImage(fact: Fact, context: Context) {
+        viewModelScope.launch {
+            try {
+                val sharesDir = java.io.File(context.cacheDir, "shares").apply { mkdirs() }
+                val shareFile = java.io.File(sharesDir, "card_${fact.id.take(8)}.png")
+                if (cardExportService != null) {
+                    val bitmap = cardExportService.renderCard(fact)
+                    java.io.FileOutputStream(shareFile).use { out ->
+                        bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, out)
+                    }
+                    val uri = androidx.core.content.FileProvider.getUriForFile(
+                        context,
+                        "${context.packageName}.fileprovider",
+                        shareFile,
+                    )
+                    val sendIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                        type = "image/png"
+                        putExtra(android.content.Intent.EXTRA_STREAM, uri)
+                        putExtra(android.content.Intent.EXTRA_TEXT, fact.text)
+                        addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    context.startActivity(android.content.Intent.createChooser(sendIntent, null))
+                } else {
+                    val sendIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(android.content.Intent.EXTRA_TEXT, fact.text)
+                    }
+                    context.startActivity(android.content.Intent.createChooser(sendIntent, null))
+                }
+            } catch (e: Exception) {
+                showMessage(R.string.facts_export_failed)
+            }
         }
     }
 

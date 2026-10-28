@@ -76,4 +76,7 @@
     <string name="outline_cost_guard_confirm">Run anyway</string>
     <string name="outline_load_error">Could not load this outline.</string>
     <string name="outline_document_missing">This document is no longer in your library.</string>
+    <string name="outline_regenerate_failed">Regenerate failed lessons</string>
+    <string name="outline_no_failed_lessons">No failed lessons to regenerate</string>
+    <string name="outline_regenerating_failed">Regenerating failed lessons&#8230;</string>
 </resources>

@@ -40,6 +40,8 @@
     <string name="facts_save">Save</string>
     <string name="facts_cancel">Cancel</string>
     <string name="facts_saved">Fact updated.</string>
+    <string name="facts_deleted">Fact deleted.</string>
+    <string name="facts_undo">Undo</string>
     <string name="facts_text_required">Fact text cannot be empty.</string>
     <string name="facts_regenerate_title">Regenerate fact with AI</string>
     <string name="facts_regenerate_current_label">Current fact</string>

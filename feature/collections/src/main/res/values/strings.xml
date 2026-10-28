@@ -72,6 +72,9 @@
     <string name="collections_dismissed">Suggestion dismissed.</string>
     <string name="collections_deleted">Deleted.</string>
     <string name="collections_delete_failed">Could not delete this item.</string>
+    <string name="collections_undo">Undo</string>
+    <string name="collections_collection_deleted">Collection deleted</string>
+    <string name="collections_folder_deleted">Folder deleted</string>
     <string name="collections_generated">%1$d suggested collections created.</string>
     <string name="collections_no_suggestions">No new collection themes were found among your active facts.</string>
     <string name="collections_generate_failed">Could not generate suggestions.</string>

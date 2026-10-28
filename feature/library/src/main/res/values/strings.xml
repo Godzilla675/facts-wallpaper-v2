@@ -156,4 +156,6 @@
     <string name="library_selected_count">%1$d selected</string>
     <string name="library_select_all">Select all</string>
     <string name="library_clear_selection">Clear</string>
+    <string name="library_deleted">Document deleted</string>
+    <string name="library_undo">Undo</string>
 </resources>

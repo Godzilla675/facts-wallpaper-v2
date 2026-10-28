@@ -45,3 +45,21 @@
 - **Rotation Source Picker:**
   - Added `RotationSource` enum: `ALL` (all cards from active documents), `COLLECTIONS` (specific collections/folders marked for rotation), `FAVORITES` (favorite cards only), `DUE_FOR_REVIEW` (spaced repetition review cards).
   - Integrated into `RoomRotationPoolRepository`, `AppPreferences`, `WallpaperViewModel`, and `WallpaperScreen`.
+
+## Phase P9.3 — Library, Cards and Generation
+
+- **Card Actions (Long-Press and Context Menu on Cards):**
+  - Added 8-action contextual menu and long-press handler across `FactListItemCard` and `FactsScreen`.
+  - Actions: favorite/pin toggle, hide from / restore to wallpaper rotation (`excluded_from_rotation`), inline text edit and immediate re-render, single-card AI regeneration, clipboard copy, share rendered card image via Android Sharesheet (`FileProvider`), jump to source PDF page, and delete.
+- **Built-in PDF Page Viewer (`PdfViewerScreen` & `PdfViewerViewModel`):**
+  - Full-screen viewer using `PdfRenderer` with pinch-to-zoom (1x–5x) and double-tap zoom/reset gestures.
+  - Opens directly at the card's referenced source page with an interactive bottom page slider and step controls.
+- **Duplicate PDF Detection on Import:**
+  - Integrated SHA-256 content hashing on imported files in `DocumentRepository` / `ImportPdfViewModel`.
+  - When an identical PDF has already been imported, prompts user with a dialog to open the existing document or re-import under a unique name.
+- **Background Pipeline Controls & What's Happening Activity:**
+  - Global pause and resume for WorkManager document extraction and lesson generation jobs via `DocumentProcessingScheduler.pauseAll()` and `resumeAll()`.
+  - Added per-document "Regenerate failed lessons only" in `OutlineScreen` and `DocumentProcessingScheduler`.
+  - Created standalone `WhatsHappeningActivity` and Compose route (`WhatsHappeningScreen`) displaying all running, queued, paused, and failed jobs with retry, cancel, pause-all, and resume-all controls. Reachable from foreground notification and Settings.
+- **Undo Snackbar for Deletions:**
+  - Implemented 5-second soft delete with Undo action for documents (Library), cards (Facts), and collections/folders (Collections). If not undone within 5 seconds, hard deletion is committed to the database and filesystem.

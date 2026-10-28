@@ -89,6 +89,7 @@ private data class BackupDestinationRequest(
 fun AdvancedSettingsScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
+    onOpenWhatsHappening: () -> Unit = {},
     viewModel: AdvancedSettingsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -190,6 +191,7 @@ fun AdvancedSettingsScreen(
                     viewModel.setAutomaticBackup(value.backupDestination.automaticEnabled, it)
                 },
                 onSqlCipher = viewModel::sqlCipherInfo,
+                onOpenWhatsHappening = onOpenWhatsHappening,
                 modifier = Modifier.padding(padding),
             )
         }
@@ -356,6 +358,7 @@ private fun AdvancedContent(
     onAutomaticBackupChange: (Boolean) -> Unit,
     onBackupFrequencyChange: (AutomaticBackupFrequency) -> Unit,
     onSqlCipher: () -> Unit,
+    onOpenWhatsHappening: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val spacing = LocalSpacing.current
@@ -366,6 +369,19 @@ private fun AdvancedContent(
         contentPadding = PaddingValues(spacing.lg),
         verticalArrangement = Arrangement.spacedBy(spacing.md),
     ) {
+        item {
+            SectionGroupCard(
+                title = stringResource(R.string.advanced_pipeline_title),
+                subtitle = stringResource(R.string.advanced_pipeline_helper),
+            ) {
+                ValueRow(
+                    title = stringResource(R.string.advanced_whats_happening),
+                    value = stringResource(R.string.advanced_whats_happening_action),
+                    onClick = onOpenWhatsHappening,
+                )
+            }
+        }
+
         item {
             SectionGroupCard(
                 title = stringResource(R.string.advanced_ocr_title),

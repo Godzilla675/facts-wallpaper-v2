@@ -27,6 +27,7 @@ import com.factswallpaper.core.render.export.CardExportService
 import com.factswallpaper.core.ui.FeatureViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.catch
@@ -207,6 +208,20 @@ class CollectionsViewModel @Inject constructor(
         }
     }
 
+    fun deleteCollectionWithUndo(collectionId: String, onUndoAvailable: (onUndo: () -> Unit) -> Unit) {
+        val job = viewModelScope.launch {
+            delay(5_000)
+            when (collectionRepository.deleteCollection(collectionId)) {
+                is AppResult.Success -> {
+                    preRenderScheduler.enqueue()
+                    showMessage(R.string.collections_deleted)
+                }
+                is AppResult.Failure -> showMessage(R.string.collections_delete_failed)
+            }
+        }
+        onUndoAvailable { job.cancel() }
+    }
+
     fun deleteFolder(folderId: String) {
         viewModelScope.launch {
             when (collectionRepository.deleteFolder(folderId)) {
@@ -217,6 +232,20 @@ class CollectionsViewModel @Inject constructor(
                 is AppResult.Failure -> showMessage(R.string.collections_delete_failed)
             }
         }
+    }
+
+    fun deleteFolderWithUndo(folderId: String, onUndoAvailable: (onUndo: () -> Unit) -> Unit) {
+        val job = viewModelScope.launch {
+            delay(5_000)
+            when (collectionRepository.deleteFolder(folderId)) {
+                is AppResult.Success -> {
+                    preRenderScheduler.enqueue()
+                    showMessage(R.string.collections_deleted)
+                }
+                is AppResult.Failure -> showMessage(R.string.collections_delete_failed)
+            }
+        }
+        onUndoAvailable { job.cancel() }
     }
 
     fun openMembership(targetType: MembershipTargetType, targetId: String, targetName: String) {

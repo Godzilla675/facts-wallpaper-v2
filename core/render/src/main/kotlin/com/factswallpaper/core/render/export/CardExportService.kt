@@ -31,6 +31,10 @@ class CardExportService @Inject constructor(
     private val templateSeeder: CardTemplateSeeder,
     private val dispatchers: FactsDispatchers,
 ) {
+    suspend fun renderCard(fact: Fact): Bitmap = withContext(dispatchers.io) {
+        renderCards(listOf(fact)).first().second
+    }
+
     suspend fun export(
         facts: List<Fact>,
         format: CardExportFormat,

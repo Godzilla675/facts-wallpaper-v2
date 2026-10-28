@@ -18,6 +18,7 @@ import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /**
@@ -110,6 +111,48 @@ open class DocumentProcessingScheduler internal constructor(
         workManager.cancelUniqueWork(workName(documentId))
         workManager.cancelUniqueWork(outlineWorkName(documentId))
         workManager.cancelUniqueWork(factsWorkName(documentId))
+    }
+
+    /** Pause all active processing across documents. */
+    open suspend fun pauseAll() {
+        val documents = documentRepository.observeDocuments().first()
+        documents.forEach { doc ->
+            if (doc.extractionStatus in listOf(
+                    ExtractionStatus.OCR_IN_PROGRESS,
+                    ExtractionStatus.OUTLINE_IN_PROGRESS,
+                    ExtractionStatus.FACTS_IN_PROGRESS,
+                )
+            ) {
+                pause(doc.id)
+            }
+        }
+    }
+
+    /** Resume all paused processing jobs. */
+    open suspend fun resumeAll() {
+        val documents = documentRepository.observeDocuments().first()
+        documents.forEach { doc ->
+            if (doc.extractionStatus == ExtractionStatus.OCR_PAUSED ||
+                doc.extractionStatus == ExtractionStatus.OUTLINE_READY ||
+                doc.extractionStatus == ExtractionStatus.ANALYZED
+            ) {
+                resume(doc.id)
+            }
+        }
+    }
+
+    /** Regenerate facts only for lessons that failed or produced 0 facts. */
+    open suspend fun regenerateFailedLessons(documentId: String) {
+        val lessons = lessonRepository?.getLessons(documentId) ?: emptyList()
+        val failedLessons = lessons.filter { it.factCount == 0 }
+        if (failedLessons.isNotEmpty()) {
+            documentRepository.updatePipelineStatus(
+                documentId = documentId,
+                status = ExtractionStatus.FACTS_IN_PROGRESS,
+                progress = 0.7f,
+            )
+            enqueueFacts(documentId, failedLessons.map { it.id })
+        }
     }
 
     override fun enqueueOutline(documentId: String) {

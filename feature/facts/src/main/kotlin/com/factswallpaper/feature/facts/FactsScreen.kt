@@ -1,8 +1,8 @@
 package com.factswallpaper.feature.facts
 
+import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -17,9 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Close
@@ -34,19 +32,22 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.SuggestionChip
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -55,11 +56,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -82,6 +86,7 @@ import com.factswallpaper.core.ui.component.FactListItemCard
 import com.factswallpaper.core.ui.component.InlineBanner
 import com.factswallpaper.core.ui.component.SectionGroupCard
 import com.factswallpaper.core.ui.component.SourceBadge
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -89,6 +94,7 @@ fun FactsScreen(
     onOpenLibrary: () -> Unit,
     onOpenTemplates: () -> Unit,
     onOpenStudy: (documentId: String?) -> Unit = {},
+    onOpenPdfViewer: ((documentId: String, page: Int) -> Unit)? = null,
     modifier: Modifier = Modifier,
     viewModel: FactsViewModel = hiltViewModel(),
 ) {
@@ -96,6 +102,8 @@ fun FactsScreen(
     val message by viewModel.message.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
+    val clipboardManager = LocalClipboardManager.current
+    val coroutineScope = rememberCoroutineScope()
     var editingFact by remember { mutableStateOf<Fact?>(null) }
     var regeneratingFact by remember { mutableStateOf<Fact?>(null) }
     var showExportFormatDialog by remember { mutableStateOf(false) }
@@ -171,6 +179,33 @@ fun FactsScreen(
                 onToggleFavorite = viewModel::toggleFavorite,
                 onEdit = { editingFact = it },
                 onRegenerate = { fact -> regeneratingFact = fact },
+                onCopyText = { fact ->
+                    clipboardManager.setText(AnnotatedString(fact.text))
+                    coroutineScope.launch {
+                        snackbarHostState.showSnackbar(
+                            context.getString(com.factswallpaper.core.ui.R.string.fact_copied_to_clipboard),
+                        )
+                    }
+                },
+                onShareImage = { fact -> viewModel.shareCardAsImage(fact, context) },
+                onJumpToSourcePage = { fact ->
+                    val page = fact.sourcePage ?: 1
+                    onOpenPdfViewer?.invoke(fact.documentId, page)
+                },
+                onDelete = { fact ->
+                    viewModel.deleteFactWithUndo(fact.id) { onUndo ->
+                        coroutineScope.launch {
+                            val result = snackbarHostState.showSnackbar(
+                                message = context.getString(R.string.facts_deleted),
+                                actionLabel = context.getString(R.string.facts_undo),
+                                duration = SnackbarDuration.Short,
+                            )
+                            if (result == SnackbarResult.ActionPerformed) {
+                                onUndo()
+                            }
+                        }
+                    }
+                },
                 onCancelWork = viewModel::cancelGeneration,
                 onOpenLibrary = onOpenLibrary,
                 modifier = Modifier.padding(padding),
@@ -247,14 +282,10 @@ fun FactsScreen(
     }
 
     regeneratingFact?.let { fact ->
-        val content = state as? FactsUiState.Content
-        val isRegeneratingThis = content?.isRegenerating == true && content.regeneratingFactId == fact.id
-        RegenerateFactSheet(
+        FactRegenerateDialog(
             fact = fact,
-            isRegenerating = isRegeneratingThis,
-            isOnline = content?.isOnline ?: true,
-            onDismiss = { if (!isRegeneratingThis) regeneratingFact = null },
-            onRegenerate = { instruction ->
+            onDismiss = { regeneratingFact = null },
+            onConfirm = { instruction ->
                 viewModel.regenerate(fact.id, instruction)
                 regeneratingFact = null
             },
@@ -262,6 +293,7 @@ fun FactsScreen(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 private fun FactsContent(
     state: FactsUiState.Content,
@@ -276,13 +308,19 @@ private fun FactsContent(
     onToggleFavorite: (String, Boolean) -> Unit,
     onEdit: (Fact) -> Unit,
     onRegenerate: (Fact) -> Unit,
+    onCopyText: (Fact) -> Unit,
+    onShareImage: (Fact) -> Unit,
+    onJumpToSourcePage: (Fact) -> Unit,
+    onDelete: (Fact) -> Unit,
     onCancelWork: () -> Unit,
     onOpenLibrary: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val spacing = LocalSpacing.current
     val filter = state.filter
-    val documentTitle = state.documents.firstOrNull { it.id == filter.documentId }?.title
+    val documentTitle = filter.documentId?.let { docId ->
+        state.documents.firstOrNull { it.id == docId }?.title
+    }
 
     Column(modifier = modifier.fillMaxSize()) {
         if (!state.isOnline) {
@@ -523,6 +561,12 @@ private fun FactsContent(
                         onToggleFavorite = { favorite -> onToggleFavorite(fact.id, favorite) },
                         onEdit = { onEdit(fact) },
                         onRegenerate = { onRegenerate(fact) },
+                        onCopyText = { onCopyText(fact) },
+                        onShareAsImage = { onShareImage(fact) },
+                        onJumpToSource = if (fact.sourcePage != null) {
+                            { onJumpToSourcePage(fact) }
+                        } else null,
+                        onDelete = { onDelete(fact) },
                     )
                 }
             }
@@ -549,294 +593,301 @@ private fun FactEditorSheet(
     val spacing = LocalSpacing.current
     var text by remember(fact.id) { mutableStateOf(fact.text) }
     var latex by remember(fact.id) { mutableStateOf(fact.latex.orEmpty()) }
-    var tags by remember(fact.id) { mutableStateOf(fact.tags.joinToString(", ")) }
-    var template by remember(fact.id) { mutableStateOf(fact.templateType) }
-    var diagramType by remember(fact.id) { mutableStateOf(fact.diagramType) }
+    var tagsText by remember(fact.id) { mutableStateOf(fact.tags.joinToString(", ")) }
+    var templateType by remember(fact.id) { mutableStateOf(fact.templateType) }
+    var diagramKind by remember(fact.id) { mutableStateOf(fact.diagramType) }
     var diagramSource by remember(fact.id) { mutableStateOf(fact.diagramSource.orEmpty()) }
-    var sourceMode by remember(fact.id) { mutableStateOf(fact.sourceReferenceModeOverride) }
-    var sourcePageStr by remember(fact.id) { mutableStateOf(fact.sourcePage?.toString().orEmpty()) }
+    var sourceReferenceMode by remember(fact.id) { mutableStateOf(fact.sourceReferenceModeOverride) }
+    var sourcePageText by remember(fact.id) { mutableStateOf(fact.sourcePage?.toString().orEmpty()) }
 
-    ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(
+    var templateExpanded by remember { mutableStateOf(false) }
+    var diagramExpanded by remember { mutableStateOf(false) }
+    var sourceModeExpanded by remember { mutableStateOf(false) }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        dragHandle = null,
+    ) {
+        LazyColumn(
             modifier = Modifier
                 .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = spacing.lg)
-                .padding(bottom = spacing.xl),
+                .padding(spacing.lg),
             verticalArrangement = Arrangement.spacedBy(spacing.md),
         ) {
-            Text(
-                text = stringResource(R.string.facts_edit_title),
-                style = MaterialTheme.typography.titleLarge,
-            )
-            SourceBadge(
-                bookTitle = fact.sourceBookTitle,
-                mode = sourceMode ?: SourceReferenceMode.COMPACT,
-                lessonTitle = fact.sourceLessonTitle,
-                page = sourcePageStr.toIntOrNull() ?: fact.sourcePage,
-            )
-            OutlinedTextField(
-                value = text,
-                onValueChange = { text = it },
-                label = { Text(stringResource(R.string.facts_edit_text_label)) },
-                minLines = 3,
-                maxLines = 8,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            OutlinedTextField(
-                value = latex,
-                onValueChange = { latex = it },
-                label = { Text(stringResource(R.string.facts_edit_latex_label)) },
-                supportingText = { Text(stringResource(R.string.facts_edit_latex_helper)) },
-                textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
-                minLines = 2,
-                maxLines = 5,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            OutlinedTextField(
-                value = tags,
-                onValueChange = { tags = it },
-                label = { Text(stringResource(R.string.facts_edit_tags_label)) },
-                supportingText = { Text(stringResource(R.string.facts_edit_tags_helper)) },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            OutlinedTextField(
-                value = sourcePageStr,
-                onValueChange = { sourcePageStr = it.filter(Char::isDigit) },
-                label = { Text(stringResource(R.string.facts_edit_source_page_label)) },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Text(
-                text = stringResource(R.string.facts_edit_template_label),
-                style = MaterialTheme.typography.labelLarge,
-            )
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(spacing.sm)) {
-                items(CardTemplateType.entries) { type ->
-                    FilterChip(
-                        selected = template == type,
-                        onClick = { template = type },
-                        label = { Text(templateLabel(type)) },
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = stringResource(R.string.facts_edit_title),
+                        style = MaterialTheme.typography.titleMedium,
                     )
+                    Row(horizontalArrangement = Arrangement.spacedBy(spacing.xs)) {
+                        TextButton(onClick = onDismiss) {
+                            Text(stringResource(R.string.facts_cancel))
+                        }
+                        Button(
+                            onClick = {
+                                val parsedTags = tagsText
+                                    .split(",")
+                                    .map(String::trim)
+                                    .filter(String::isNotEmpty)
+                                onSave(
+                                    text,
+                                    latex,
+                                    parsedTags,
+                                    templateType,
+                                    diagramKind,
+                                    diagramSource,
+                                    sourceReferenceMode,
+                                    sourcePageText.toIntOrNull(),
+                                )
+                            },
+                        ) {
+                            Text(stringResource(R.string.facts_save))
+                        }
+                    }
                 }
             }
-            Text(
-                text = stringResource(R.string.facts_edit_diagram_kind_label),
-                style = MaterialTheme.typography.labelLarge,
-            )
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(spacing.sm)) {
-                DiagramKind.entries.forEach { kind ->
-                    FilterChip(
-                        selected = diagramType == kind,
-                        onClick = { diagramType = kind },
-                        label = { Text(diagramLabel(kind)) },
-                    )
-                }
-            }
-            if (diagramType != DiagramKind.NONE) {
+
+            item {
                 OutlinedTextField(
-                    value = diagramSource,
-                    onValueChange = { diagramSource = it },
-                    label = { Text(stringResource(R.string.facts_edit_diagram_source_label)) },
-                    textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                    value = text,
+                    onValueChange = { text = it },
+                    label = { Text(stringResource(R.string.facts_edit_text_label)) },
+                    modifier = Modifier.fillMaxWidth(),
                     minLines = 3,
-                    maxLines = 8,
+                )
+            }
+
+            item {
+                OutlinedTextField(
+                    value = latex,
+                    onValueChange = { latex = it },
+                    label = { Text(stringResource(R.string.facts_edit_latex_label)) },
+                    supportingText = { Text(stringResource(R.string.facts_edit_latex_helper)) },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 2,
+                    textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
+                )
+            }
+
+            item {
+                OutlinedTextField(
+                    value = tagsText,
+                    onValueChange = { tagsText = it },
+                    label = { Text(stringResource(R.string.facts_edit_tags_label)) },
+                    supportingText = { Text(stringResource(R.string.facts_edit_tags_helper)) },
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
-            Text(
-                text = stringResource(R.string.facts_edit_source_mode_label),
-                style = MaterialTheme.typography.labelLarge,
-            )
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(spacing.sm)) {
-                listOf(
-                    null to stringResource(R.string.facts_source_mode_default),
-                    SourceReferenceMode.FULL to stringResource(R.string.facts_source_mode_full),
-                    SourceReferenceMode.COMPACT to stringResource(R.string.facts_source_mode_compact),
-                    SourceReferenceMode.PAGE_ONLY to stringResource(R.string.facts_source_mode_page_only),
-                    SourceReferenceMode.HIDDEN to stringResource(R.string.facts_source_mode_hidden),
-                ).forEach { (mode, label) ->
-                    FilterChip(
-                        selected = sourceMode == mode,
-                        onClick = { sourceMode = mode },
-                        label = { Text(label) },
-                    )
-                }
-            }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                TextButton(onClick = onDismiss) {
-                    Text(stringResource(R.string.facts_cancel))
-                }
-                Button(
-                    onClick = {
-                        val parsedTags = tags.split(",")
-                            .map { it.trim() }
-                            .filter { it.isNotEmpty() }
-                        onSave(
-                            text,
-                            latex,
-                            parsedTags,
-                            template,
-                            diagramType,
-                            diagramSource.ifBlank { null },
-                            sourceMode,
-                            sourcePageStr.toIntOrNull(),
-                        )
-                    },
-                    enabled = text.isNotBlank(),
-                ) {
-                    Text(stringResource(R.string.facts_save))
-                }
-            }
-        }
-    }
-}
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
-@Composable
-private fun RegenerateFactSheet(
-    fact: Fact,
-    isRegenerating: Boolean,
-    isOnline: Boolean,
-    onDismiss: () -> Unit,
-    onRegenerate: (String?) -> Unit,
-) {
-    val spacing = LocalSpacing.current
-    var instruction by remember(fact.id) { mutableStateOf("") }
-
-    ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = spacing.lg)
-                .padding(bottom = spacing.xl),
-            verticalArrangement = Arrangement.spacedBy(spacing.md),
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = stringResource(R.string.facts_regenerate_title),
-                    style = MaterialTheme.typography.titleLarge,
+            item {
+                OutlinedTextField(
+                    value = sourcePageText,
+                    onValueChange = { sourcePageText = it.filter(Char::isDigit) },
+                    label = { Text(stringResource(R.string.facts_edit_source_page_label)) },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth(),
                 )
-                if (isRegenerating) {
-                    CircularProgressIndicator(modifier = Modifier.padding(end = spacing.sm))
-                }
             }
 
-            Text(
-                text = stringResource(R.string.facts_regenerate_current_label),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-                text = fact.text,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-
-            Text(
-                text = stringResource(R.string.facts_regenerate_instruction_label),
-                style = MaterialTheme.typography.labelLarge,
-            )
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(spacing.sm),
-                verticalArrangement = Arrangement.spacedBy(spacing.xs),
-            ) {
-                listOf(
-                    stringResource(R.string.facts_regenerate_preset_concise),
-                    stringResource(R.string.facts_regenerate_preset_qa),
-                    stringResource(R.string.facts_regenerate_preset_formula),
-                    stringResource(R.string.facts_regenerate_preset_intuitive),
-                ).forEach { preset ->
-                    SuggestionChip(
-                        onClick = { instruction = preset },
-                        label = { Text(preset) },
-                    )
-                }
-            }
-
-            OutlinedTextField(
-                value = instruction,
-                onValueChange = { instruction = it },
-                label = { Text(stringResource(R.string.facts_regenerate_instruction_label)) },
-                supportingText = { Text(stringResource(R.string.facts_regenerate_instruction_helper)) },
-                minLines = 2,
-                maxLines = 4,
-                enabled = !isRegenerating,
-                modifier = Modifier.fillMaxWidth(),
-            )
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                TextButton(onClick = onDismiss, enabled = !isRegenerating) {
-                    Text(stringResource(R.string.facts_cancel))
-                }
-                Button(
-                    onClick = { onRegenerate(instruction.trim().ifBlank { null }) },
-                    enabled = isOnline && !isRegenerating,
+            item {
+                ExposedDropdownMenuBox(
+                    expanded = templateExpanded,
+                    onExpandedChange = { templateExpanded = it },
                 ) {
-                    Icon(
-                        imageVector = Icons.Filled.AutoAwesome,
-                        contentDescription = null,
-                        modifier = Modifier.padding(end = spacing.xs),
+                    OutlinedTextField(
+                        value = templateLabel(templateType),
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text(stringResource(R.string.facts_edit_template_label)) },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = templateExpanded) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .menuAnchor(),
                     )
-                    Text(stringResource(R.string.facts_regenerate_action))
+                    ExposedDropdownMenu(
+                        expanded = templateExpanded,
+                        onDismissRequest = { templateExpanded = false },
+                    ) {
+                        CardTemplateType.entries.forEach { type ->
+                            DropdownMenuItem(
+                                text = { Text(templateLabel(type)) },
+                                onClick = {
+                                    templateType = type
+                                    templateExpanded = false
+                                },
+                            )
+                        }
+                    }
                 }
+            }
+
+            item {
+                ExposedDropdownMenuBox(
+                    expanded = diagramExpanded,
+                    onExpandedChange = { diagramExpanded = it },
+                ) {
+                    OutlinedTextField(
+                        value = diagramLabel(diagramKind),
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text(stringResource(R.string.facts_edit_diagram_kind_label)) },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = diagramExpanded) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .menuAnchor(),
+                    )
+                    ExposedDropdownMenu(
+                        expanded = diagramExpanded,
+                        onDismissRequest = { diagramExpanded = false },
+                    ) {
+                        DiagramKind.entries.forEach { kind ->
+                            DropdownMenuItem(
+                                text = { Text(diagramLabel(kind)) },
+                                onClick = {
+                                    diagramKind = kind
+                                    diagramExpanded = false
+                                },
+                            )
+                        }
+                    }
+                }
+            }
+
+            if (diagramKind != DiagramKind.NONE) {
+                item {
+                    OutlinedTextField(
+                        value = diagramSource,
+                        onValueChange = { diagramSource = it },
+                        label = { Text(stringResource(R.string.facts_edit_diagram_source_label)) },
+                        modifier = Modifier.fillMaxWidth(),
+                        minLines = 4,
+                        textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
+                    )
+                }
+            }
+
+            item {
+                ExposedDropdownMenuBox(
+                    expanded = sourceModeExpanded,
+                    onExpandedChange = { sourceModeExpanded = it },
+                ) {
+                    OutlinedTextField(
+                        value = sourceModeLabel(sourceReferenceMode),
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text(stringResource(R.string.facts_edit_source_mode_label)) },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = sourceModeExpanded) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .menuAnchor(),
+                    )
+                    ExposedDropdownMenu(
+                        expanded = sourceModeExpanded,
+                        onDismissRequest = { sourceModeExpanded = false },
+                    ) {
+                        listOf(
+                            null to stringResource(R.string.facts_source_mode_default),
+                            SourceReferenceMode.FULL to stringResource(R.string.facts_source_mode_full),
+                            SourceReferenceMode.COMPACT to stringResource(R.string.facts_source_mode_compact),
+                            SourceReferenceMode.PAGE_ONLY to stringResource(R.string.facts_source_mode_page_only),
+                            SourceReferenceMode.HIDDEN to stringResource(R.string.facts_source_mode_hidden),
+                        ).forEach { (mode, label) ->
+                            DropdownMenuItem(
+                                text = { Text(label) },
+                                onClick = {
+                                    sourceReferenceMode = mode
+                                    sourceModeExpanded = false
+                                },
+                            )
+                        }
+                    }
+                }
+            }
+
+            item {
+                Spacer(modifier = Modifier.height(spacing.xl))
             }
         }
     }
 }
 
 @Composable
-private fun statusLabel(status: FactStatusFilter): String = stringResource(
-    when (status) {
-        FactStatusFilter.ALL -> R.string.facts_status_all
-        FactStatusFilter.ACTIVE -> R.string.facts_status_active
-        FactStatusFilter.IGNORED -> R.string.facts_status_ignored
-        FactStatusFilter.FAVORITES -> R.string.facts_status_favorites
-        FactStatusFilter.FORMULAS -> R.string.facts_status_formulas
-        FactStatusFilter.DIAGRAMS -> R.string.facts_status_diagrams
-        FactStatusFilter.DUE_FOR_REVIEW -> R.string.facts_status_due_for_review
-    },
-)
+private fun FactRegenerateDialog(
+    fact: Fact,
+    onDismiss: () -> Unit,
+    onConfirm: (instruction: String?) -> Unit,
+) {
+    var instruction by remember { mutableStateOf("") }
+    val spacing = LocalSpacing.current
 
-@Composable
-private fun templateLabel(type: CardTemplateType): String = stringResource(
-    when (type) {
-        CardTemplateType.TEXT -> R.string.facts_template_text
-        CardTemplateType.QUOTE -> R.string.facts_template_quote
-        CardTemplateType.BULLET -> R.string.facts_template_bullet
-        CardTemplateType.DEFINITION -> R.string.facts_template_definition
-        CardTemplateType.QA -> R.string.facts_template_qa
-        CardTemplateType.FORMULA -> R.string.facts_template_formula
-        CardTemplateType.DIAGRAM -> R.string.facts_template_diagram
-        CardTemplateType.TIMELINE -> R.string.facts_template_timeline
-    },
-)
-
-@Composable
-private fun diagramLabel(kind: DiagramKind): String = stringResource(
-    when (kind) {
-        DiagramKind.NONE -> R.string.facts_diagram_none
-        DiagramKind.MERMAID -> R.string.facts_diagram_mermaid
-        DiagramKind.TIKZ -> R.string.facts_diagram_tikz
-        DiagramKind.SVG -> R.string.facts_diagram_svg
-        DiagramKind.HTML_CANVAS -> R.string.facts_diagram_html_canvas
-    },
-)
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.facts_regenerate_title)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(spacing.sm)) {
+                Text(
+                    text = stringResource(R.string.facts_regenerate_current_label),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    text = fact.text,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                OutlinedTextField(
+                    value = instruction,
+                    onValueChange = { instruction = it },
+                    label = { Text(stringResource(R.string.facts_regenerate_instruction_label)) },
+                    supportingText = { Text(stringResource(R.string.facts_regenerate_instruction_helper)) },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 2,
+                )
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(spacing.xs),
+                    verticalArrangement = Arrangement.spacedBy(spacing.xs),
+                ) {
+                    FilterChip(
+                        selected = false,
+                        onClick = { instruction = "Make shorter & punchier" },
+                        label = { Text(stringResource(R.string.facts_regenerate_preset_concise)) },
+                    )
+                    FilterChip(
+                        selected = false,
+                        onClick = { instruction = "Turn into Q&A" },
+                        label = { Text(stringResource(R.string.facts_regenerate_preset_qa)) },
+                    )
+                    FilterChip(
+                        selected = false,
+                        onClick = { instruction = "Emphasize formula" },
+                        label = { Text(stringResource(R.string.facts_regenerate_preset_formula)) },
+                    )
+                    FilterChip(
+                        selected = false,
+                        onClick = { instruction = "Explain intuitively" },
+                        label = { Text(stringResource(R.string.facts_regenerate_preset_intuitive)) },
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = { onConfirm(instruction.trim().ifBlank { null }) },
+            ) {
+                Text(stringResource(R.string.facts_regenerate_action))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.facts_cancel))
+            }
+        },
+    )
+}
 
 @Composable
 private fun CenteredLoading(modifier: Modifier = Modifier) {
@@ -847,4 +898,45 @@ private fun CenteredLoading(modifier: Modifier = Modifier) {
     ) {
         CircularProgressIndicator()
     }
+}
+
+@Composable
+private fun statusLabel(status: FactStatusFilter): String = when (status) {
+    FactStatusFilter.ALL -> stringResource(R.string.facts_status_all)
+    FactStatusFilter.ACTIVE -> stringResource(R.string.facts_status_active)
+    FactStatusFilter.IGNORED -> stringResource(R.string.facts_status_ignored)
+    FactStatusFilter.FAVORITES -> stringResource(R.string.facts_status_favorites)
+    FactStatusFilter.FORMULAS -> stringResource(R.string.facts_status_formulas)
+    FactStatusFilter.DIAGRAMS -> stringResource(R.string.facts_status_diagrams)
+    FactStatusFilter.DUE_FOR_REVIEW -> stringResource(R.string.facts_status_due_for_review)
+}
+
+@Composable
+private fun templateLabel(type: CardTemplateType): String = when (type) {
+    CardTemplateType.TEXT -> stringResource(R.string.facts_template_text)
+    CardTemplateType.QUOTE -> stringResource(R.string.facts_template_quote)
+    CardTemplateType.BULLET -> stringResource(R.string.facts_template_bullet)
+    CardTemplateType.DEFINITION -> stringResource(R.string.facts_template_definition)
+    CardTemplateType.QA -> stringResource(R.string.facts_template_qa)
+    CardTemplateType.FORMULA -> stringResource(R.string.facts_template_formula)
+    CardTemplateType.DIAGRAM -> stringResource(R.string.facts_template_diagram)
+    CardTemplateType.TIMELINE -> stringResource(R.string.facts_template_timeline)
+}
+
+@Composable
+private fun diagramLabel(kind: DiagramKind): String = when (kind) {
+    DiagramKind.NONE -> stringResource(R.string.facts_diagram_none)
+    DiagramKind.MERMAID -> stringResource(R.string.facts_diagram_mermaid)
+    DiagramKind.TIKZ -> stringResource(R.string.facts_diagram_tikz)
+    DiagramKind.SVG -> stringResource(R.string.facts_diagram_svg)
+    DiagramKind.HTML_CANVAS -> stringResource(R.string.facts_diagram_html_canvas)
+}
+
+@Composable
+private fun sourceModeLabel(mode: SourceReferenceMode?): String = when (mode) {
+    null -> stringResource(R.string.facts_source_mode_default)
+    SourceReferenceMode.FULL -> stringResource(R.string.facts_source_mode_full)
+    SourceReferenceMode.COMPACT -> stringResource(R.string.facts_source_mode_compact)
+    SourceReferenceMode.PAGE_ONLY -> stringResource(R.string.facts_source_mode_page_only)
+    SourceReferenceMode.HIDDEN -> stringResource(R.string.facts_source_mode_hidden)
 }

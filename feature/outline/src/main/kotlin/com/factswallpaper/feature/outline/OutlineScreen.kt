@@ -101,6 +101,14 @@ fun OutlineScreen(
                         )
                     }
                 },
+                actions = {
+                    IconButton(onClick = viewModel::regenerateFailedLessons) {
+                        Icon(
+                            imageVector = Icons.Filled.Replay,
+                            contentDescription = stringResource(R.string.outline_regenerate_failed),
+                        )
+                    }
+                },
             )
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
