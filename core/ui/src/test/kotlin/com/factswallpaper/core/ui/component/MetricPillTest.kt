@@ -1,10 +1,12 @@
 package com.factswallpaper.core.ui.component
 
 import androidx.compose.ui.test.assertHasClickAction
+import androidx.compose.ui.test.assertHasNoClickAction
 import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
 import androidx.test.core.app.ApplicationProvider
@@ -50,6 +52,11 @@ class MetricPillTest {
             MetricPill(value = "3", label = "Formulas")
         }
 
+        // Assert the pill really rendered, so the absence check below cannot pass on a blank screen.
+        composeRule.onNodeWithText("3")
+            .assertIsDisplayed()
+            .assertHasNoClickAction()
+        composeRule.onNodeWithText("Formulas").assertIsDisplayed()
         composeRule.onNodeWithContentDescription(
             context.getString(R.string.metric_open_description, "3 Formulas"),
         ).assertDoesNotExist()

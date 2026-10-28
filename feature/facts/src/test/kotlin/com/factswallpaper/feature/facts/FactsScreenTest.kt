@@ -15,6 +15,7 @@ import androidx.work.testing.WorkManagerTestInitHelper
 import com.factswallpaper.core.model.Fact
 import com.factswallpaper.core.render.CardPreRenderScheduler
 import com.factswallpaper.core.ui.R as CoreUiR
+import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -102,7 +103,7 @@ class FactsScreenTest {
             .performClick()
         composeRule.waitForIdle()
 
-        assert(factRepository.factsFlow.value.single().favorite)
+        assertThat(factRepository.factsFlow.value.single().favorite).isTrue()
     }
 
     private fun showFacts() {

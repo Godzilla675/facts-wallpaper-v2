@@ -60,9 +60,7 @@ class FactsDatabaseMigrationTest {
     fun `version two profiles receive advanced request settings defaults`() {
         val migration = FactsDatabase.MIGRATIONS.singleOrNull {
             it.startVersion == 2 && it.endVersion == 3
-        }
-        assertThat(migration?.endVersion).isEqualTo(3)
-        if (migration == null) return
+        } ?: throw AssertionError("Expected a version 2 to 3 migration.")
 
         val context = ApplicationProvider.getApplicationContext<Context>()
         val helper = FrameworkSQLiteOpenHelperFactory().create(
