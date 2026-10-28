@@ -53,6 +53,7 @@ import com.factswallpaper.core.model.CardTemplateType
 import com.factswallpaper.core.model.DiagramKind
 import com.factswallpaper.core.model.Fact
 import com.factswallpaper.core.model.SourceReferenceMode
+import com.factswallpaper.core.model.VerificationStatus
 import com.factswallpaper.core.ui.R
 
 /** Fact curation card: badges, body, optional formula/diagram, tags and actions. */
@@ -91,6 +92,14 @@ fun FactListItemCard(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 MetricPill(value = templateLabel(fact.templateType))
+                if (fact.verificationStatus == VerificationStatus.FAILED) {
+                    Spacer(modifier = Modifier.width(spacing.xs))
+                    Text(
+                        text = stringResource(R.string.fact_needs_review),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
                 if (fact.confidence < 1f) {
                     Spacer(modifier = Modifier.width(spacing.xs))
                     MetricPill(

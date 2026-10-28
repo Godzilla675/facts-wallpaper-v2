@@ -47,6 +47,8 @@ fun DocumentCard(
     onResumeOcr: () -> Unit,
     onRetry: () -> Unit,
     onDelete: () -> Unit,
+    sourceMissing: Boolean = false,
+    onRelink: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val spacing = LocalSpacing.current
@@ -112,6 +114,18 @@ fun DocumentCard(
                 MetricPill(value = routeLabel(document.processingRoute))
                 stageChipLabel(document.extractionStatus)?.let { stage ->
                     MetricPill(value = stage)
+                }
+            }
+
+            if (sourceMissing) {
+                Spacer(modifier = Modifier.height(spacing.xs))
+                Text(
+                    text = stringResource(R.string.document_source_missing),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+                TextButton(onClick = onRelink) {
+                    Text(stringResource(R.string.document_source_relink))
                 }
             }
 

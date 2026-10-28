@@ -28,6 +28,8 @@ import com.factswallpaper.core.pdf.PdfPageRange
 import com.factswallpaper.core.pdf.PdfPageTextStat
 import com.factswallpaper.core.pdf.PdfProcessingOptions
 import com.factswallpaper.core.pdf.PdfProviderCapabilities
+import com.factswallpaper.core.pdf.PdfRelinkResult
+import com.factswallpaper.core.pdf.PdfRelinkService
 import com.factswallpaper.core.pdf.PdfRouteClassifier
 import com.factswallpaper.core.pdf.StagedPdf
 import com.google.common.truth.Truth.assertThat
@@ -72,6 +74,7 @@ class LibraryViewModelTest {
             rotationPoolRepository = FakeRotationPoolRepository(),
             scheduler = scheduler,
             settingsRepository = FakeSettingsRepository(),
+            pdfRelinkService = FakePdfRelinkService(),
         )
 
         val collectJob = backgroundScope.launch(testDispatcher) {
@@ -104,6 +107,7 @@ class LibraryViewModelTest {
             rotationPoolRepository = FakeRotationPoolRepository(),
             scheduler = scheduler,
             settingsRepository = FakeSettingsRepository(),
+            pdfRelinkService = FakePdfRelinkService(),
         )
 
         viewModel.pauseOcr("doc-ocr")
@@ -196,6 +200,54 @@ class LibraryViewModelTest {
         assertThat(readyState.canStart).isTrue()
     }
 
+    @Test
+    fun `relinkSourcePdf saves the verified path and reports success`() = runTest {
+        val doc = sampleDocument("doc-relink", "Restored Without PDF")
+        val repo = FakeLibraryDocumentRepository(listOf(doc))
+        val relink = FakePdfRelinkService().apply {
+            result = PdfRelinkResult.Success(
+                localFilePath = "/data/pdfs/doc-relink.pdf",
+                sizeBytes = 42_000L,
+            )
+        }
+        val viewModel = LibraryViewModel(
+            documentRepository = repo,
+            rotationPoolRepository = FakeRotationPoolRepository(),
+            scheduler = FakeDocumentProcessingScheduler(repo),
+            settingsRepository = FakeSettingsRepository(),
+            pdfRelinkService = relink,
+        )
+
+        viewModel.relinkSourcePdf(doc, "content://picked/doc-relink.pdf")
+
+        val saved = repo.getDocument("doc-relink")
+        assertThat(saved?.localFilePath).isEqualTo("/data/pdfs/doc-relink.pdf")
+        assertThat(saved?.fileSizeBytes).isEqualTo(42_000L)
+        assertThat(saved?.sourceUri).isEqualTo("content://picked/doc-relink.pdf")
+        assertThat(relink.lastExpectedSha256).isEqualTo("hash-doc-relink")
+        assertThat(viewModel.message.value?.textRes).isEqualTo(R.string.library_relink_success)
+    }
+
+    @Test
+    fun `relinkSourcePdf rejects a PDF with a different fingerprint`() = runTest {
+        val doc = sampleDocument("doc-mismatch", "Restored Without PDF")
+        val repo = FakeLibraryDocumentRepository(listOf(doc))
+        val relink = FakePdfRelinkService().apply { result = PdfRelinkResult.HashMismatch }
+        val viewModel = LibraryViewModel(
+            documentRepository = repo,
+            rotationPoolRepository = FakeRotationPoolRepository(),
+            scheduler = FakeDocumentProcessingScheduler(repo),
+            settingsRepository = FakeSettingsRepository(),
+            pdfRelinkService = relink,
+        )
+
+        viewModel.relinkSourcePdf(doc, "content://picked/wrong.pdf")
+
+        assertThat(repo.getDocument("doc-mismatch")?.localFilePath)
+            .isEqualTo("/data/pdfs/doc-mismatch.pdf")
+        assertThat(viewModel.message.value?.textRes).isEqualTo(R.string.library_relink_wrong_file)
+    }
+
     private fun sampleDocument(id: String, title: String) = Document(
         id = id,
         title = title,
@@ -240,6 +292,20 @@ private class FakeDocumentProcessingScheduler(
 
     override fun cancel(documentId: String) {
         cancelledIds += documentId
+    }
+}
+
+private class FakePdfRelinkService : PdfRelinkService {
+    var result: PdfRelinkResult = PdfRelinkResult.HashMismatch
+    var lastExpectedSha256: String? = null
+
+    override suspend fun relink(
+        documentId: String,
+        expectedSha256: String,
+        uriString: String,
+    ): PdfRelinkResult {
+        lastExpectedSha256 = expectedSha256
+        return result
     }
 }
 

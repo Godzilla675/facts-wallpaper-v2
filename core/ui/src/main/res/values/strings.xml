@@ -47,6 +47,8 @@
     <string name="document_route_direct_pdf">Direct PDF</string>
     <string name="document_route_ocr_override">OCR review</string>
     <string name="document_use_for_wallpaper">Use for wallpaper</string>
+    <string name="document_source_missing">Source PDF not on device</string>
+    <string name="document_source_relink">Re-link PDF</string>
     <string name="document_open_outline">Outline</string>
     <string name="document_open_facts">Facts</string>
     <string name="document_delete">Delete</string>
@@ -82,6 +84,7 @@
     <string name="fact_regenerate">Regenerate</string>
     <string name="fact_diagram_chip">%1$s diagram</string>
     <string name="fact_confidence">%1$d%% confidence</string>
+    <string name="fact_needs_review">Needs review</string>
     <string name="fact_active">Active</string>
     <string name="fact_active_description">Include fact in wallpaper rotation</string>
     <string name="fact_template_text">Text</string>

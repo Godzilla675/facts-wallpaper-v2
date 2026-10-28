@@ -413,6 +413,14 @@ private fun StepThree(onOpenImport: () -> Unit, onNext: () -> Unit) {
                 Button(onClick = onOpenImport, modifier = Modifier.fillMaxWidth()) {
                     Text(stringResource(R.string.onboarding_open_import))
                 }
+                OutlinedButton(onClick = onOpenImport, modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.onboarding_open_import_url))
+                }
+                Text(
+                    text = stringResource(R.string.onboarding_open_import_url_helper),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
                 TextButton(onClick = onNext, modifier = Modifier.fillMaxWidth()) {
                     Text(stringResource(R.string.onboarding_skip_import))
                 }
@@ -555,4 +563,9 @@ private val PRESET_TYPES = setOf(
     ProviderType.GEMINI,
     ProviderType.OPENAI,
     ProviderType.ANTHROPIC,
+    ProviderType.AZURE_OPENAI,
+    ProviderType.OPENROUTER,
+    ProviderType.DEEPSEEK,
+    ProviderType.QWEN,
+    ProviderType.OPENAI_COMPATIBLE,
 )

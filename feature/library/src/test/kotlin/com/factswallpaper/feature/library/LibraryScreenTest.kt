@@ -17,6 +17,8 @@ import com.factswallpaper.core.model.Fact
 import com.factswallpaper.core.model.PdfProcessingRoute
 import com.factswallpaper.core.model.RotationPoolSummary
 import com.factswallpaper.core.pdf.DocumentProcessingScheduler
+import com.factswallpaper.core.pdf.PdfRelinkResult
+import com.factswallpaper.core.pdf.PdfRelinkService
 import com.factswallpaper.core.ui.R as CoreUiR
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -105,6 +107,7 @@ class LibraryScreenTest {
             rotationPoolRepository = ScreenFakeRotationPoolRepository(),
             scheduler = FakeScheduler(repository),
             settingsRepository = FakeSettingsRepository(),
+            pdfRelinkService = ScreenFakePdfRelinkService,
         )
         composeRule.setContent {
             LibraryScreen(
@@ -246,4 +249,12 @@ private class FakeLibraryRepository(
         compiledTextPath: String,
         status: ExtractionStatus,
     ) = Unit
+}
+
+private object ScreenFakePdfRelinkService : PdfRelinkService {
+    override suspend fun relink(
+        documentId: String,
+        expectedSha256: String,
+        uriString: String,
+    ): PdfRelinkResult = PdfRelinkResult.Failure("not used")
 }

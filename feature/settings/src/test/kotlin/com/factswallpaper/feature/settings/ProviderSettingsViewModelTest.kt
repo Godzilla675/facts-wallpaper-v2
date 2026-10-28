@@ -6,13 +6,19 @@ import com.factswallpaper.core.ai.ModelCatalogResult
 import com.factswallpaper.core.ai.ProviderDiagnosticsService
 import com.factswallpaper.core.common.AppResult
 import com.factswallpaper.core.data.repository.DiagnosticsRepository
+import com.factswallpaper.core.data.repository.DocumentRepository
 import com.factswallpaper.core.data.repository.ProviderProfileRepository
 import com.factswallpaper.core.datastore.AppPreferences
 import com.factswallpaper.core.datastore.SettingsRepository
 import com.factswallpaper.core.model.AiRequestLogEntry
 import com.factswallpaper.core.model.AiTask
 import com.factswallpaper.core.model.AutoProcessMode
+import com.factswallpaper.core.model.Document
+import com.factswallpaper.core.model.DocumentChunk
 import com.factswallpaper.core.model.DocumentInputMode
+import com.factswallpaper.core.model.DocumentSettings
+import com.factswallpaper.core.model.ExtractionStatus
+import com.factswallpaper.core.model.PdfProcessingRoute
 import com.factswallpaper.core.model.ProviderKeyStatus
 import com.factswallpaper.core.model.ProviderProfile
 import com.factswallpaper.core.model.ProviderType
@@ -62,6 +68,7 @@ class ProviderSettingsViewModelTest {
             apiKeyStore = fakeApiKeyStore,
             diagnosticsService = fakeDiagnosticsService,
             diagnosticsRepository = fakeDiagnosticsRepo,
+            documentRepository = FakeDocumentRepository(),
         )
     }
 
@@ -298,4 +305,57 @@ private class FakeApiKeyStore : ApiKeyStore {
     override suspend fun hasApiKey(profileId: String): Boolean = keys.containsKey(profileId)
     override suspend fun configuredProfileIds(candidateProfileIds: Collection<String>): Set<String> =
         candidateProfileIds.filter { keys.containsKey(it) }.toSet()
+}
+
+private class FakeDocumentRepository : DocumentRepository {
+    private val documents = MutableStateFlow<List<Document>>(emptyList())
+
+    override fun observeDocuments(): Flow<List<Document>> = documents
+    override fun observeDocument(documentId: String): Flow<Document?> =
+        MutableStateFlow(null)
+    override suspend fun getDocument(documentId: String): Document? = null
+    override suspend fun findByHash(fileHash: String): Document? = null
+    override suspend fun getLocalFilePath(documentId: String): String? = null
+    override fun observeSettings(documentId: String): Flow<DocumentSettings?> = MutableStateFlow(null)
+    override suspend fun getSettings(documentId: String): DocumentSettings? = null
+    override fun observeAllSettings(): Flow<List<DocumentSettings>> = MutableStateFlow(emptyList())
+    override suspend fun saveDocument(document: Document) {}
+    override suspend fun saveDocumentWithSettings(document: Document, settings: DocumentSettings) {}
+    override suspend fun replaceDocumentWithSettings(document: Document, settings: DocumentSettings) {}
+    override suspend fun saveSettings(settings: DocumentSettings) {}
+    override suspend fun setIncludedInRotation(documentId: String, included: Boolean) {}
+    override suspend fun updateExtractionStatus(
+        documentId: String,
+        status: ExtractionStatus,
+        errorMessage: String?,
+    ) {}
+    override suspend fun updatePipelineProgress(documentId: String, progress: Float) {}
+    override suspend fun updatePipelineStatus(
+        documentId: String,
+        status: ExtractionStatus,
+        progress: Float,
+        errorMessage: String?,
+    ) {}
+    override suspend fun deleteDocument(documentId: String): AppResult<Unit> = AppResult.Success(Unit)
+    override fun observeRouteCounts(): Flow<Map<PdfProcessingRoute, Int>> = MutableStateFlow(emptyMap())
+    override fun observeChunks(documentId: String): Flow<List<DocumentChunk>> = MutableStateFlow(emptyList())
+    override suspend fun getChunks(
+        documentId: String,
+        startPage: Int,
+        endPage: Int,
+    ): List<DocumentChunk> = emptyList()
+    override suspend fun upsertChunk(chunk: DocumentChunk) {}
+    override suspend fun clearChunks(documentId: String) {}
+    override suspend fun markOcrPageStarted(documentId: String, page: Int) {}
+    override suspend fun commitOcrPage(
+        documentId: String,
+        page: Int,
+        text: String,
+        confidence: Float?,
+    ) {}
+    override suspend fun updateCompiledText(
+        documentId: String,
+        compiledTextPath: String,
+        status: ExtractionStatus,
+    ) {}
 }

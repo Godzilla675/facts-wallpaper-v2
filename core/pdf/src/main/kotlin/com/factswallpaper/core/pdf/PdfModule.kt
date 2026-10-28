@@ -40,6 +40,10 @@ abstract class PdfBindingsModule {
 
     @Binds
     @Singleton
+    abstract fun bindPdfRelinkService(impl: DefaultPdfRelinkService): PdfRelinkService
+
+    @Binds
+    @Singleton
     abstract fun bindOcrPageRenderer(impl: PdfRendererPageRenderer): com.factswallpaper.core.ocr.OcrPageRenderer
 
     @Binds

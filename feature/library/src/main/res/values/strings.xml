@@ -25,6 +25,9 @@
     <string name="library_ocr_paused">OCR paused. Saved pages are kept.</string>
     <string name="library_ocr_resumed">Resuming OCR from the saved checkpoint.</string>
     <string name="library_retry_started">Processing restarted.</string>
+    <string name="library_relink_success">Source PDF re-linked.</string>
+    <string name="library_relink_wrong_file">That PDF does not match this document\'s fingerprint. Pick the original file.</string>
+    <string name="library_relink_failed">Could not re-link the source PDF.</string>
 
     <string name="import_title">Import PDF</string>
     <string name="import_back">Back</string>

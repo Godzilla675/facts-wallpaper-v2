@@ -11,4 +11,6 @@ dependencies {
     implementation(project(":core:wallpaper"))
     implementation(project(":core:ai"))
     implementation(project(":core:security"))
+    implementation(project(":core:render"))
+    implementation(project(":core:ocr"))
 }

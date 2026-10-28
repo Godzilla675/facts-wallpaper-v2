@@ -1,6 +1,8 @@
 package com.factswallpaper.feature.library
 
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -84,6 +86,16 @@ fun LibraryScreen(
     val coroutineScope = rememberCoroutineScope()
     var pendingDelete by remember { mutableStateOf<Document?>(null) }
     var showBatchDeleteConfirm by remember { mutableStateOf(false) }
+    var relinkTarget by remember { mutableStateOf<Document?>(null) }
+    val relinkPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        val document = relinkTarget
+        relinkTarget = null
+        if (uri != null && document != null) {
+            viewModel.relinkSourcePdf(document, uri.toString())
+        }
+    }
     UiMessageEffect(message, snackbarHostState, viewModel::onMessageShown)
 
     val contentState = state as? LibraryUiState.Content
@@ -214,6 +226,10 @@ fun LibraryScreen(
                 onResumeOcr = viewModel::resumeOcr,
                 onRetry = viewModel::retryProcessing,
                 onDelete = { pendingDelete = it },
+                onRelink = { document ->
+                    relinkTarget = document
+                    relinkPicker.launch(arrayOf("application/pdf"))
+                },
                 showCoachHint = showCoachHint,
                 onDismissCoachHint = viewModel::dismissCoachHint,
                 modifier = Modifier.padding(padding),
@@ -301,6 +317,7 @@ private fun LibraryContent(
     onResumeOcr: (String) -> Unit,
     onRetry: (String) -> Unit,
     onDelete: (Document) -> Unit,
+    onRelink: (Document) -> Unit,
     showCoachHint: Boolean,
     onDismissCoachHint: () -> Unit,
     modifier: Modifier = Modifier,
@@ -400,6 +417,8 @@ private fun LibraryContent(
                         onResumeOcr = { onResumeOcr(document.id) },
                         onRetry = { onRetry(document.id) },
                         onDelete = { onDelete(document) },
+                        sourceMissing = document.id in state.missingSourceIds,
+                        onRelink = { onRelink(document) },
                     )
                 }
             }

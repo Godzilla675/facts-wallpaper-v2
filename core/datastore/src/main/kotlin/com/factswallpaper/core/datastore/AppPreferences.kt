@@ -14,7 +14,7 @@ import com.factswallpaper.core.model.ThemeMode
  */
 data class AppPreferences(
     val onboardingCompleted: Boolean = false,
-    val appThemeMode: ThemeMode = ThemeMode.SYSTEM,
+    val appThemeMode: ThemeMode = ThemeMode.DARK,
     val wallpaperThemeMode: ThemeMode = ThemeMode.AMOLED,
     val routingStrategy: RoutingStrategy = RoutingStrategy.BALANCED,
     val taskProfileOverrides: Map<AiTask, String> = emptyMap(),

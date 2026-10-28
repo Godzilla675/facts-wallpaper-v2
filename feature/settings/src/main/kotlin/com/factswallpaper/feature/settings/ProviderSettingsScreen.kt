@@ -445,6 +445,14 @@ private fun ProviderContent(
                         label = stringResource(R.string.provider_usage_all_time),
                     )
                 }
+                UsageBreakdownSection(
+                    title = stringResource(R.string.advanced_usage_by_provider),
+                    rows = state.usageBreakdown.byProvider,
+                )
+                UsageBreakdownSection(
+                    title = stringResource(R.string.advanced_usage_by_document),
+                    rows = state.usageBreakdown.byDocument,
+                )
             }
         }
         item {

@@ -120,15 +120,19 @@ class PdfFileStore @Inject constructor(
         moveStaged(staged, documentFile(documentId))
 
     suspend fun moveStaged(staged: StagedPdf, target: File): File =
+        moveFile(File(staged.filePath), target)
+
+    /** Moves [source] to [target], replacing an existing file atomically when possible. */
+    suspend fun moveFile(source: File, target: File): File =
         withContext(dispatchers.io) {
             documentsDir.mkdirs()
+            target.parentFile?.mkdirs()
             if (target.exists() && !target.delete()) {
                 throw PdfImportException(
                     PdfImportErrorCode.STORAGE_FAILED,
                     "Could not replace ${target.name}",
                 )
             }
-            val source = File(staged.filePath)
             if (!source.exists()) {
                 throw PdfImportException(
                     PdfImportErrorCode.STORAGE_FAILED,

@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
@@ -69,6 +70,8 @@ import com.factswallpaper.core.backup.BackupDestinationStatus
 import com.factswallpaper.core.designsystem.theme.LocalSpacing
 import com.factswallpaper.core.model.AiRequestLogEntry
 import com.factswallpaper.core.model.AiTask
+import com.factswallpaper.core.ocr.OcrModelState
+import com.factswallpaper.core.ocr.OcrModelStatus
 import com.factswallpaper.core.ui.UiMessageEffect
 import com.factswallpaper.core.ui.component.ErrorStatePanel
 import com.factswallpaper.core.ui.component.MetricPill
@@ -119,6 +122,7 @@ fun AdvancedSettingsScreen(
     var showRestoreDialog by remember { mutableStateOf(false) }
     var selectedRestoreUri by remember { mutableStateOf<Uri?>(null) }
     var pendingCacheClear by remember { mutableStateOf<CacheClearTarget?>(null) }
+    var pendingReverify by remember { mutableStateOf(false) }
     var pendingBackupDestination by remember { mutableStateOf<BackupDestinationRequest?>(null) }
 
     val backupDocumentPicker = rememberLauncherForActivityResult(
@@ -180,6 +184,8 @@ fun AdvancedSettingsScreen(
                 state = value,
                 onEditOcrLimit = { editingOcrLimit = true },
                 onEditQueueSize = { editingQueueSize = true },
+                onDownloadOcrModel = viewModel::downloadOcrModel,
+                onDeleteOcrModel = viewModel::deleteOcrModel,
                 onAdvancedOcrChange = viewModel::setAllowAdvancedOcrEngines,
                 onEnableLogsChange = viewModel::setEnableAiDiagnosticsLog,
                 onDoubleTapChange = viewModel::setEnableDoubleTapAdvance,
@@ -190,6 +196,8 @@ fun AdvancedSettingsScreen(
                 onClearRenderCache = { pendingCacheClear = CacheClearTarget.CARDS },
                 onClearDiagramCache = { pendingCacheClear = CacheClearTarget.DIAGRAMS },
                 onCompactDatabase = viewModel::compactDatabase,
+                onReVerify = { pendingReverify = true },
+                onEncryptedDatabaseChange = viewModel::setEncryptedDatabase,
                 onOpenBackupDialog = { showBackupDialog = true },
                 onOpenRestoreDialog = {
                     selectedRestoreUri = null
@@ -205,9 +213,7 @@ fun AdvancedSettingsScreen(
                 onBackupFrequencyChange = {
                     viewModel.setAutomaticBackup(value.backupDestination.automaticEnabled, it)
                 },
-                onSqlCipher = viewModel::sqlCipherInfo,
-                onOpenWhatsHappening = onOpenWhatsHappening,
-                onOpenLibrary = onOpenLibrary,
+                onOpenWhatsHappening = onOpenWhatsHappening,                onOpenLibrary = onOpenLibrary,
                 onThemeModeChange = viewModel::setAppThemeMode,
                 onDynamicColorChange = viewModel::setDynamicColorEnabled,
                 onHapticsChange = viewModel::setHapticsEnabled,
@@ -248,6 +254,31 @@ fun AdvancedSettingsScreen(
             },
             dismissButton = {
                 TextButton(onClick = { pendingCacheClear = null }) {
+                    Text(stringResource(R.string.advanced_cancel))
+                }
+            },
+        )
+    }
+
+    if (pendingReverify) {
+        val running = (state as? AdvancedSettingsUiState.Content)?.isReverifying == true
+        AlertDialog(
+            onDismissRequest = { pendingReverify = false },
+            title = { Text(stringResource(R.string.advanced_reverify_confirm_title)) },
+            text = { Text(stringResource(R.string.advanced_reverify_confirm_body)) },
+            confirmButton = {
+                TextButton(
+                    enabled = !running,
+                    onClick = {
+                        pendingReverify = false
+                        viewModel.reVerifyAll()
+                    },
+                ) {
+                    Text(stringResource(R.string.advanced_reverify_action))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingReverify = false }) {
                     Text(stringResource(R.string.advanced_cancel))
                 }
             },
@@ -362,6 +393,8 @@ private fun AdvancedContent(
     state: AdvancedSettingsUiState.Content,
     onEditOcrLimit: () -> Unit,
     onEditQueueSize: () -> Unit,
+    onDownloadOcrModel: (String) -> Unit,
+    onDeleteOcrModel: (String) -> Unit,
     onAdvancedOcrChange: (Boolean) -> Unit,
     onEnableLogsChange: (Boolean) -> Unit,
     onDoubleTapChange: (Boolean) -> Unit,
@@ -372,13 +405,14 @@ private fun AdvancedContent(
     onClearRenderCache: () -> Unit,
     onClearDiagramCache: () -> Unit,
     onCompactDatabase: () -> Unit,
+    onReVerify: () -> Unit,
+    onEncryptedDatabaseChange: (Boolean) -> Unit,
     onOpenBackupDialog: () -> Unit,
     onOpenRestoreDialog: () -> Unit,
     onRestoreFromFile: () -> Unit,
     onBackupToSavedLocation: () -> Unit,
     onAutomaticBackupChange: (Boolean) -> Unit,
     onBackupFrequencyChange: (AutomaticBackupFrequency) -> Unit,
-    onSqlCipher: () -> Unit,
     onOpenWhatsHappening: () -> Unit,
     onOpenLibrary: (() -> Unit)?,
     onThemeModeChange: (ThemeMode) -> Unit,
@@ -485,6 +519,26 @@ private fun AdvancedContent(
                     ),
                     onClick = onEditQueueSize,
                 )
+                Text(
+                    text = stringResource(R.string.advanced_ocr_models_title),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = spacing.sm),
+                )
+                Text(
+                    text = stringResource(R.string.advanced_ocr_models_helper),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                state.ocrModels
+                    .filter { it.language.requiresDownload }
+                    .forEach { model ->
+                        OcrLanguagePackRow(
+                            model = model,
+                            onDownload = { onDownloadOcrModel(model.language.code) },
+                            onDelete = { onDeleteOcrModel(model.language.code) },
+                        )
+                    }
             }
         }
 
@@ -588,6 +642,14 @@ private fun AdvancedContent(
                         label = stringResource(R.string.provider_usage_all_time),
                     )
                 }
+                UsageBreakdownSection(
+                    title = stringResource(R.string.advanced_usage_by_provider),
+                    rows = state.usageBreakdown.byProvider,
+                )
+                UsageBreakdownSection(
+                    title = stringResource(R.string.advanced_usage_by_document),
+                    rows = state.usageBreakdown.byDocument,
+                )
             }
         }
 
@@ -646,6 +708,49 @@ private fun AdvancedContent(
                     Spacer(Modifier.padding(start = 4.dp))
                     Text(stringResource(R.string.advanced_storage_compact))
                 }
+                OutlinedButton(
+                    onClick = onReVerify,
+                    enabled = !state.isReverifying,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    if (state.isReverifying) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp,
+                        )
+                    } else {
+                        Icon(Icons.Filled.CheckCircle, contentDescription = null)
+                    }
+                    Spacer(Modifier.padding(start = 4.dp))
+                    Text(
+                        stringResource(
+                            if (state.isReverifying) {
+                                R.string.advanced_reverify_running
+                            } else {
+                                R.string.advanced_reverify
+                            },
+                        ),
+                    )
+                }
+                SettingSwitchRow(
+                    title = stringResource(R.string.advanced_sqlcipher),
+                    subtitle = stringResource(R.string.advanced_sqlcipher_helper),
+                    checked = state.databaseEncryptionRequested,
+                    onCheckedChange = onEncryptedDatabaseChange,
+                )
+                Text(
+                    text = stringResource(
+                        when {
+                            state.databaseEncryptionApplied == true &&
+                                state.databaseEncryptionRequested -> R.string.advanced_sqlcipher_active
+                            state.databaseEncryptionApplied == false &&
+                                !state.databaseEncryptionRequested -> R.string.advanced_sqlcipher_inactive
+                            else -> R.string.advanced_sqlcipher_restart
+                        },
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
                 Text(
                     text = stringResource(R.string.advanced_storage_note),
                     style = MaterialTheme.typography.bodySmall,
@@ -724,33 +829,71 @@ private fun AdvancedContent(
                 ) {
                     Text(stringResource(R.string.advanced_backup_choose_location))
                 }
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = 48.dp)
-                        .clickable(onClick = onSqlCipher)
-                        .padding(vertical = spacing.sm),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = stringResource(R.string.advanced_sqlcipher),
-                            style = MaterialTheme.typography.bodyLarge,
-                        )
-                        Text(
-                            text = stringResource(R.string.advanced_sqlcipher_helper),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    Text(
-                        text = stringResource(R.string.advanced_sqlcipher_state),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                }
             }
         }
+    }
+}
+
+@Composable
+private fun OcrLanguagePackRow(
+    model: OcrModelState,
+    onDownload: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    val spacing = LocalSpacing.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp)
+            .padding(vertical = spacing.xs),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = stringResource(model.language.displayNameRes),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Text(
+                text = ocrModelStatusText(model),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        when (model.status) {
+            OcrModelStatus.DOWNLOADING,
+            OcrModelStatus.VERIFYING,
+            -> CircularProgressIndicator(
+                modifier = Modifier
+                    .padding(start = spacing.sm)
+                    .size(20.dp),
+                strokeWidth = 2.dp,
+            )
+            OcrModelStatus.INSTALLED -> TextButton(onClick = onDelete) {
+                Text(stringResource(R.string.advanced_ocr_model_delete))
+            }
+            else -> TextButton(onClick = onDownload) {
+                Text(stringResource(R.string.advanced_ocr_model_download))
+            }
+        }
+    }
+}
+
+@Composable
+private fun ocrModelStatusText(model: OcrModelState): String {
+    val sizeBytes = model.totalBytes.takeIf { it > 0L } ?: model.language.expectedSizeBytes
+    val sizeMb = sizeBytes.toFloat() / (1024f * 1024f)
+    return when (model.status) {
+        OcrModelStatus.INSTALLED -> stringResource(R.string.advanced_ocr_model_installed_status)
+        OcrModelStatus.DOWNLOADING -> stringResource(
+            R.string.advanced_ocr_model_progress,
+            (model.progress * 100f).toInt(),
+        )
+        OcrModelStatus.VERIFYING -> stringResource(R.string.advanced_ocr_model_verifying)
+        OcrModelStatus.ERROR -> stringResource(
+            R.string.advanced_ocr_model_error,
+            model.errorDetail ?: stringResource(R.string.advanced_ocr_model_failed),
+        )
+        OcrModelStatus.NOT_INSTALLED -> stringResource(R.string.advanced_ocr_model_size, sizeMb)
     }
 }
 

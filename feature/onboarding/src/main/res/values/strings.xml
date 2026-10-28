@@ -29,6 +29,8 @@
     <string name="onboarding_step3_title">Bring your first PDF</string>
     <string name="onboarding_step3_body">Import a textbook or lecture notes. The library can hold your whole study shelf, and only selected facts join the wallpaper rotation.</string>
     <string name="onboarding_open_import">Choose a PDF</string>
+    <string name="onboarding_open_import_url">Import from HTTPS URL</string>
+    <string name="onboarding_open_import_url_helper">Opens the import screen, where you can paste a direct PDF link.</string>
     <string name="onboarding_skip_import">Skip for now</string>
     <string name="onboarding_step4_title">Pick a look</string>
     <string name="onboarding_step4_body">The app theme and the wallpaper theme are independent. Choose what feels comfortable for reading and for your lock screen.</string>

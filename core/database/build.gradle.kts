@@ -16,6 +16,8 @@ android {
 dependencies {
     implementation(project(":core:model"))
     implementation(project(":core:common"))
+    implementation(project(":core:security"))
+    implementation(libs.sqlcipher.android)
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
 

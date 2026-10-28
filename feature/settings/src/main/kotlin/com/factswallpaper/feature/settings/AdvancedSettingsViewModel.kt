@@ -14,13 +14,22 @@ import com.factswallpaper.core.backup.BackupManager
 import com.factswallpaper.core.backup.BackupOptions
 import com.factswallpaper.core.common.AppResult
 import com.factswallpaper.core.data.repository.DiagnosticsRepository
+import com.factswallpaper.core.data.repository.DocumentRepository
+import com.factswallpaper.core.data.repository.FactRepository
+import com.factswallpaper.core.data.repository.ProviderProfileRepository
 import com.factswallpaper.core.data.repository.StorageRepository
 import com.factswallpaper.core.data.repository.StorageStats
 import com.factswallpaper.core.datastore.AppPreferences
 import com.factswallpaper.core.datastore.SettingsRepository
 import com.factswallpaper.core.model.AiRequestLogEntry
 import com.factswallpaper.core.model.AiTask
+import com.factswallpaper.core.model.FactFilter
 import com.factswallpaper.core.model.UsageSummary
+import com.factswallpaper.core.ocr.OcrModelManager
+import com.factswallpaper.core.ocr.OcrModelState
+import com.factswallpaper.core.render.verify.FormulaVerificationOutcome
+import com.factswallpaper.core.render.verify.FormulaVerificationService
+import com.factswallpaper.core.security.DatabaseEncryptionStore
 import com.factswallpaper.core.ui.FeatureViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -45,9 +54,27 @@ sealed interface AdvancedSettingsUiState {
         val logs: List<AiRequestLogEntry>,
         val storage: StorageStats,
         val usage: UsageSummary,
+        val usageBreakdown: UsageBreakdown,
         val backupDestination: BackupDestinationStatus,
+        val databaseEncryptionRequested: Boolean,
+        val databaseEncryptionApplied: Boolean?,
+        val isReverifying: Boolean,
+        val ocrModels: List<OcrModelState>,
     ) : AdvancedSettingsUiState
 }
+
+private data class LedgerState(
+    val summary: UsageSummary,
+    val breakdown: UsageBreakdown,
+)
+
+private data class BaseContent(
+    val preferences: AppPreferences,
+    val logs: List<AiRequestLogEntry>,
+    val storage: StorageStats,
+    val ledger: LedgerState,
+    val backupDestination: BackupDestinationStatus,
+)
 
 @HiltViewModel
 class AdvancedSettingsViewModel @Inject constructor(
@@ -58,31 +85,72 @@ class AdvancedSettingsViewModel @Inject constructor(
     private val backupManager: BackupManager,
     private val backupDestinationStore: BackupDestinationStore,
     private val automaticBackupScheduler: AutomaticBackupScheduler,
+    private val providerProfileRepository: ProviderProfileRepository,
+    private val documentRepository: DocumentRepository,
+    private val factRepository: FactRepository,
+    private val formulaVerificationService: FormulaVerificationService,
+    private val databaseEncryptionStore: DatabaseEncryptionStore,
+    private val ocrModelManager: OcrModelManager,
 ) : FeatureViewModel() {
 
     private val storage = MutableStateFlow(StorageStats())
     private val retrySignal = MutableStateFlow(0)
+    private val reverifying = MutableStateFlow(false)
+    private val encryptionRequested =
+        MutableStateFlow(databaseEncryptionStore.isEncryptionRequested())
+    private val encryptionApplied = databaseEncryptionStore.appliedEncryption()
 
     init {
         refreshStorage()
     }
 
+    private val usageBreakdown = combine(
+        diagnosticsRepository.observeUsage(),
+        providerProfileRepository.observeProfiles(),
+        documentRepository.observeDocuments(),
+    ) { usage, profiles, documents ->
+        buildUsageBreakdown(usage, profiles, documents)
+    }
+
     val uiState = retrySignal.flatMapLatest {
+        val ledger = combine(
+            diagnosticsRepository.observeUsageSummary(),
+            usageBreakdown,
+        ) { summary, breakdown -> LedgerState(summary, breakdown) }
+
         combine(
             settingsRepository.observePreferences(),
             diagnosticsRepository.observeRecentLogs(limit = 50),
             storage,
-            diagnosticsRepository.observeUsageSummary(),
+            ledger,
             backupDestinationStore.observeStatus(),
-        ) { preferences, logs, stats, usage, backupDestination ->
-            AdvancedSettingsUiState.Content(
+        ) { preferences, logs, stats, ledgerState, backupDestination ->
+            BaseContent(
                 preferences = preferences,
                 logs = logs,
                 storage = stats,
-                usage = usage,
+                ledger = ledgerState,
                 backupDestination = backupDestination,
             )
         }
+            .combine(reverifying) { base, running -> base to running }
+            .combine(encryptionRequested) { (base, running), requested ->
+                Triple(base, running, requested)
+            }
+            .combine(ocrModelManager.states) { (base, running, requested), models ->
+                AdvancedSettingsUiState.Content(
+                    preferences = base.preferences,
+                    logs = base.logs,
+                    storage = base.storage,
+                    usage = base.ledger.summary,
+                    usageBreakdown = base.ledger.breakdown,
+                    backupDestination = base.backupDestination,
+                    databaseEncryptionRequested = requested,
+                    databaseEncryptionApplied = encryptionApplied,
+                    isReverifying = running,
+                    ocrModels = models,
+                )
+            }
             .map<AdvancedSettingsUiState.Content, AdvancedSettingsUiState> { it }
             .catch { emit(AdvancedSettingsUiState.Error(R.string.advanced_load_error)) }
     }
@@ -369,8 +437,78 @@ class AdvancedSettingsViewModel @Inject constructor(
         }
     }
 
-    fun sqlCipherInfo() {
-        showMessage(R.string.advanced_sqlcipher_info)
+    fun setEncryptedDatabase(enabled: Boolean) {
+        viewModelScope.launch {
+            databaseEncryptionStore.setEncryptionRequested(enabled)
+            settingsRepository.setEncryptedDatabaseEnabled(enabled)
+            encryptionRequested.value = enabled
+            showMessage(R.string.advanced_sqlcipher_restart)
+        }
+    }
+
+    /**
+     * Runs the two-tier verifier over every fact that carries formula or diagram
+     * markup (F8/F22). AI verification can incur provider cost, so the UI asks for
+     * confirmation before calling this.
+     */
+    fun reVerifyAll() {
+        if (reverifying.value) return
+        viewModelScope.launch {
+            reverifying.value = true
+            try {
+                val facts = factRepository.observeFacts(FactFilter()).first()
+                var checked = 0
+                var verified = 0
+                var failed = 0
+                var pending = 0
+                for (fact in facts) {
+                    when (val outcome = formulaVerificationService.verifyAndPersist(fact)) {
+                        FormulaVerificationOutcome.NotApplicable -> Unit
+                        FormulaVerificationOutcome.Verified -> {
+                            checked++
+                            verified++
+                        }
+                        FormulaVerificationOutcome.PendingAi -> {
+                            checked++
+                            pending++
+                        }
+                        is FormulaVerificationOutcome.Failed -> {
+                            checked++
+                            failed++
+                        }
+                    }
+                }
+                if (checked == 0) {
+                    showMessage(R.string.advanced_reverify_none)
+                } else {
+                    showMessage(
+                        R.string.advanced_reverify_done,
+                        checked,
+                        verified,
+                        failed,
+                        pending,
+                    )
+                }
+            } catch (exception: kotlinx.coroutines.CancellationException) {
+                throw exception
+            } catch (_: Exception) {
+                showMessage(R.string.advanced_reverify_failed)
+            } finally {
+                reverifying.value = false
+            }
+        }
+    }
+
+    fun downloadOcrModel(languageCode: String) {
+        viewModelScope.launch {
+            ocrModelManager.download(languageCode)
+                .onSuccess { showMessage(R.string.advanced_ocr_model_installed) }
+                .onFailure { showMessage(R.string.advanced_ocr_model_failed) }
+        }
+    }
+
+    fun deleteOcrModel(languageCode: String) {
+        viewModelScope.launch { ocrModelManager.delete(languageCode) }
     }
 
     fun setAppThemeMode(mode: ThemeMode) {

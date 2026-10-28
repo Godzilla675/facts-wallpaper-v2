@@ -1,6 +1,9 @@
 package com.factswallpaper.feature.library
 
 import androidx.annotation.StringRes
+import com.factswallpaper.core.pdf.PdfRelinkResult
+import com.factswallpaper.core.pdf.PdfRelinkService
+import java.io.File
 import androidx.lifecycle.viewModelScope
 import com.factswallpaper.core.common.AppResult
 import com.factswallpaper.core.data.repository.DocumentRepository
@@ -43,6 +46,8 @@ sealed interface LibraryUiState {
         val query: String,
         val sortOrder: DocumentSortOrder = DocumentSortOrder.DATE_DESC,
         val selectedDocumentIds: Set<String> = emptySet(),
+        /** Documents whose app-private PDF copy is gone (restore without PDFs). */
+        val missingSourceIds: Set<String> = emptySet(),
     ) : LibraryUiState
 }
 
@@ -52,6 +57,7 @@ class LibraryViewModel @Inject constructor(
     rotationPoolRepository: RotationPoolRepository,
     private val scheduler: DocumentProcessingScheduler,
     private val settingsRepository: SettingsRepository,
+    private val pdfRelinkService: PdfRelinkService,
 ) : FeatureViewModel() {
 
     private data class FilterState(
@@ -93,6 +99,9 @@ class LibraryViewModel @Inject constructor(
                     query = filters.query,
                     sortOrder = filters.sortOrder,
                     selectedDocumentIds = filters.selectedIds,
+                    missingSourceIds = nonDeleted
+                        .filter { document -> !File(document.localFilePath).exists() }
+                        .mapTo(mutableSetOf()) { it.id },
                 )
             }
         }
@@ -211,6 +220,36 @@ class LibraryViewModel @Inject constructor(
     fun resumeOcr(documentId: String) {
         scheduler.resume(documentId)
         showMessage(R.string.library_ocr_resumed)
+    }
+
+    /**
+     * Re-attaches a restored document to a user-picked PDF. The picker output is
+     * verified against the document's recorded SHA-256 so a wrong file is rejected
+     * before it can be used by the pipeline.
+     */
+    fun relinkSourcePdf(document: Document, uriString: String) {
+        viewModelScope.launch {
+            when (
+                val result = pdfRelinkService.relink(
+                    documentId = document.id,
+                    expectedSha256 = document.fileHash,
+                    uriString = uriString,
+                )
+            ) {
+                is PdfRelinkResult.Success -> {
+                    documentRepository.saveDocument(
+                        document.copy(
+                            localFilePath = result.localFilePath,
+                            sourceUri = uriString,
+                            fileSizeBytes = result.sizeBytes,
+                        ),
+                    )
+                    showMessage(R.string.library_relink_success)
+                }
+                PdfRelinkResult.HashMismatch -> showMessage(R.string.library_relink_wrong_file)
+                is PdfRelinkResult.Failure -> showMessage(R.string.library_relink_failed)
+            }
+        }
     }
 
     fun retryProcessing(documentId: String) {

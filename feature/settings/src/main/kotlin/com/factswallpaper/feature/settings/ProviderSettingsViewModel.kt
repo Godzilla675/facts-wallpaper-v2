@@ -7,6 +7,7 @@ import com.factswallpaper.core.ai.ProviderDiagnosticsService
 import com.factswallpaper.core.ai.client.RawRequestJson
 import com.factswallpaper.core.common.AppResult
 import com.factswallpaper.core.data.repository.DiagnosticsRepository
+import com.factswallpaper.core.data.repository.DocumentRepository
 import com.factswallpaper.core.data.repository.ProviderProfileRepository
 import com.factswallpaper.core.datastore.AppPreferences
 import com.factswallpaper.core.datastore.SettingsRepository
@@ -37,10 +38,18 @@ sealed interface ProviderSettingsUiState {
         val profiles: List<ProviderProfile>,
         val preferences: AppPreferences,
         val usage: UsageSummary,
+        val usageBreakdown: UsageBreakdown = UsageBreakdown(),
         val configuredKeyProfileIds: Set<String> = emptySet(),
         val testingProfileId: String? = null,
     ) : ProviderSettingsUiState
 }
+
+private data class ProviderBaseContent(
+    val profiles: List<ProviderProfile>,
+    val preferences: AppPreferences,
+    val usage: UsageSummary,
+    val usageBreakdown: UsageBreakdown,
+)
 
 @HiltViewModel
 class ProviderSettingsViewModel @Inject constructor(
@@ -49,6 +58,7 @@ class ProviderSettingsViewModel @Inject constructor(
     private val apiKeyStore: ApiKeyStore,
     private val diagnosticsService: ProviderDiagnosticsService,
     diagnosticsRepository: DiagnosticsRepository,
+    documentRepository: DocumentRepository,
 ) : FeatureViewModel() {
 
     private val configuredKeyIds = MutableStateFlow<Set<String>>(emptySet())
@@ -60,17 +70,27 @@ class ProviderSettingsViewModel @Inject constructor(
             profileRepository.observeProfiles(),
             settingsRepository.observePreferences(),
             diagnosticsRepository.observeUsageSummary(),
-            configuredKeyIds,
-            testingProfileId,
-        ) { profiles, preferences, usage, keyIds, testingId ->
-            ProviderSettingsUiState.Content(
+            diagnosticsRepository.observeUsage(),
+            documentRepository.observeDocuments(),
+        ) { profiles, preferences, usage, entries, documents ->
+            ProviderBaseContent(
                 profiles = profiles,
                 preferences = preferences,
                 usage = usage,
-                configuredKeyProfileIds = keyIds,
-                testingProfileId = testingId,
+                usageBreakdown = buildUsageBreakdown(entries, profiles, documents),
             )
         }
+            .combine(configuredKeyIds) { base, keyIds -> base to keyIds }
+            .combine(testingProfileId) { (base, keyIds), testingId ->
+                ProviderSettingsUiState.Content(
+                    profiles = base.profiles,
+                    preferences = base.preferences,
+                    usage = base.usage,
+                    usageBreakdown = base.usageBreakdown,
+                    configuredKeyProfileIds = keyIds,
+                    testingProfileId = testingId,
+                )
+            }
             .map<ProviderSettingsUiState.Content, ProviderSettingsUiState> { it }
             .catch { emit(ProviderSettingsUiState.Error(R.string.provider_settings_load_error)) }
     }

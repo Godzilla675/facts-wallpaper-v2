@@ -217,7 +217,7 @@ private fun Preferences.toAppPreferences(
     taskMapSerializer: KSerializer<Map<AiTask, String>>,
 ): AppPreferences = AppPreferences(
     onboardingCompleted = this[Keys.ONBOARDING_COMPLETED] ?: false,
-    appThemeMode = this[Keys.APP_THEME_MODE].toEnum(ThemeMode.SYSTEM),
+    appThemeMode = this[Keys.APP_THEME_MODE].toEnum(ThemeMode.DARK),
     wallpaperThemeMode = this[Keys.WALLPAPER_THEME_MODE].toEnum(ThemeMode.AMOLED),
     routingStrategy = this[Keys.ROUTING_STRATEGY].toEnum(RoutingStrategy.BALANCED),
     taskProfileOverrides = this[Keys.TASK_PROFILE_OVERRIDES_JSON].decodeTaskMap(json, taskMapSerializer),
