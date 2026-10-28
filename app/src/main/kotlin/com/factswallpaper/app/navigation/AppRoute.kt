@@ -48,7 +48,7 @@ sealed interface AppRoute {
     data object ProviderSettings : AppRoute
 
     @Serializable
-    data object AdvancedSettings : AppRoute
+    data class AdvancedSettings(val section: String? = null) : AppRoute
 
     @Serializable
     data object TemplateGallery : AppRoute

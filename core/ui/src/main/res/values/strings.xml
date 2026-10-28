@@ -162,5 +162,6 @@
     <string name="whats_happening_retry">Retry</string>
     <string name="whats_happening_cancel">Cancel</string>
     <string name="whats_happening_open_document">Open document</string>
+    <string name="whats_happening_open_library">Open Library</string>
     <string name="undo">Undo</string>
 </resources>

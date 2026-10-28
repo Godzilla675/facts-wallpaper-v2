@@ -60,6 +60,7 @@ import com.factswallpaper.core.model.ThemeMode
 import com.factswallpaper.core.model.WallpaperScheduleMode
 import com.factswallpaper.core.model.WallpaperTarget
 import com.factswallpaper.core.ui.UiMessageEffect
+import com.factswallpaper.core.ui.rememberHapticFeedback
 import com.factswallpaper.core.ui.component.BannerSeverity
 import com.factswallpaper.core.ui.component.ErrorStatePanel
 import com.factswallpaper.core.ui.component.InlineBanner
@@ -162,6 +163,7 @@ private fun WallpaperContent(
     modifier: Modifier = Modifier,
 ) {
     val spacing = LocalSpacing.current
+    val haptic = rememberHapticFeedback()
     val wallpaper = state.wallpaper
     val prefs = state.preferences
 
@@ -360,7 +362,10 @@ private fun WallpaperContent(
                     onCheckedChange = onOnlyFavoritesChange,
                 )
                 OutlinedButton(
-                    onClick = onNextCard,
+                    onClick = {
+                        haptic()
+                        onNextCard()
+                    },
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = spacing.sm),

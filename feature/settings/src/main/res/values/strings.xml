@@ -245,8 +245,18 @@
 
     <string name="provider_search_hint">Search settings (profiles, models, tasks, backups&#8230;)</string>
     <string name="provider_search_clear">Clear search</string>
+    <string name="settings_search_no_results_title">No settings match</string>
+    <string name="settings_search_no_results_body">Try a broader word such as theme, backup, model or OCR.</string>
+    <string name="settings_search_results_title">Settings results</string>
+    <string name="advanced_haptics">Haptic feedback</string>
+    <string name="advanced_haptics_helper">Vibrate lightly when you favorite or hide a card, review a study card, or advance the wallpaper.</string>
     <string name="provider_copy_model_list">Copy model list</string>
     <string name="provider_model_list_copied">Model list copied to clipboard.</string>
     <string name="provider_select_model">Select model</string>
     <string name="provider_filter_models_hint">Filter models&#8230;</string>
+    <string name="provider_models_error">Could not fetch models: %1$s</string>
+    <string name="provider_models_empty">The provider returned no models. Type the model id manually.</string>
+    <string name="provider_models_available">%1$d models available</string>
+    <string name="provider_models_manual_hint">You can still type any model id manually.</string>
+    <string name="provider_models_select">Use this model</string>
 </resources>

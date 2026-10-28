@@ -79,6 +79,7 @@ import com.factswallpaper.core.model.FactStatusFilter
 import com.factswallpaper.core.model.SourceReferenceMode
 import com.factswallpaper.core.render.export.CardExportFormat
 import com.factswallpaper.core.ui.UiMessageEffect
+import com.factswallpaper.core.ui.rememberHapticFeedback
 import com.factswallpaper.core.ui.component.BannerSeverity
 import com.factswallpaper.core.ui.component.EmptyStatePanel
 import com.factswallpaper.core.ui.component.ErrorStatePanel
@@ -318,6 +319,7 @@ private fun FactsContent(
     modifier: Modifier = Modifier,
 ) {
     val spacing = LocalSpacing.current
+    val haptic = rememberHapticFeedback()
     val filter = state.filter
     val documentTitle = filter.documentId?.let { docId ->
         state.documents.firstOrNull { it.id == docId }?.title
@@ -558,8 +560,14 @@ private fun FactsContent(
                         fact = fact,
                         sourceReferenceMode = fact.sourceReferenceModeOverride
                             ?: SourceReferenceMode.COMPACT,
-                        onToggleActive = { active -> onToggleActive(fact.id, active) },
-                        onToggleFavorite = { favorite -> onToggleFavorite(fact.id, favorite) },
+                        onToggleActive = { active ->
+                            haptic()
+                            onToggleActive(fact.id, active)
+                        },
+                        onToggleFavorite = { favorite ->
+                            haptic()
+                            onToggleFavorite(fact.id, favorite)
+                        },
                         onEdit = { onEdit(fact) },
                         onRegenerate = { onRegenerate(fact) },
                         onCopyText = { onCopyText(fact) },

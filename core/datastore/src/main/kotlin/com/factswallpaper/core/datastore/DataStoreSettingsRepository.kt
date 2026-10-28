@@ -163,6 +163,10 @@ class DataStoreSettingsRepository @Inject constructor(
         dataStore.edit { it[Keys.DYNAMIC_COLOR_ENABLED] = enabled }
     }
 
+    override suspend fun setHapticsEnabled(enabled: Boolean) {
+        dataStore.edit { it[Keys.HAPTICS_ENABLED] = enabled }
+    }
+
     override suspend fun setLibraryCoachHintDismissed(dismissed: Boolean) {
         dataStore.edit { it[Keys.LIBRARY_COACH_HINT_DISMISSED] = dismissed }
     }
@@ -198,6 +202,7 @@ private object Keys {
     val DAILY_FACT_NOTIFICATION_ENABLED = booleanPreferencesKey("daily_fact_notification_enabled")
     val DAILY_FACT_NOTIFICATION_TIME_MINUTES = intPreferencesKey("daily_fact_notification_time_minutes")
     val DYNAMIC_COLOR_ENABLED = booleanPreferencesKey("dynamic_color_enabled")
+    val HAPTICS_ENABLED = booleanPreferencesKey("haptics_enabled")
     val LIBRARY_COACH_HINT_DISMISSED = booleanPreferencesKey("library_coach_hint_dismissed")
     val OUTLINE_COACH_HINT_DISMISSED = booleanPreferencesKey("outline_coach_hint_dismissed")
 }
@@ -231,6 +236,7 @@ private fun Preferences.toAppPreferences(
     dailyFactNotificationEnabled = this[Keys.DAILY_FACT_NOTIFICATION_ENABLED] ?: false,
     dailyFactNotificationTimeMinutes = (this[Keys.DAILY_FACT_NOTIFICATION_TIME_MINUTES] ?: (8 * 60)).coerceIn(0, 1439),
     dynamicColorEnabled = this[Keys.DYNAMIC_COLOR_ENABLED] ?: true,
+    hapticsEnabled = this[Keys.HAPTICS_ENABLED] ?: true,
     libraryCoachHintDismissed = this[Keys.LIBRARY_COACH_HINT_DISMISSED] ?: false,
     outlineCoachHintDismissed = this[Keys.OUTLINE_COACH_HINT_DISMISSED] ?: false,
 )

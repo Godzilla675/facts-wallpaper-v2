@@ -8,6 +8,9 @@
     <string name="library_pool_sources">%1$d collections &#183; %2$d folders</string>
     <string name="library_empty_title">Your library is empty</string>
     <string name="library_empty_body">Import a PDF to start building study facts. Everything is processed and stored on this device.</string>
+    <string name="library_coach_hint_title">Import → outline → generate</string>
+    <string name="library_coach_hint_body">Import a PDF, review the on-device outline, then generate facts. Long-press a document or use Select all to delete several at once — undo is available for five seconds.</string>
+    <string name="library_coach_hint_dismiss">Dismiss hint</string>
     <string name="library_no_matches_title">No matching documents</string>
     <string name="library_no_matches_body">Nothing matches &#8220;%1$s&#8221;. Try a shorter title or clear the search.</string>
     <string name="library_clear_search">Clear search</string>

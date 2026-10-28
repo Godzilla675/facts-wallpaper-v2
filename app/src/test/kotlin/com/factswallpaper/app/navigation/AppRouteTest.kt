@@ -22,7 +22,7 @@ class AppRouteTest {
             AppRoute.Collections,
             AppRoute.WallpaperSettings,
             AppRoute.ProviderSettings,
-            AppRoute.AdvancedSettings,
+            AppRoute.AdvancedSettings(),
             AppRoute.TemplateGallery,
             AppRoute.CardPreview(),
         )
@@ -53,6 +53,8 @@ class AppRouteTest {
             .isEqualTo(AppRoute.ImportPdf(sharedUri = "content://pdf/1"))
         assertThat(roundTrip(AppRoute.CardPreview(factId = "fact-1", templateId = "template-1")))
             .isEqualTo(AppRoute.CardPreview(factId = "fact-1", templateId = "template-1"))
+        assertThat(roundTrip(AppRoute.AdvancedSettings(section = "OCR")))
+            .isEqualTo(AppRoute.AdvancedSettings(section = "OCR"))
     }
 
     @Test

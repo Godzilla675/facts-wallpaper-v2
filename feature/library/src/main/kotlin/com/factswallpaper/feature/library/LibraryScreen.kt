@@ -1,5 +1,6 @@
 package com.factswallpaper.feature.library
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -75,6 +76,7 @@ fun LibraryScreen(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val message by viewModel.message.collectAsStateWithLifecycle()
+    val showCoachHint by viewModel.showCoachHint.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
     val deletedMessage = stringResource(R.string.library_deleted)
@@ -86,6 +88,10 @@ fun LibraryScreen(
 
     val contentState = state as? LibraryUiState.Content
     val inSelectionMode = contentState?.selectedDocumentIds?.isNotEmpty() == true
+
+    BackHandler(enabled = inSelectionMode) {
+        viewModel.clearSelection()
+    }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -208,6 +214,8 @@ fun LibraryScreen(
                 onResumeOcr = viewModel::resumeOcr,
                 onRetry = viewModel::retryProcessing,
                 onDelete = { pendingDelete = it },
+                showCoachHint = showCoachHint,
+                onDismissCoachHint = viewModel::dismissCoachHint,
                 modifier = Modifier.padding(padding),
             )
         }
@@ -293,6 +301,8 @@ private fun LibraryContent(
     onResumeOcr: (String) -> Unit,
     onRetry: (String) -> Unit,
     onDelete: (Document) -> Unit,
+    showCoachHint: Boolean,
+    onDismissCoachHint: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val spacing = LocalSpacing.current
@@ -308,6 +318,11 @@ private fun LibraryContent(
     ) {
         item {
             PoolSummaryBanner(summary = state.poolSummary)
+        }
+        if (showCoachHint) {
+            item {
+                LibraryCoachHint(onDismiss = onDismissCoachHint)
+            }
         }
         item {
             OutlinedTextField(
@@ -388,6 +403,42 @@ private fun LibraryContent(
                     )
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun LibraryCoachHint(onDismiss: () -> Unit) {
+    val spacing = LocalSpacing.current
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+        ),
+    ) {
+        Column(modifier = Modifier.padding(spacing.lg)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = stringResource(R.string.library_coach_hint_title),
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                )
+                IconButton(onClick = onDismiss) {
+                    Icon(
+                        imageVector = Icons.Filled.Close,
+                        contentDescription = stringResource(R.string.library_coach_hint_dismiss),
+                    )
+                }
+            }
+            Text(
+                text = stringResource(R.string.library_coach_hint_body),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
+            )
         }
     }
 }

@@ -42,7 +42,10 @@ data class ConnectionTestResult(
  */
 interface ProviderDiagnosticsService {
     suspend fun testConnection(profile: ProviderProfile): ConnectionTestResult
-    suspend fun fetchModels(profile: ProviderProfile): ModelCatalogResult
+    suspend fun fetchModels(
+        profile: ProviderProfile,
+        apiKeyOverride: String? = null,
+    ): ModelCatalogResult
 }
 
 @Singleton
@@ -122,8 +125,12 @@ class DefaultProviderDiagnosticsService @Inject constructor(
         }
     }
 
-    override suspend fun fetchModels(profile: ProviderProfile): ModelCatalogResult {
-        val apiKey = apiKeyStore.getApiKey(profile.id)
+    override suspend fun fetchModels(
+        profile: ProviderProfile,
+        apiKeyOverride: String?,
+    ): ModelCatalogResult {
+        val apiKey = apiKeyOverride?.takeIf { it.isNotBlank() }
+            ?: apiKeyStore.getApiKey(profile.id)
         if (apiKey.isNullOrBlank()) {
             return ModelCatalogResult(error = "Add an API key before fetching models.")
         }

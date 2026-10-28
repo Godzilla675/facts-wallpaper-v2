@@ -10,6 +10,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -21,6 +22,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.factswallpaper.app.navigation.AppNavHost
 import com.factswallpaper.core.designsystem.theme.FactsTheme
 import com.factswallpaper.core.designsystem.theme.LocalSpacing
+import com.factswallpaper.core.ui.LocalHapticsEnabled
 
 @Composable
 fun FactsWallpaperApp(
@@ -33,21 +35,24 @@ fun FactsWallpaperApp(
 ) {
     val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
     val dynamicColorEnabled by viewModel.dynamicColorEnabled.collectAsStateWithLifecycle()
+    val hapticsEnabled by viewModel.hapticsEnabled.collectAsStateWithLifecycle()
     val startDestination by viewModel.startDestination.collectAsStateWithLifecycle()
 
     FactsTheme(themeMode = themeMode, dynamicColorEnabled = dynamicColorEnabled) {
-        val start = startDestination
-        if (start == null) {
-            StartLoading()
-        } else {
-            AppNavHost(
-                startDestination = start,
-                sharedPdfUri = sharedPdfUri,
-                initialOpenImport = initialOpenImport,
-                onImportConsumed = onImportConsumed,
-                onSharedPdfConsumed = onSharedPdfConsumed,
-                onLaunchLiveWallpaper = onLaunchLiveWallpaper,
-            )
+        CompositionLocalProvider(LocalHapticsEnabled provides hapticsEnabled) {
+            val start = startDestination
+            if (start == null) {
+                StartLoading()
+            } else {
+                AppNavHost(
+                    startDestination = start,
+                    sharedPdfUri = sharedPdfUri,
+                    initialOpenImport = initialOpenImport,
+                    onImportConsumed = onImportConsumed,
+                    onSharedPdfConsumed = onSharedPdfConsumed,
+                    onLaunchLiveWallpaper = onLaunchLiveWallpaper,
+                )
+            }
         }
     }
 }

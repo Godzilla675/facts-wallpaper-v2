@@ -126,12 +126,14 @@ class DataStoreSettingsRepositoryTest {
         repository.setEncryptedDatabaseEnabled(true)
         repository.setEnableAiDiagnosticsLog(false)
         repository.setEnableDoubleTapWallpaperAdvance(true)
+        repository.setHapticsEnabled(false)
 
         val stored = preferences()
         assertThat(stored.allowAdvancedOcrEngines).isTrue()
         assertThat(stored.encryptedDatabaseEnabled).isTrue()
         assertThat(stored.enableAiDiagnosticsLog).isFalse()
         assertThat(stored.enableDoubleTapWallpaperAdvance).isTrue()
+        assertThat(stored.hapticsEnabled).isFalse()
     }
 
     @Test

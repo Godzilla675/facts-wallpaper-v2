@@ -3,6 +3,11 @@ package com.factswallpaper.feature.library
 import com.factswallpaper.core.common.AppResult
 import com.factswallpaper.core.data.repository.DocumentRepository
 import com.factswallpaper.core.data.repository.RotationPoolRepository
+import com.factswallpaper.core.datastore.AppPreferences
+import com.factswallpaper.core.datastore.SettingsRepository
+import com.factswallpaper.core.model.AiTask
+import com.factswallpaper.core.model.AutoProcessMode
+import com.factswallpaper.core.model.DocumentInputMode
 import com.factswallpaper.core.model.Document
 import com.factswallpaper.core.model.DocumentChunk
 import com.factswallpaper.core.model.DocumentSettings
@@ -11,6 +16,9 @@ import com.factswallpaper.core.model.Fact
 import com.factswallpaper.core.model.OcrEngineType
 import com.factswallpaper.core.model.PdfProcessingRoute
 import com.factswallpaper.core.model.RotationPoolSummary
+import com.factswallpaper.core.model.RotationSource
+import com.factswallpaper.core.model.RoutingStrategy
+import com.factswallpaper.core.model.ThemeMode
 import com.factswallpaper.core.ocr.OcrLanguageCatalog
 import com.factswallpaper.core.ocr.OcrModelState
 import com.factswallpaper.core.ocr.OcrModelStatus
@@ -63,6 +71,7 @@ class LibraryViewModelTest {
             documentRepository = repo,
             rotationPoolRepository = FakeRotationPoolRepository(),
             scheduler = scheduler,
+            settingsRepository = FakeSettingsRepository(),
         )
 
         val collectJob = backgroundScope.launch(testDispatcher) {
@@ -94,6 +103,7 @@ class LibraryViewModelTest {
             documentRepository = repo,
             rotationPoolRepository = FakeRotationPoolRepository(),
             scheduler = scheduler,
+            settingsRepository = FakeSettingsRepository(),
         )
 
         viewModel.pauseOcr("doc-ocr")
@@ -310,4 +320,38 @@ private class FakeLibraryDocumentRepository(
         compiledTextPath: String,
         status: ExtractionStatus,
     ) = Unit
+}
+
+internal class FakeSettingsRepository : SettingsRepository {
+    private val preferences = MutableStateFlow(AppPreferences())
+    override fun observePreferences(): Flow<AppPreferences> = preferences
+    override suspend fun setOnboardingCompleted(completed: Boolean) = Unit
+    override suspend fun setAppThemeMode(mode: ThemeMode) = Unit
+    override suspend fun setWallpaperThemeMode(mode: ThemeMode) = Unit
+    override suspend fun setRoutingStrategy(strategy: RoutingStrategy) = Unit
+    override suspend fun setTaskProfileOverrides(overrides: Map<AiTask, String>) = Unit
+    override suspend fun setTaskProfileOverride(task: AiTask, profileId: String?) = Unit
+    override suspend fun setCustomTaskPromptSuffixes(suffixes: Map<AiTask, String>) = Unit
+    override suspend fun setCustomTaskPromptSuffix(task: AiTask, instruction: String?) = Unit
+    override suspend fun setDefaultOcrPageLimit(limit: Int) = Unit
+    override suspend fun setAllowAdvancedOcrEngines(allowed: Boolean) = Unit
+    override suspend fun setPreRenderQueueSize(size: Int) = Unit
+    override suspend fun setEncryptedDatabaseEnabled(enabled: Boolean) = Unit
+    override suspend fun setEnableAiDiagnosticsLog(enabled: Boolean) = Unit
+    override suspend fun setEnableDoubleTapWallpaperAdvance(enabled: Boolean) = Unit
+    override suspend fun setAiCostGuardThresholdUsd(thresholdUsd: Double) = Unit
+    override suspend fun setDefaultAutoProcessMode(mode: AutoProcessMode) = Unit
+    override suspend fun setDefaultDocumentInputMode(mode: DocumentInputMode) = Unit
+    override suspend fun setMaxImagesPerRequest(maxImages: Int) = Unit
+    override suspend fun setRotationSource(source: RotationSource) = Unit
+    override suspend fun setQuietHoursEnabled(enabled: Boolean) = Unit
+    override suspend fun setQuietHoursWindow(startMinute: Int, endMinute: Int) = Unit
+    override suspend fun setRotationPaused(paused: Boolean) = Unit
+    override suspend fun setBatterySaverSlowdownEnabled(enabled: Boolean) = Unit
+    override suspend fun setDailyFactNotificationEnabled(enabled: Boolean) = Unit
+    override suspend fun setDailyFactNotificationTime(timeMinutes: Int) = Unit
+    override suspend fun setDynamicColorEnabled(enabled: Boolean) = Unit
+    override suspend fun setHapticsEnabled(enabled: Boolean) = Unit
+    override suspend fun setLibraryCoachHintDismissed(dismissed: Boolean) = Unit
+    override suspend fun setOutlineCoachHintDismissed(dismissed: Boolean) = Unit
 }

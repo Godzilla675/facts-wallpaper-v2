@@ -71,6 +71,7 @@ import com.factswallpaper.core.designsystem.theme.LocalSpacing
 import com.factswallpaper.core.model.Fact
 import com.factswallpaper.core.model.SourceReferenceMode
 import com.factswallpaper.core.ui.UiMessageEffect
+import com.factswallpaper.core.ui.rememberHapticFeedback
 import com.factswallpaper.core.ui.component.EmptyStatePanel
 import com.factswallpaper.core.ui.component.SourceBadge
 import java.text.SimpleDateFormat
@@ -212,6 +213,7 @@ private fun StudyContentView(
 ) {
     val spacing = LocalSpacing.current
     val scope = rememberCoroutineScope()
+    val haptic = rememberHapticFeedback()
     val pagerState = rememberPagerState { facts.size }
     var sessionDone by remember { mutableStateOf(false) }
 
@@ -342,6 +344,7 @@ private fun StudyContentView(
             ) {
                 OutlinedButton(
                     onClick = {
+                        haptic()
                         if (currentFact != null) {
                             onRecordReview(currentFact.id, false)
                             if (pagerState.currentPage < facts.size - 1) {
@@ -360,6 +363,7 @@ private fun StudyContentView(
 
                 Button(
                     onClick = {
+                        haptic()
                         if (currentFact != null) {
                             onRecordReview(currentFact.id, true)
                             if (pagerState.currentPage < facts.size - 1) {

@@ -38,6 +38,7 @@ data class AppPreferences(
     val dailyFactNotificationEnabled: Boolean = false,
     val dailyFactNotificationTimeMinutes: Int = 8 * 60,
     val dynamicColorEnabled: Boolean = true,
+    val hapticsEnabled: Boolean = true,
     val libraryCoachHintDismissed: Boolean = false,
     val outlineCoachHintDismissed: Boolean = false,
 )

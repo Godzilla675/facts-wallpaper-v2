@@ -45,6 +45,7 @@ import com.factswallpaper.core.designsystem.theme.LocalSpacing
 fun WhatsHappeningScreen(
     onBack: () -> Unit,
     onOpenDocument: ((String) -> Unit)? = null,
+    onOpenLibrary: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     viewModel: WhatsHappeningViewModel = hiltViewModel(),
 ) {
@@ -123,6 +124,15 @@ fun WhatsHappeningScreen(
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
+                        if (onOpenLibrary != null) {
+                            Button(onClick = onOpenLibrary) {
+                                Text(
+                                    stringResource(
+                                        com.factswallpaper.core.ui.R.string.whats_happening_open_library,
+                                    ),
+                                )
+                            }
+                        }
                     }
                 }
             }

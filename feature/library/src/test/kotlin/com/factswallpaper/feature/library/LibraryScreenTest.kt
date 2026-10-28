@@ -104,6 +104,7 @@ class LibraryScreenTest {
             documentRepository = repository,
             rotationPoolRepository = ScreenFakeRotationPoolRepository(),
             scheduler = FakeScheduler(repository),
+            settingsRepository = FakeSettingsRepository(),
         )
         composeRule.setContent {
             LibraryScreen(

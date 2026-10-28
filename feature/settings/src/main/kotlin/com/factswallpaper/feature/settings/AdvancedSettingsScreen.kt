@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -48,6 +49,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -91,11 +93,23 @@ fun AdvancedSettingsScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
     onOpenWhatsHappening: () -> Unit = {},
+    onOpenLibrary: (() -> Unit)? = null,
+    initialSection: String? = null,
     viewModel: AdvancedSettingsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val message by viewModel.message.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
+    val listState = rememberLazyListState()
+
+    val targetSection = remember(initialSection) {
+        initialSection?.let { raw -> AdvancedSection.entries.firstOrNull { it.name == raw } }
+    }
+    LaunchedEffect(targetSection) {
+        if (targetSection != null) {
+            listState.animateScrollToItem(targetSection.lazyListIndex())
+        }
+    }
 
     var editingOcrLimit by remember { mutableStateOf(false) }
     var editingQueueSize by remember { mutableStateOf(false) }
@@ -193,8 +207,11 @@ fun AdvancedSettingsScreen(
                 },
                 onSqlCipher = viewModel::sqlCipherInfo,
                 onOpenWhatsHappening = onOpenWhatsHappening,
+                onOpenLibrary = onOpenLibrary,
                 onThemeModeChange = viewModel::setAppThemeMode,
                 onDynamicColorChange = viewModel::setDynamicColorEnabled,
+                onHapticsChange = viewModel::setHapticsEnabled,
+                listState = listState,
                 modifier = Modifier.padding(padding),
             )
         }
@@ -362,14 +379,18 @@ private fun AdvancedContent(
     onBackupFrequencyChange: (AutomaticBackupFrequency) -> Unit,
     onSqlCipher: () -> Unit,
     onOpenWhatsHappening: () -> Unit,
+    onOpenLibrary: (() -> Unit)?,
     onThemeModeChange: (ThemeMode) -> Unit,
     onDynamicColorChange: (Boolean) -> Unit,
+    onHapticsChange: (Boolean) -> Unit,
+    listState: androidx.compose.foundation.lazy.LazyListState,
     modifier: Modifier = Modifier,
 ) {
     val spacing = LocalSpacing.current
     val prefs = state.preferences
 
     LazyColumn(
+        state = listState,
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(spacing.lg),
         verticalArrangement = Arrangement.spacedBy(spacing.md),
@@ -406,6 +427,12 @@ private fun AdvancedContent(
                     subtitle = stringResource(R.string.advanced_theme_dynamic_color_helper),
                     checked = prefs.dynamicColorEnabled,
                     onCheckedChange = onDynamicColorChange,
+                )
+                SettingSwitchRow(
+                    title = stringResource(R.string.advanced_haptics),
+                    subtitle = stringResource(R.string.advanced_haptics_helper),
+                    checked = prefs.hapticsEnabled,
+                    onCheckedChange = onHapticsChange,
                 )
             }
         }

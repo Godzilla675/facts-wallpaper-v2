@@ -38,6 +38,7 @@ interface SettingsRepository {
     suspend fun setDailyFactNotificationEnabled(enabled: Boolean)
     suspend fun setDailyFactNotificationTime(timeMinutes: Int)
     suspend fun setDynamicColorEnabled(enabled: Boolean)
+    suspend fun setHapticsEnabled(enabled: Boolean)
     suspend fun setLibraryCoachHintDismissed(dismissed: Boolean)
     suspend fun setOutlineCoachHintDismissed(dismissed: Boolean)
 }

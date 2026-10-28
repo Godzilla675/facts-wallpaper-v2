@@ -189,7 +189,10 @@ private class FakeProviderDiagnosticsService : ProviderDiagnosticsService {
     var catalogResult: ModelCatalogResult = ModelCatalogResult(models = emptyList())
 
     override suspend fun testConnection(profile: ProviderProfile): ConnectionTestResult = testResult
-    override suspend fun fetchModels(profile: ProviderProfile): ModelCatalogResult = catalogResult
+    override suspend fun fetchModels(
+        profile: ProviderProfile,
+        apiKeyOverride: String?,
+    ): ModelCatalogResult = catalogResult
 }
 
 private class FakeProviderProfileRepository : ProviderProfileRepository {
@@ -263,6 +266,7 @@ private class FakeSettingsRepository : SettingsRepository {
     override suspend fun setDailyFactNotificationEnabled(enabled: Boolean) {}
     override suspend fun setDailyFactNotificationTime(timeMinutes: Int) {}
     override suspend fun setDynamicColorEnabled(enabled: Boolean) {}
+    override suspend fun setHapticsEnabled(enabled: Boolean) {}
     override suspend fun setLibraryCoachHintDismissed(dismissed: Boolean) {}
     override suspend fun setOutlineCoachHintDismissed(dismissed: Boolean) {}
 }

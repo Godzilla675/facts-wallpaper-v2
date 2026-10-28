@@ -6,6 +6,7 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.toRoute
 import com.factswallpaper.app.StartDestination
 import com.factswallpaper.core.ui.TopLevelDestination
 import com.factswallpaper.core.ui.component.FactsAppScaffold
@@ -143,6 +144,9 @@ fun AppNavHost(
                     onOpenDocument = { documentId ->
                         navController.navigate(AppRoute.Outline(documentId))
                     },
+                    onOpenLibrary = {
+                        navController.navigateTopLevel(TopLevelDestination.LIBRARY)
+                    },
                 )
             }
         }
@@ -174,16 +178,23 @@ fun AppNavHost(
         composable<AppRoute.ProviderSettings> {
             TabFrame(TopLevelDestination.SETTINGS, navController) {
                 ProviderSettingsScreen(
-                    onOpenAdvanced = { navController.navigate(AppRoute.AdvancedSettings) },
+                    onOpenAdvanced = { navController.navigate(AppRoute.AdvancedSettings()) },
+                    onOpenAdvancedSection = { section ->
+                        navController.navigate(AppRoute.AdvancedSettings(section = section.name))
+                    },
                 )
             }
         }
 
-        composable<AppRoute.AdvancedSettings> {
+        composable<AppRoute.AdvancedSettings> { entry ->
             DetailFrame {
                 AdvancedSettingsScreen(
                     onBack = { navController.popBackStack() },
                     onOpenWhatsHappening = { navController.navigate(AppRoute.WhatsHappening) },
+                    onOpenLibrary = {
+                        navController.navigateTopLevel(TopLevelDestination.LIBRARY)
+                    },
+                    initialSection = entry.toRoute<AppRoute.AdvancedSettings>().section,
                 )
             }
         }

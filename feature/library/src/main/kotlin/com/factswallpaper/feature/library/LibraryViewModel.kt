@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.factswallpaper.core.common.AppResult
 import com.factswallpaper.core.data.repository.DocumentRepository
 import com.factswallpaper.core.data.repository.RotationPoolRepository
+import com.factswallpaper.core.datastore.SettingsRepository
 import com.factswallpaper.core.model.Document
 import com.factswallpaper.core.model.DocumentSettings
 import com.factswallpaper.core.model.RotationPoolSummary
@@ -19,6 +20,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -49,6 +51,7 @@ class LibraryViewModel @Inject constructor(
     private val documentRepository: DocumentRepository,
     rotationPoolRepository: RotationPoolRepository,
     private val scheduler: DocumentProcessingScheduler,
+    private val settingsRepository: SettingsRepository,
 ) : FeatureViewModel() {
 
     private data class FilterState(
@@ -103,6 +106,20 @@ class LibraryViewModel @Inject constructor(
 
     fun retry() {
         retrySignal.update { it + 1 }
+    }
+
+    val showCoachHint = settingsRepository.observePreferences()
+        .map { !it.libraryCoachHintDismissed }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = false,
+        )
+
+    fun dismissCoachHint() {
+        viewModelScope.launch {
+            settingsRepository.setLibraryCoachHintDismissed(true)
+        }
     }
 
     fun updateQuery(value: String) {

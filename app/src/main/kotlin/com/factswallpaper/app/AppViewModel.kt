@@ -41,6 +41,14 @@ class AppViewModel @Inject constructor(
             initialValue = true,
         )
 
+    val hapticsEnabled = settingsRepository.observePreferences()
+        .map { it.hapticsEnabled }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = true,
+        )
+
     /**
      * One-shot start decision. [take] keeps the graph start destination stable
      * after onboarding writes `onboardingCompleted = true`.

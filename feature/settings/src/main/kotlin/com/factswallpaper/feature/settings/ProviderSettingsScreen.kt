@@ -16,14 +16,18 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.KeyOff
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -43,11 +47,13 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -59,6 +65,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.factswallpaper.core.ai.AiModelInfo
+import com.factswallpaper.core.ai.ModelCatalogResult
 import com.factswallpaper.core.ai.client.ProviderHeaderValue
 import com.factswallpaper.core.ai.client.ProviderHeadersJson
 import com.factswallpaper.core.ai.client.RawRequestJson
@@ -69,6 +76,7 @@ import com.factswallpaper.core.model.ProviderType
 import com.factswallpaper.core.model.RoutingStrategy
 import com.factswallpaper.core.ui.UiMessageEffect
 import com.factswallpaper.core.ui.component.BannerSeverity
+import com.factswallpaper.core.ui.component.EmptyStatePanel
 import com.factswallpaper.core.ui.component.ErrorStatePanel
 import com.factswallpaper.core.ui.component.InlineBanner
 import com.factswallpaper.core.ui.component.MetricPill
@@ -82,6 +90,7 @@ import kotlinx.coroutines.launch
 fun ProviderSettingsScreen(
     onOpenAdvanced: () -> Unit,
     modifier: Modifier = Modifier,
+    onOpenAdvancedSection: (AdvancedSection) -> Unit = { onOpenAdvanced() },
     viewModel: ProviderSettingsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -92,6 +101,8 @@ fun ProviderSettingsScreen(
     var deletingProfile by remember { mutableStateOf<ProviderProfile?>(null) }
     var editingKeyProfile by remember { mutableStateOf<ProviderProfile?>(null) }
     var overrideTask by remember { mutableStateOf<AiTask?>(null) }
+    var searchQuery by rememberSaveable { mutableStateOf("") }
+    var pendingProviderSectionName by rememberSaveable { mutableStateOf<String?>(null) }
     UiMessageEffect(message, snackbarHostState, viewModel::onMessageShown)
 
     Scaffold(
@@ -130,6 +141,14 @@ fun ProviderSettingsScreen(
                 onEditKey = { editingKeyProfile = it },
                 onSetDefault = viewModel::setDefaultProfile,
                 onTestConnection = viewModel::testConnection,
+                searchQuery = searchQuery,
+                onSearchQueryChange = { searchQuery = it },
+                pendingSection = pendingProviderSectionName?.let { raw ->
+                    ProviderSection.entries.firstOrNull { it.name == raw }
+                },
+                onPendingSectionShown = { pendingProviderSectionName = null },
+                onOpenSection = { section -> pendingProviderSectionName = section.name },
+                onOpenAdvancedSection = onOpenAdvancedSection,
                 modifier = Modifier.padding(padding),
             )
         }
@@ -142,6 +161,7 @@ fun ProviderSettingsScreen(
                 addingProfile = false
                 editingProfile = null
             },
+            onFetchModels = viewModel::fetchModels,
             onSave = {
                     name,
                     type,
@@ -248,17 +268,79 @@ private fun ProviderContent(
     onEditKey: (ProviderProfile) -> Unit,
     onSetDefault: (String) -> Unit,
     onTestConnection: (ProviderProfile) -> Unit,
+    searchQuery: String,
+    onSearchQueryChange: (String) -> Unit,
+    pendingSection: ProviderSection?,
+    onPendingSectionShown: () -> Unit,
+    onOpenSection: (ProviderSection) -> Unit,
+    onOpenAdvancedSection: (AdvancedSection) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val spacing = LocalSpacing.current
     val hasMissingKeys = state.profiles.isNotEmpty() &&
         state.profiles.any { !state.configuredKeyProfileIds.contains(it.id) }
+    val listState = rememberLazyListState()
 
-    LazyColumn(
-        modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(spacing.lg),
-        verticalArrangement = Arrangement.spacedBy(spacing.md),
-    ) {
+    LaunchedEffect(pendingSection, searchQuery) {
+        val section = pendingSection ?: return@LaunchedEffect
+        if (searchQuery.isNotBlank()) return@LaunchedEffect
+        val base = if (hasMissingKeys) 1 else 0
+        val index = base + when (section) {
+            ProviderSection.ROUTING -> 0
+            ProviderSection.TASK_ROUTING -> 1
+            ProviderSection.USAGE -> 2
+            ProviderSection.PROFILES -> 3
+        }
+        runCatching { listState.animateScrollToItem(index) }
+        onPendingSectionShown()
+    }
+
+    Column(modifier = modifier.fillMaxSize()) {
+        OutlinedTextField(
+            value = searchQuery,
+            onValueChange = onSearchQueryChange,
+            placeholder = { Text(stringResource(R.string.provider_search_hint)) },
+            leadingIcon = {
+                Icon(Icons.Filled.Search, contentDescription = null)
+            },
+            trailingIcon = {
+                if (searchQuery.isNotEmpty()) {
+                    IconButton(onClick = { onSearchQueryChange("") }) {
+                        Icon(
+                            imageVector = Icons.Filled.Close,
+                            contentDescription = stringResource(R.string.provider_search_clear),
+                        )
+                    }
+                }
+            },
+            singleLine = true,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = spacing.lg, vertical = spacing.sm),
+        )
+
+        if (searchQuery.isNotBlank()) {
+            SettingsSearchResults(
+                query = searchQuery,
+                onOpenProviderSection = { section ->
+                    onSearchQueryChange("")
+                    onOpenSection(section)
+                },
+                onOpenAdvancedSection = onOpenAdvancedSection,
+                onOpenAdvanced = { onOpenAdvancedSection(AdvancedSection.THEME) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+            )
+        } else {
+            LazyColumn(
+                state = listState,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                contentPadding = PaddingValues(spacing.lg),
+                verticalArrangement = Arrangement.spacedBy(spacing.md),
+            ) {
         if (hasMissingKeys) {
             item {
                 InlineBanner(
@@ -456,6 +538,91 @@ private fun ProviderContent(
                 )
             }
         }
+            }
+        }
+    }
+}
+
+/**
+ * Cross-screen settings search. Provider results scroll the caller's list to a
+ * section; advanced results deep-link to the advanced screen.
+ */
+@Composable
+private fun SettingsSearchResults(
+    query: String,
+    onOpenProviderSection: (ProviderSection) -> Unit,
+    onOpenAdvancedSection: (AdvancedSection) -> Unit,
+    onOpenAdvanced: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val spacing = LocalSpacing.current
+    val entries = SettingsSearchCatalog.entries
+    val titles = entries.associateWith { stringResource(it.titleRes) }
+    val summaries = entries.associateWith { stringResource(it.summaryRes) }
+    val results = filterSettingsEntries(
+        entries = entries,
+        query = query,
+        titleOf = { titles.getValue(it) },
+        summaryOf = { summaries.getValue(it) },
+    )
+
+    LazyColumn(
+        modifier = modifier,
+        contentPadding = PaddingValues(spacing.lg),
+        verticalArrangement = Arrangement.spacedBy(spacing.sm),
+    ) {
+        if (results.isEmpty()) {
+            item {
+                EmptyStatePanel(
+                    icon = Icons.Filled.Search,
+                    title = stringResource(R.string.settings_search_no_results_title),
+                    message = stringResource(R.string.settings_search_no_results_body),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        } else {
+            item {
+                Text(
+                    text = stringResource(R.string.settings_search_results_title),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            items(results, key = { it.id }) { entry ->
+                val isProvider = entry.destination == SettingsDestination.PROVIDER
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 56.dp)
+                        .clickable {
+                            if (isProvider) {
+                                entry.providerSection?.let(onOpenProviderSection)
+                            } else {
+                                entry.advancedSection?.let(onOpenAdvancedSection) ?: onOpenAdvanced()
+                            }
+                        }
+                        .padding(vertical = spacing.sm),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = titles.getValue(entry),
+                            style = MaterialTheme.typography.bodyLarge,
+                        )
+                        Text(
+                            text = summaries.getValue(entry),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -519,6 +686,7 @@ private fun ApiKeyDialog(
 private fun ProfileEditorDialog(
     existing: ProviderProfile?,
     onDismiss: () -> Unit,
+    onFetchModels: suspend (ProviderProfile, String?) -> ModelCatalogResult,
     onSave: (
         name: String,
         type: ProviderType,
@@ -588,6 +756,11 @@ private fun ProfileEditorDialog(
             (topP.isBlank() || topPValue?.let { it in 0.0..1.0 } == true) &&
             (effortMode != "custom" || customEffort.isNotBlank())
     var apiKey by remember { mutableStateOf("") }
+    val scope = rememberCoroutineScope()
+    var fetchingModels by remember { mutableStateOf(false) }
+    var fetchedModels by remember { mutableStateOf<List<AiModelInfo>>(emptyList()) }
+    var modelFetchError by remember { mutableStateOf<String?>(null) }
+    var modelFilter by remember { mutableStateOf("") }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -644,6 +817,120 @@ private fun ProfileEditorDialog(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    OutlinedButton(
+                        onClick = {
+                            scope.launch {
+                                fetchingModels = true
+                                modelFetchError = null
+                                val draft = ProviderProfile(
+                                    id = existing?.id ?: "draft-provider",
+                                    name = name.ifBlank { "Draft provider" },
+                                    providerType = type,
+                                    baseUrl = baseUrl.trim(),
+                                    modelName = model.trim().ifBlank { "model" },
+                                )
+                                val result = onFetchModels(
+                                    draft,
+                                    apiKey.takeIf { it.isNotBlank() },
+                                )
+                                fetchingModels = false
+                                fetchedModels = result.models
+                                modelFetchError = result.error
+                            }
+                        },
+                        enabled = !fetchingModels && baseUrl.isNotBlank(),
+                    ) {
+                        if (fetchingModels) {
+                            CircularProgressIndicator(modifier = Modifier.size(16.dp))
+                        }
+                        Text(
+                            text = stringResource(
+                                if (fetchingModels) {
+                                    R.string.provider_fetch_models_loading
+                                } else {
+                                    R.string.provider_fetch_models
+                                },
+                            ),
+                            modifier = Modifier.padding(start = if (fetchingModels) 8.dp else 0.dp),
+                        )
+                    }
+                    if (fetchedModels.isNotEmpty()) {
+                        Text(
+                            text = stringResource(
+                                R.string.provider_models_available,
+                                fetchedModels.size,
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+                modelFetchError?.let { error ->
+                    Text(
+                        text = stringResource(R.string.provider_models_error, error),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+                if (fetchedModels.isNotEmpty()) {
+                    OutlinedTextField(
+                        value = modelFilter,
+                        onValueChange = { modelFilter = it },
+                        placeholder = { Text(stringResource(R.string.provider_filter_models_hint)) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 180.dp)
+                            .verticalScroll(rememberScrollState()),
+                    ) {
+                        fetchedModels
+                            .filter { info ->
+                                modelFilter.isBlank() ||
+                                    info.id.contains(modelFilter, ignoreCase = true) ||
+                                    info.displayName?.contains(modelFilter, ignoreCase = true) == true
+                            }
+                            .take(100)
+                            .forEach { info ->
+                                TextButton(
+                                    onClick = {
+                                        model = info.id
+                                        fetchedModels = emptyList()
+                                        modelFilter = ""
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                ) {
+                                    Column(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalAlignment = Alignment.Start,
+                                    ) {
+                                        Text(
+                                            text = info.id,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                        )
+                                        info.displayName?.takeIf { it != info.id }?.let { label ->
+                                            Text(
+                                                text = label,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                    }
+                    Text(
+                        text = stringResource(R.string.provider_models_manual_hint),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
                 OutlinedTextField(
                     value = context,
                     onValueChange = { context = it.filter(Char::isDigit) },

@@ -2,7 +2,7 @@ package com.factswallpaper.feature.settings
 
 import androidx.annotation.StringRes
 import androidx.lifecycle.viewModelScope
-import com.factswallpaper.core.ai.AiModelInfo
+import com.factswallpaper.core.ai.ModelCatalogResult
 import com.factswallpaper.core.ai.ProviderDiagnosticsService
 import com.factswallpaper.core.ai.client.RawRequestJson
 import com.factswallpaper.core.common.AppResult
@@ -241,19 +241,14 @@ class ProviderSettingsViewModel @Inject constructor(
         }
     }
 
-    fun fetchModels(
+    /**
+     * Fetches the provider's model catalog. [apiKeyOverride] lets the editor
+     * test an unsaved key without writing it to the keystore first.
+     */
+    suspend fun fetchModels(
         profile: ProviderProfile,
         apiKeyOverride: String? = null,
-        onResult: (List<AiModelInfo>, String?) -> Unit,
-    ) {
-        viewModelScope.launch {
-            if (!apiKeyOverride.isNullOrBlank()) {
-                apiKeyStore.setApiKey(profile.id, apiKeyOverride.trim())
-            }
-            val result = diagnosticsService.fetchModels(profile)
-            onResult(result.models, result.error)
-        }
-    }
+    ): ModelCatalogResult = diagnosticsService.fetchModels(profile, apiKeyOverride)
 
     fun copyModelCatalog(profile: ProviderProfile, onCopy: (String) -> Unit) {
         viewModelScope.launch {

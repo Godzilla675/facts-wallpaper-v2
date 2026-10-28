@@ -6,6 +6,57 @@ fact generation, diagram generation, formula verification and template design
 run through user-configured providers; everything generated is stored locally
 and keeps working without a network.
 
+## Features
+
+- **Bring your own AI provider** — Gemini, Anthropic, OpenAI (Responses or Chat
+  Completions), Azure OpenAI, OpenRouter, DeepSeek, Qwen and any
+  OpenAI-compatible endpoint such as NVIDIA NIM or Ollama. Per-task routing,
+  manual profile pinning, custom headers, raw JSON body overrides, reasoning
+  controls and a model picker that fetches the live catalog.
+- **On-device PDF pipeline** — import from the file picker, a share sheet or
+  "Open with"; duplicate detection; embedded-text extraction; ML Kit OCR with
+  optional Tesseract/PaddleOCR engines; page-range selection and route
+  classification (text, scanned, mixed).
+- **Outline → facts → cards** — bookmark-aware or chunked outline detection,
+  editable/mergeable/splittable lessons, cancellable and resumable background
+  generation with progress notifications, schema validation, one JSON repair
+  pass, formula verification and diagram generation.
+- **Vision mode** — optionally send rendered page images instead of extracted
+  text for scanned or layout-heavy documents.
+- **Curate and study** — search, filter, favorite, hide, edit, regenerate and
+  export facts; Study Mode with swipeable cards, session counters and spaced
+  repetition scheduling.
+- **Wallpaper rotation** — live wallpaper service and static system/lock
+  wallpaper export, manual FOTD/interval/battery-aware schedules, quiet hours,
+  rotation pool from documents/collections/folders/tags, double-tap advance,
+  Quick Settings tile and home-screen widget.
+- **Rich card rendering** — built-in and AI-generated templates for text,
+  formulas and diagrams, pre-rendered offline and cached.
+- **Organization and export** — collections, folders, smart views and tags;
+  Markdown, ZIP and PDF study exports through the Storage Access Framework.
+- **Local-first settings** — encrypted API keys, usage/cost ledger, diagnostics
+  logs, settings search, haptic toggle, theme/dynamic color, and encrypted
+  daily/weekly backup to any SAF location including Google Drive.
+
+## How PDFs reach the LLM
+
+1. The PDF is copied into app storage and hashed for duplicate detection.
+2. Text is extracted **on-device** page by page. Scanned pages are OCR'd
+   locally (ML Kit, with optional Tesseract/PaddleOCR). No PDF bytes leave the
+   device in text mode.
+3. The outline stage sends bounded page ranges — never the whole book — and
+   adapts chunk size to the selected model's context window. Long outlines are
+   merged and deduplicated locally.
+4. Generation sends only the selected lesson's pages. Providers that support
+   native tool calling may request a missing page range through the `get_pages`
+   tool, up to a bounded number of calls per job; other providers receive the
+   lesson page text directly.
+5. **Vision mode** renders the selected pages to bitmaps on-device and sends
+   those images instead of text, for scanned or layout-critical documents.
+6. The returned JSON is schema-validated, repaired once when needed, verified,
+   then rendered into cards locally. API keys stay in the Android Keystore and
+   request logs contain only redacted summaries.
+
 ## Requirements
 
 - Android Studio with the Android SDK for API 36 (`compileSdk`/`targetSdk` 36,
