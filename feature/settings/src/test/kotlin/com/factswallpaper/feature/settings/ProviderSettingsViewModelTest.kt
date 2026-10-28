@@ -263,6 +263,8 @@ private class FakeSettingsRepository : SettingsRepository {
     override suspend fun setDailyFactNotificationEnabled(enabled: Boolean) {}
     override suspend fun setDailyFactNotificationTime(timeMinutes: Int) {}
     override suspend fun setDynamicColorEnabled(enabled: Boolean) {}
+    override suspend fun setLibraryCoachHintDismissed(dismissed: Boolean) {}
+    override suspend fun setOutlineCoachHintDismissed(dismissed: Boolean) {}
 }
 
 private class FakeDiagnosticsRepository : DiagnosticsRepository {

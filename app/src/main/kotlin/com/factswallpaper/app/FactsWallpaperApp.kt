@@ -32,9 +32,10 @@ fun FactsWallpaperApp(
     viewModel: AppViewModel = hiltViewModel(),
 ) {
     val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
+    val dynamicColorEnabled by viewModel.dynamicColorEnabled.collectAsStateWithLifecycle()
     val startDestination by viewModel.startDestination.collectAsStateWithLifecycle()
 
-    FactsTheme(themeMode = themeMode) {
+    FactsTheme(themeMode = themeMode, dynamicColorEnabled = dynamicColorEnabled) {
         val start = startDestination
         if (start == null) {
             StartLoading()

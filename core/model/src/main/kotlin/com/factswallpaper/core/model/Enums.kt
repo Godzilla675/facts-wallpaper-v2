@@ -56,7 +56,7 @@ enum class RotationSource {
 }
 
 @Serializable
-enum class ThemeMode { LIGHT, DARK, AMOLED, DYNAMIC }
+enum class ThemeMode { SYSTEM, LIGHT, DARK, AMOLED, DYNAMIC }
 
 @Serializable
 enum class ProviderType {

@@ -162,6 +162,14 @@ class DataStoreSettingsRepository @Inject constructor(
     override suspend fun setDynamicColorEnabled(enabled: Boolean) {
         dataStore.edit { it[Keys.DYNAMIC_COLOR_ENABLED] = enabled }
     }
+
+    override suspend fun setLibraryCoachHintDismissed(dismissed: Boolean) {
+        dataStore.edit { it[Keys.LIBRARY_COACH_HINT_DISMISSED] = dismissed }
+    }
+
+    override suspend fun setOutlineCoachHintDismissed(dismissed: Boolean) {
+        dataStore.edit { it[Keys.OUTLINE_COACH_HINT_DISMISSED] = dismissed }
+    }
 }
 
 private object Keys {
@@ -190,6 +198,8 @@ private object Keys {
     val DAILY_FACT_NOTIFICATION_ENABLED = booleanPreferencesKey("daily_fact_notification_enabled")
     val DAILY_FACT_NOTIFICATION_TIME_MINUTES = intPreferencesKey("daily_fact_notification_time_minutes")
     val DYNAMIC_COLOR_ENABLED = booleanPreferencesKey("dynamic_color_enabled")
+    val LIBRARY_COACH_HINT_DISMISSED = booleanPreferencesKey("library_coach_hint_dismissed")
+    val OUTLINE_COACH_HINT_DISMISSED = booleanPreferencesKey("outline_coach_hint_dismissed")
 }
 
 private fun Preferences.toAppPreferences(
@@ -197,7 +207,7 @@ private fun Preferences.toAppPreferences(
     taskMapSerializer: KSerializer<Map<AiTask, String>>,
 ): AppPreferences = AppPreferences(
     onboardingCompleted = this[Keys.ONBOARDING_COMPLETED] ?: false,
-    appThemeMode = this[Keys.APP_THEME_MODE].toEnum(ThemeMode.DARK),
+    appThemeMode = this[Keys.APP_THEME_MODE].toEnum(ThemeMode.SYSTEM),
     wallpaperThemeMode = this[Keys.WALLPAPER_THEME_MODE].toEnum(ThemeMode.AMOLED),
     routingStrategy = this[Keys.ROUTING_STRATEGY].toEnum(RoutingStrategy.BALANCED),
     taskProfileOverrides = this[Keys.TASK_PROFILE_OVERRIDES_JSON].decodeTaskMap(json, taskMapSerializer),
@@ -221,6 +231,8 @@ private fun Preferences.toAppPreferences(
     dailyFactNotificationEnabled = this[Keys.DAILY_FACT_NOTIFICATION_ENABLED] ?: false,
     dailyFactNotificationTimeMinutes = (this[Keys.DAILY_FACT_NOTIFICATION_TIME_MINUTES] ?: (8 * 60)).coerceIn(0, 1439),
     dynamicColorEnabled = this[Keys.DYNAMIC_COLOR_ENABLED] ?: true,
+    libraryCoachHintDismissed = this[Keys.LIBRARY_COACH_HINT_DISMISSED] ?: false,
+    outlineCoachHintDismissed = this[Keys.OUTLINE_COACH_HINT_DISMISSED] ?: false,
 )
 
 private inline fun <reified T : Enum<T>> String?.toEnum(default: T): T =

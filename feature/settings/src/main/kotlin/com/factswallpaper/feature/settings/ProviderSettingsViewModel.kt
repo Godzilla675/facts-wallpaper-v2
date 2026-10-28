@@ -241,10 +241,30 @@ class ProviderSettingsViewModel @Inject constructor(
         }
     }
 
-    fun fetchModels(profile: ProviderProfile, onResult: (List<AiModelInfo>, String?) -> Unit) {
+    fun fetchModels(
+        profile: ProviderProfile,
+        apiKeyOverride: String? = null,
+        onResult: (List<AiModelInfo>, String?) -> Unit,
+    ) {
         viewModelScope.launch {
+            if (!apiKeyOverride.isNullOrBlank()) {
+                apiKeyStore.setApiKey(profile.id, apiKeyOverride.trim())
+            }
             val result = diagnosticsService.fetchModels(profile)
             onResult(result.models, result.error)
+        }
+    }
+
+    fun copyModelCatalog(profile: ProviderProfile, onCopy: (String) -> Unit) {
+        viewModelScope.launch {
+            val result = diagnosticsService.fetchModels(profile)
+            val textToCopy = if (result.models.isNotEmpty()) {
+                result.models.joinToString("\n") { it.id }
+            } else {
+                profile.modelName
+            }
+            onCopy(textToCopy)
+            showMessage(R.string.provider_model_list_copied)
         }
     }
 }

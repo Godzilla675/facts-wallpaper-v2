@@ -450,6 +450,7 @@ private fun RenderedCardPanel(
 @Composable
 private fun themeLabel(mode: ThemeMode): String = stringResource(
     when (mode) {
+        ThemeMode.SYSTEM -> R.string.preview_theme_system
         ThemeMode.LIGHT -> R.string.preview_theme_light
         ThemeMode.DARK -> R.string.preview_theme_dark
         ThemeMode.AMOLED -> R.string.preview_theme_amoled

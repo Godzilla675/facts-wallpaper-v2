@@ -30,7 +30,15 @@ class AppViewModel @Inject constructor(
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
-            initialValue = ThemeMode.DARK,
+            initialValue = ThemeMode.SYSTEM,
+        )
+
+    val dynamicColorEnabled = settingsRepository.observePreferences()
+        .map { it.dynamicColorEnabled }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = true,
         )
 
     /**

@@ -33,6 +33,7 @@
     <string name="wallpaper_source_label">Source reference</string>
     <string name="wallpaper_template_label">Template</string>
     <string name="wallpaper_templates_empty">No templates available. Built-in layout will be used.</string>
+    <string name="wallpaper_theme_system">System</string>
     <string name="wallpaper_theme_light">Light</string>
     <string name="wallpaper_theme_dark">Dark</string>
     <string name="wallpaper_theme_amoled">AMOLED</string>

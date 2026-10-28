@@ -1,5 +1,6 @@
 package com.factswallpaper.feature.settings
 
+import com.factswallpaper.core.model.ThemeMode
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -370,6 +371,20 @@ class AdvancedSettingsViewModel @Inject constructor(
 
     fun sqlCipherInfo() {
         showMessage(R.string.advanced_sqlcipher_info)
+    }
+
+    fun setAppThemeMode(mode: ThemeMode) {
+        viewModelScope.launch {
+            settingsRepository.setAppThemeMode(mode)
+            showMessage(R.string.advanced_saved)
+        }
+    }
+
+    fun setDynamicColorEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setDynamicColorEnabled(enabled)
+            showMessage(R.string.advanced_saved)
+        }
     }
 }
 

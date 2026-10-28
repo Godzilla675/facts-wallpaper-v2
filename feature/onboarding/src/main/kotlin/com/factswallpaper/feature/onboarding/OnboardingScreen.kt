@@ -543,6 +543,7 @@ private fun presetLabel(type: ProviderType): String = stringResource(
 @Composable
 private fun themeLabel(mode: ThemeMode): String = stringResource(
     when (mode) {
+        ThemeMode.SYSTEM -> R.string.onboarding_theme_system
         ThemeMode.LIGHT -> R.string.onboarding_theme_light
         ThemeMode.DARK -> R.string.onboarding_theme_dark
         ThemeMode.AMOLED -> R.string.onboarding_theme_amoled

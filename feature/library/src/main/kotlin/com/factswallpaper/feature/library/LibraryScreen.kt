@@ -77,6 +77,8 @@ fun LibraryScreen(
     val message by viewModel.message.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
+    val deletedMessage = stringResource(R.string.library_deleted)
+    val undoLabel = stringResource(R.string.library_undo)
     val coroutineScope = rememberCoroutineScope()
     var pendingDelete by remember { mutableStateOf<Document?>(null) }
     var showBatchDeleteConfirm by remember { mutableStateOf(false) }
@@ -224,8 +226,8 @@ fun LibraryScreen(
                         viewModel.deleteDocumentWithUndo(docToDelete) { onUndo ->
                             coroutineScope.launch {
                                 val result = snackbarHostState.showSnackbar(
-                                    message = context.getString(R.string.library_deleted),
-                                    actionLabel = context.getString(R.string.library_undo),
+                                    message = deletedMessage,
+                                    actionLabel = undoLabel,
                                     duration = SnackbarDuration.Short,
                                 )
                                 if (result == SnackbarResult.ActionPerformed) {

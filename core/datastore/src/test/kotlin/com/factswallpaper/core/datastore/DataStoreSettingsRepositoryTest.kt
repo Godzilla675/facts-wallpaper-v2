@@ -61,7 +61,7 @@ class DataStoreSettingsRepositoryTest {
         }
 
         val stored = preferences()
-        assertThat(stored.appThemeMode).isEqualTo(ThemeMode.DARK)
+        assertThat(stored.appThemeMode).isEqualTo(ThemeMode.SYSTEM)
         assertThat(stored.routingStrategy).isEqualTo(RoutingStrategy.BALANCED)
     }
 

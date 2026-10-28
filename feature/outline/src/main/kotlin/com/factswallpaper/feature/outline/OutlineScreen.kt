@@ -20,6 +20,12 @@ import androidx.compose.material.icons.filled.CallSplit
 import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Replay
+import androidx.compose.material.icons.filled.Lightbulb
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
@@ -75,6 +81,7 @@ fun OutlineScreen(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val message by viewModel.message.collectAsStateWithLifecycle()
+    val showCoachHint by viewModel.showCoachHint.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     var editingLesson by remember { mutableStateOf<Lesson?>(null) }
     var addingLesson by remember { mutableStateOf(false) }
@@ -139,6 +146,8 @@ fun OutlineScreen(
                 onCancelWork = viewModel::cancelWork,
                 onGenerateFacts = viewModel::generateFacts,
                 onOpenFacts = { onOpenFacts(value.document.id) },
+                showCoachHint = showCoachHint,
+                onDismissCoachHint = viewModel::dismissCoachHint,
                 modifier = Modifier.padding(padding),
             )
         }
@@ -225,6 +234,8 @@ private fun OutlineContent(
     onCancelWork: () -> Unit,
     onGenerateFacts: () -> Unit,
     onOpenFacts: () -> Unit,
+    showCoachHint: Boolean = false,
+    onDismissCoachHint: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val spacing = LocalSpacing.current
@@ -244,6 +255,49 @@ private fun OutlineContent(
                 lessonCount = state.lessons.size,
                 onOpenFacts = onOpenFacts,
             )
+        }
+        if (showCoachHint) {
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    ),
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(spacing.md),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Lightbulb,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                        )
+                        Spacer(Modifier.width(spacing.sm))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = stringResource(R.string.outline_coach_hint_title),
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            )
+                            Text(
+                                text = stringResource(R.string.outline_coach_hint_body),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            )
+                        }
+                        IconButton(onClick = onDismissCoachHint) {
+                            Icon(
+                                imageVector = Icons.Filled.Close,
+                                contentDescription = stringResource(R.string.outline_coach_hint_dismiss),
+                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                            )
+                        }
+                    }
+                }
+            }
         }
         if (!state.online) {
             item {

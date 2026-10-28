@@ -1,5 +1,6 @@
 package com.factswallpaper.feature.settings
 
+import com.factswallpaper.core.model.ThemeMode
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -192,6 +193,8 @@ fun AdvancedSettingsScreen(
                 },
                 onSqlCipher = viewModel::sqlCipherInfo,
                 onOpenWhatsHappening = onOpenWhatsHappening,
+                onThemeModeChange = viewModel::setAppThemeMode,
+                onDynamicColorChange = viewModel::setDynamicColorEnabled,
                 modifier = Modifier.padding(padding),
             )
         }
@@ -359,6 +362,8 @@ private fun AdvancedContent(
     onBackupFrequencyChange: (AutomaticBackupFrequency) -> Unit,
     onSqlCipher: () -> Unit,
     onOpenWhatsHappening: () -> Unit,
+    onThemeModeChange: (ThemeMode) -> Unit,
+    onDynamicColorChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val spacing = LocalSpacing.current
@@ -369,6 +374,42 @@ private fun AdvancedContent(
         contentPadding = PaddingValues(spacing.lg),
         verticalArrangement = Arrangement.spacedBy(spacing.md),
     ) {
+        item {
+            SectionGroupCard(
+                title = stringResource(R.string.advanced_theme_title),
+                subtitle = stringResource(R.string.advanced_theme_helper),
+            ) {
+                Text(
+                    text = stringResource(R.string.advanced_theme_mode),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(spacing.sm),
+                    modifier = Modifier.padding(vertical = spacing.xs),
+                ) {
+                    listOf(
+                        ThemeMode.SYSTEM to R.string.advanced_theme_system,
+                        ThemeMode.LIGHT to R.string.advanced_theme_light,
+                        ThemeMode.DARK to R.string.advanced_theme_dark,
+                        ThemeMode.AMOLED to R.string.advanced_theme_amoled,
+                    ).forEach { (mode, labelRes) ->
+                        FilterChip(
+                            selected = prefs.appThemeMode == mode,
+                            onClick = { onThemeModeChange(mode) },
+                            label = { Text(stringResource(labelRes)) },
+                        )
+                    }
+                }
+                SettingSwitchRow(
+                    title = stringResource(R.string.advanced_theme_dynamic_color),
+                    subtitle = stringResource(R.string.advanced_theme_dynamic_color_helper),
+                    checked = prefs.dynamicColorEnabled,
+                    onCheckedChange = onDynamicColorChange,
+                )
+            }
+        }
+
         item {
             SectionGroupCard(
                 title = stringResource(R.string.advanced_pipeline_title),

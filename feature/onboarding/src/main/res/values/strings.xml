@@ -33,6 +33,7 @@
     <string name="onboarding_step4_title">Pick a look</string>
     <string name="onboarding_step4_body">The app theme and the wallpaper theme are independent. Choose what feels comfortable for reading and for your lock screen.</string>
     <string name="onboarding_theme_label">App theme</string>
+    <string name="onboarding_theme_system">System</string>
     <string name="onboarding_theme_light">Light</string>
     <string name="onboarding_theme_dark">Dark</string>
     <string name="onboarding_theme_amoled">AMOLED</string>

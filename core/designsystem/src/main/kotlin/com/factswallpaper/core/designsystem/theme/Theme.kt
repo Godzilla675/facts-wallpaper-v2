@@ -1,5 +1,6 @@
 package com.factswallpaper.core.designsystem.theme
 
+import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.dynamicDarkColorScheme
@@ -15,23 +16,29 @@ import com.factswallpaper.core.model.ThemeMode
  */
 @Composable
 fun FactsTheme(
-    themeMode: ThemeMode = ThemeMode.DARK,
+    themeMode: ThemeMode = ThemeMode.SYSTEM,
+    dynamicColorEnabled: Boolean = true,
     content: @Composable () -> Unit,
 ) {
     val context = LocalContext.current
     val systemDark = isSystemInDarkTheme()
-    val colorScheme = when (themeMode) {
-        ThemeMode.LIGHT -> FactsLightColorScheme
-        ThemeMode.DARK -> FactsDarkColorScheme
-        ThemeMode.AMOLED -> FactsAmoledColorScheme
-        ThemeMode.DYNAMIC ->
-            if (systemDark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+    val isDark = when (themeMode) {
+        ThemeMode.SYSTEM -> systemDark
+        ThemeMode.LIGHT -> false
+        ThemeMode.DARK, ThemeMode.AMOLED -> true
+        ThemeMode.DYNAMIC -> systemDark
     }
-    val factColors = when {
-        themeMode == ThemeMode.LIGHT -> LightFactColors
-        themeMode == ThemeMode.DYNAMIC && !systemDark -> LightFactColors
-        else -> DarkFactColors
+    val supportsDynamic = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+    val applyDynamic = (dynamicColorEnabled && themeMode != ThemeMode.AMOLED) || themeMode == ThemeMode.DYNAMIC
+
+    val colorScheme = when {
+        supportsDynamic && applyDynamic && isDark -> dynamicDarkColorScheme(context)
+        supportsDynamic && applyDynamic && !isDark -> dynamicLightColorScheme(context)
+        themeMode == ThemeMode.AMOLED -> FactsAmoledColorScheme
+        isDark -> FactsDarkColorScheme
+        else -> FactsLightColorScheme
     }
+    val factColors = if (isDark) DarkFactColors else LightFactColors
     CompositionLocalProvider(
         LocalFactColors provides factColors,
         LocalSpacing provides Spacing(),

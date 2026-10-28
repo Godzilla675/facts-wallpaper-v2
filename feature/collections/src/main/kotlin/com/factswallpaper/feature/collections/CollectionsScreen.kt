@@ -403,6 +403,8 @@ private fun CollectionsContent(
             item {
                 EmptySection(
                     message = stringResource(R.string.collections_empty_collections),
+                    actionLabel = stringResource(R.string.collections_new_collection),
+                    onAction = onNewCollection,
                 )
             }
         } else {
@@ -430,6 +432,8 @@ private fun CollectionsContent(
             item {
                 EmptySection(
                     message = stringResource(R.string.collections_empty_folders),
+                    actionLabel = stringResource(R.string.collections_new_folder),
+                    onAction = onNewFolder,
                 )
             }
         } else {
@@ -900,19 +904,36 @@ private fun SectionHeader(
 }
 
 @Composable
-private fun EmptySection(message: String) {
+private fun EmptySection(
+    message: String,
+    actionLabel: String? = null,
+    onAction: (() -> Unit)? = null,
+) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
         ),
     ) {
-        Text(
-            text = message,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        Column(
             modifier = Modifier.padding(16.dp),
-        )
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            if (actionLabel != null && onAction != null) {
+                OutlinedButton(onClick = onAction) {
+                    Icon(Icons.Filled.Add, contentDescription = null)
+                    Text(
+                        text = actionLabel,
+                        modifier = Modifier.padding(start = 4.dp),
+                    )
+                }
+            }
+        }
     }
 }
 

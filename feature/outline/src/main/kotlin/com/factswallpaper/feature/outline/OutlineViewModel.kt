@@ -97,6 +97,14 @@ class OutlineViewModel @Inject constructor(
     private val pendingCostGuard = MutableStateFlow<CostGuardRequest?>(null)
     private val factsJobStarted = MutableStateFlow(false)
 
+    val showCoachHint = settingsRepository.observePreferences()
+        .map { !it.outlineCoachHintDismissed }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = false,
+        )
+
     private val workInfos = workManager.getWorkInfosForUniqueWorkFlow(
         OutlineWork.uniqueName(documentId),
     )
@@ -420,6 +428,12 @@ class OutlineViewModel @Inject constructor(
 
     fun dismissCostGuard() {
         pendingCostGuard.value = null
+    }
+
+    fun dismissCoachHint() {
+        viewModelScope.launch {
+            settingsRepository.setOutlineCoachHintDismissed(true)
+        }
     }
 
     fun cancelWork() {

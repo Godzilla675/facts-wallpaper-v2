@@ -14,7 +14,7 @@ import com.factswallpaper.core.model.ThemeMode
  */
 data class AppPreferences(
     val onboardingCompleted: Boolean = false,
-    val appThemeMode: ThemeMode = ThemeMode.DARK,
+    val appThemeMode: ThemeMode = ThemeMode.SYSTEM,
     val wallpaperThemeMode: ThemeMode = ThemeMode.AMOLED,
     val routingStrategy: RoutingStrategy = RoutingStrategy.BALANCED,
     val taskProfileOverrides: Map<AiTask, String> = emptyMap(),
@@ -38,4 +38,6 @@ data class AppPreferences(
     val dailyFactNotificationEnabled: Boolean = false,
     val dailyFactNotificationTimeMinutes: Int = 8 * 60,
     val dynamicColorEnabled: Boolean = true,
+    val libraryCoachHintDismissed: Boolean = false,
+    val outlineCoachHintDismissed: Boolean = false,
 )

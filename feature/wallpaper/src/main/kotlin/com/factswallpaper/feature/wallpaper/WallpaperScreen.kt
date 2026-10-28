@@ -673,6 +673,7 @@ private fun rotationSourceLabel(source: RotationSource): String = stringResource
 @Composable
 private fun themeLabel(mode: ThemeMode): String = stringResource(
     when (mode) {
+        ThemeMode.SYSTEM -> R.string.wallpaper_theme_system
         ThemeMode.LIGHT -> R.string.wallpaper_theme_light
         ThemeMode.DARK -> R.string.wallpaper_theme_dark
         ThemeMode.AMOLED -> R.string.wallpaper_theme_amoled

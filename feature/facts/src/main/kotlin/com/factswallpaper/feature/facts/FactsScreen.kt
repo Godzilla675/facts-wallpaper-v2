@@ -102,6 +102,9 @@ fun FactsScreen(
     val message by viewModel.message.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
+    val copiedMessage = stringResource(com.factswallpaper.core.ui.R.string.fact_copied_to_clipboard)
+    val deletedMessage = stringResource(R.string.facts_deleted)
+    val undoLabel = stringResource(R.string.facts_undo)
     val clipboardManager = LocalClipboardManager.current
     val coroutineScope = rememberCoroutineScope()
     var editingFact by remember { mutableStateOf<Fact?>(null) }
@@ -182,9 +185,7 @@ fun FactsScreen(
                 onCopyText = { fact ->
                     clipboardManager.setText(AnnotatedString(fact.text))
                     coroutineScope.launch {
-                        snackbarHostState.showSnackbar(
-                            context.getString(com.factswallpaper.core.ui.R.string.fact_copied_to_clipboard),
-                        )
+                        snackbarHostState.showSnackbar(copiedMessage)
                     }
                 },
                 onShareImage = { fact -> viewModel.shareCardAsImage(fact, context) },
@@ -196,8 +197,8 @@ fun FactsScreen(
                     viewModel.deleteFactWithUndo(fact.id) { onUndo ->
                         coroutineScope.launch {
                             val result = snackbarHostState.showSnackbar(
-                                message = context.getString(R.string.facts_deleted),
-                                actionLabel = context.getString(R.string.facts_undo),
+                                message = deletedMessage,
+                                actionLabel = undoLabel,
                                 duration = SnackbarDuration.Short,
                             )
                             if (result == SnackbarResult.ActionPerformed) {

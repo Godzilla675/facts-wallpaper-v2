@@ -159,7 +159,7 @@ class CardRenderCoordinator @Inject constructor(
 
     private fun stageForeground(themeMode: ThemeMode): String = when (themeMode) {
         ThemeMode.LIGHT -> "#1A1D21"
-        ThemeMode.DARK, ThemeMode.DYNAMIC, ThemeMode.AMOLED -> "#E8EEF5"
+        ThemeMode.SYSTEM, ThemeMode.DARK, ThemeMode.DYNAMIC, ThemeMode.AMOLED -> "#E8EEF5"
     }
 
     private fun accent(spec: CardTemplateSpec, themeMode: ThemeMode): String =
