@@ -1,5 +1,7 @@
 package com.factswallpaper.feature.settings
 
+import com.factswallpaper.core.model.ThemeMode
+import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
@@ -88,6 +90,7 @@ private data class BackupDestinationRequest(
 fun AdvancedSettingsScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
+    onOpenWhatsHappening: () -> Unit = {},
     viewModel: AdvancedSettingsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -100,8 +103,10 @@ fun AdvancedSettingsScreen(
     var inspectedLog by remember { mutableStateOf<AiRequestLogEntry?>(null) }
     var showBackupDialog by remember { mutableStateOf(false) }
     var showRestoreDialog by remember { mutableStateOf(false) }
+    var selectedRestoreUri by remember { mutableStateOf<Uri?>(null) }
     var pendingCacheClear by remember { mutableStateOf<CacheClearTarget?>(null) }
     var pendingBackupDestination by remember { mutableStateOf<BackupDestinationRequest?>(null) }
+
     val backupDocumentPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("application/octet-stream"),
     ) { uri ->
@@ -117,6 +122,15 @@ fun AdvancedSettingsScreen(
             ) {
                 showBackupDialog = false
             }
+        }
+    }
+
+    val restoreDocumentPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        if (uri != null) {
+            selectedRestoreUri = uri
+            showRestoreDialog = true
         }
     }
 
@@ -163,7 +177,13 @@ fun AdvancedSettingsScreen(
                 onClearDiagramCache = { pendingCacheClear = CacheClearTarget.DIAGRAMS },
                 onCompactDatabase = viewModel::compactDatabase,
                 onOpenBackupDialog = { showBackupDialog = true },
-                onOpenRestoreDialog = { showRestoreDialog = true },
+                onOpenRestoreDialog = {
+                    selectedRestoreUri = null
+                    showRestoreDialog = true
+                },
+                onRestoreFromFile = {
+                    restoreDocumentPicker.launch(arrayOf("*/*"))
+                },
                 onBackupToSavedLocation = viewModel::backupToSavedLocation,
                 onAutomaticBackupChange = {
                     viewModel.setAutomaticBackup(it, value.backupDestination.frequency)
@@ -172,6 +192,9 @@ fun AdvancedSettingsScreen(
                     viewModel.setAutomaticBackup(value.backupDestination.automaticEnabled, it)
                 },
                 onSqlCipher = viewModel::sqlCipherInfo,
+                onOpenWhatsHappening = onOpenWhatsHappening,
+                onThemeModeChange = viewModel::setAppThemeMode,
+                onDynamicColorChange = viewModel::setDynamicColorEnabled,
                 modifier = Modifier.padding(padding),
             )
         }
@@ -248,14 +271,13 @@ fun AdvancedSettingsScreen(
     }
 
     editingSuffixTask?.let { task ->
-        val current = (state as? AdvancedSettingsUiState.Content)
-            ?.preferences
-            ?.customTaskPromptSuffixes
-            ?.get(task)
-            .orEmpty()
         PromptSuffixDialog(
             taskLabel = taskLabel(task),
-            initial = current,
+            initial = (state as? AdvancedSettingsUiState.Content)
+                ?.preferences
+                ?.customTaskPromptSuffixes
+                ?.get(task)
+                .orEmpty(),
             onDismiss = { editingSuffixTask = null },
             onSave = {
                 viewModel.setPromptSuffix(task, it)
@@ -264,9 +286,9 @@ fun AdvancedSettingsScreen(
         )
     }
 
-    inspectedLog?.let { log ->
-        PromptInspectorDialog(
-            log = log,
+    inspectedLog?.let { entry ->
+        LogDetailsDialog(
+            entry = entry,
             onDismiss = { inspectedLog = null },
         )
     }
@@ -293,10 +315,23 @@ fun AdvancedSettingsScreen(
 
     if (showRestoreDialog) {
         RestoreDialog(
-            onDismiss = { showRestoreDialog = false },
+            selectedUri = selectedRestoreUri,
+            onPickFile = { restoreDocumentPicker.launch(arrayOf("*/*")) },
+            onDismiss = {
+                showRestoreDialog = false
+                selectedRestoreUri = null
+            },
             onConfirm = { pass ->
-                viewModel.restoreBackup(pass) { _, _ ->
-                    showRestoreDialog = false
+                val uri = selectedRestoreUri
+                if (uri != null) {
+                    viewModel.restoreBackupFromUri(uri, pass) { _, _ ->
+                        showRestoreDialog = false
+                        selectedRestoreUri = null
+                    }
+                } else {
+                    viewModel.restoreBackup(pass) { _, _ ->
+                        showRestoreDialog = false
+                    }
                 }
             },
         )
@@ -321,10 +356,14 @@ private fun AdvancedContent(
     onCompactDatabase: () -> Unit,
     onOpenBackupDialog: () -> Unit,
     onOpenRestoreDialog: () -> Unit,
+    onRestoreFromFile: () -> Unit,
     onBackupToSavedLocation: () -> Unit,
     onAutomaticBackupChange: (Boolean) -> Unit,
     onBackupFrequencyChange: (AutomaticBackupFrequency) -> Unit,
     onSqlCipher: () -> Unit,
+    onOpenWhatsHappening: () -> Unit,
+    onThemeModeChange: (ThemeMode) -> Unit,
+    onDynamicColorChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val spacing = LocalSpacing.current
@@ -335,6 +374,55 @@ private fun AdvancedContent(
         contentPadding = PaddingValues(spacing.lg),
         verticalArrangement = Arrangement.spacedBy(spacing.md),
     ) {
+        item {
+            SectionGroupCard(
+                title = stringResource(R.string.advanced_theme_title),
+                subtitle = stringResource(R.string.advanced_theme_helper),
+            ) {
+                Text(
+                    text = stringResource(R.string.advanced_theme_mode),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(spacing.sm),
+                    modifier = Modifier.padding(vertical = spacing.xs),
+                ) {
+                    listOf(
+                        ThemeMode.SYSTEM to R.string.advanced_theme_system,
+                        ThemeMode.LIGHT to R.string.advanced_theme_light,
+                        ThemeMode.DARK to R.string.advanced_theme_dark,
+                        ThemeMode.AMOLED to R.string.advanced_theme_amoled,
+                    ).forEach { (mode, labelRes) ->
+                        FilterChip(
+                            selected = prefs.appThemeMode == mode,
+                            onClick = { onThemeModeChange(mode) },
+                            label = { Text(stringResource(labelRes)) },
+                        )
+                    }
+                }
+                SettingSwitchRow(
+                    title = stringResource(R.string.advanced_theme_dynamic_color),
+                    subtitle = stringResource(R.string.advanced_theme_dynamic_color_helper),
+                    checked = prefs.dynamicColorEnabled,
+                    onCheckedChange = onDynamicColorChange,
+                )
+            }
+        }
+
+        item {
+            SectionGroupCard(
+                title = stringResource(R.string.advanced_pipeline_title),
+                subtitle = stringResource(R.string.advanced_pipeline_helper),
+            ) {
+                ValueRow(
+                    title = stringResource(R.string.advanced_whats_happening),
+                    value = stringResource(R.string.advanced_whats_happening_action),
+                    onClick = onOpenWhatsHappening,
+                )
+            }
+        }
+
         item {
             SectionGroupCard(
                 title = stringResource(R.string.advanced_ocr_title),
@@ -371,35 +459,16 @@ private fun AdvancedContent(
                 subtitle = stringResource(R.string.advanced_suffixes_helper),
             ) {
                 AiTask.entries.forEach { task ->
-                    val suffix = prefs.customTaskPromptSuffixes[task]
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(min = 48.dp)
-                            .clickable { onEditSuffix(task) }
-                            .padding(vertical = spacing.sm),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = taskLabel(task),
-                                style = MaterialTheme.typography.bodyLarge,
-                            )
-                            Text(
-                                text = suffix?.takeIf { it.isNotBlank() }
-                                    ?: stringResource(R.string.advanced_suffix_default),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        }
-                        Icon(
-                            imageVector = Icons.Filled.Edit,
-                            contentDescription = stringResource(R.string.advanced_edit_suffix),
-                            tint = MaterialTheme.colorScheme.primary,
-                        )
-                    }
+                    val custom = prefs.customTaskPromptSuffixes[task]
+                    ValueRow(
+                        title = taskLabel(task),
+                        value = if (custom.isNullOrBlank()) {
+                            stringResource(R.string.advanced_suffix_default)
+                        } else {
+                            stringResource(R.string.advanced_edit_suffix)
+                        },
+                        onClick = { onEditSuffix(task) },
+                    )
                 }
             }
         }
@@ -422,35 +491,33 @@ private fun AdvancedContent(
                     onCheckedChange = onDoubleTapChange,
                 )
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = spacing.sm),
+                    horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        text = stringResource(
-                            R.string.advanced_logs_count,
-                            state.logs.size,
-                        ),
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.weight(1f),
+                        text = stringResource(R.string.advanced_logs_count, state.logs.size),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    OutlinedButton(onClick = onClearLogs, enabled = state.logs.isNotEmpty()) {
-                        Icon(Icons.Filled.DeleteSweep, contentDescription = null)
-                        Text(
-                            text = stringResource(R.string.advanced_logs_clear),
-                            modifier = Modifier.padding(start = 4.dp),
-                        )
+                    TextButton(onClick = onClearLogs, enabled = state.logs.isNotEmpty()) {
+                        Text(stringResource(R.string.advanced_logs_clear))
                     }
                 }
                 if (state.logs.isEmpty()) {
                     Text(
                         text = stringResource(R.string.advanced_logs_empty),
-                        style = MaterialTheme.typography.bodySmall,
+                        style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = spacing.sm),
+                        modifier = Modifier.padding(vertical = spacing.md),
                     )
                 } else {
-                    state.logs.forEach { log ->
-                        LogRow(log = log, onClick = { onInspectLog(log) })
+                    Column(verticalArrangement = Arrangement.spacedBy(spacing.xs)) {
+                        state.logs.forEach { entry ->
+                            LogItemRow(entry = entry, onClick = { onInspectLog(entry) })
+                        }
                     }
                 }
             }
@@ -466,9 +533,7 @@ private fun AdvancedContent(
                     verticalArrangement = Arrangement.spacedBy(spacing.sm),
                 ) {
                     MetricPill(
-                        value = MetricsFormatter.compactTokens(
-                            state.usage.todayTokens.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(),
-                        ),
+                        value = MetricsFormatter.compactTokens(state.usage.todayTokens),
                         label = stringResource(R.string.provider_usage_today),
                     )
                     MetricPill(
@@ -476,9 +541,7 @@ private fun AdvancedContent(
                         label = stringResource(R.string.provider_usage_today_cost),
                     )
                     MetricPill(
-                        value = MetricsFormatter.compactTokens(
-                            state.usage.last30DaysTokens.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(),
-                        ),
+                        value = MetricsFormatter.compactTokens(state.usage.last30DaysTokens),
                         label = stringResource(R.string.provider_usage_30d),
                     )
                     MetricPill(
@@ -524,48 +587,34 @@ private fun AdvancedContent(
                     )
                 }
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = spacing.sm),
+                    modifier = Modifier.padding(top = spacing.sm),
                     horizontalArrangement = Arrangement.spacedBy(spacing.sm),
                 ) {
-                    OutlinedButton(onClick = onRefreshStorage, modifier = Modifier.weight(1f)) {
+                    OutlinedButton(onClick = onRefreshStorage) {
                         Icon(Icons.Filled.Refresh, contentDescription = null)
-                        Text(
-                            text = stringResource(R.string.advanced_storage_refresh),
-                            modifier = Modifier.padding(start = 4.dp),
-                        )
+                        Spacer(Modifier.padding(start = 4.dp))
+                        Text(stringResource(R.string.advanced_storage_refresh))
                     }
-                    OutlinedButton(onClick = onClearRenderCache, modifier = Modifier.weight(1f)) {
-                        Icon(Icons.Filled.Storage, contentDescription = null)
-                        Text(
-                            text = stringResource(R.string.advanced_storage_clear_cards),
-                            modifier = Modifier.padding(start = 4.dp),
-                        )
+                    OutlinedButton(onClick = onClearRenderCache) {
+                        Icon(Icons.Filled.DeleteSweep, contentDescription = null)
+                        Spacer(Modifier.padding(start = 4.dp))
+                        Text(stringResource(R.string.advanced_storage_clear_cards))
                     }
-                }
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = spacing.sm),
-                    horizontalArrangement = Arrangement.spacedBy(spacing.sm),
-                ) {
-                    OutlinedButton(onClick = onClearDiagramCache, modifier = Modifier.weight(1f)) {
+                    OutlinedButton(onClick = onClearDiagramCache) {
+                        Icon(Icons.Filled.DeleteSweep, contentDescription = null)
+                        Spacer(Modifier.padding(start = 4.dp))
                         Text(stringResource(R.string.advanced_storage_clear_diagrams))
                     }
-                    OutlinedButton(onClick = onCompactDatabase, modifier = Modifier.weight(1f)) {
-                        Icon(Icons.Filled.Compress, contentDescription = null)
-                        Text(
-                            text = stringResource(R.string.advanced_storage_compact),
-                            modifier = Modifier.padding(start = 4.dp),
-                        )
-                    }
+                }
+                OutlinedButton(onClick = onCompactDatabase, modifier = Modifier.fillMaxWidth()) {
+                    Icon(Icons.Filled.Compress, contentDescription = null)
+                    Spacer(Modifier.padding(start = 4.dp))
+                    Text(stringResource(R.string.advanced_storage_compact))
                 }
                 Text(
                     text = stringResource(R.string.advanced_storage_note),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = spacing.sm),
                 )
             }
         }
@@ -576,24 +625,14 @@ private fun AdvancedContent(
                 subtitle = stringResource(R.string.advanced_data_helper),
             ) {
                 Text(
-                    text = backupStatusSummary(state.backupDestination),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = if (state.backupDestination.lastBackupSucceeded == false) {
-                        MaterialTheme.colorScheme.error
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
+                    text = backupDestinationSummary(state.backupDestination),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                state.backupDestination.lastError?.let { error ->
-                    Text(
-                        text = stringResource(R.string.advanced_backup_last_error, error),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error,
-                    )
-                }
                 SettingSwitchRow(
                     title = stringResource(R.string.advanced_backup_automatic),
                     subtitle = stringResource(
+                        R.string.advanced_backup_schedule_helper,
                         if (state.backupDestination.frequency == AutomaticBackupFrequency.WEEKLY) {
                             R.string.advanced_backup_weekly
                         } else {
@@ -639,6 +678,12 @@ private fun AdvancedContent(
                     }
                 }
                 OutlinedButton(
+                    onClick = onRestoreFromFile,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(stringResource(R.string.advanced_restore_from_file))
+                }
+                OutlinedButton(
                     onClick = onOpenBackupDialog,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
@@ -665,8 +710,8 @@ private fun AdvancedContent(
                     }
                     Text(
                         text = stringResource(R.string.advanced_sqlcipher_state),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
                     )
                 }
             }
@@ -675,38 +720,43 @@ private fun AdvancedContent(
 }
 
 @Composable
-private fun LogRow(log: AiRequestLogEntry, onClick: () -> Unit) {
-    val spacing = LocalSpacing.current
+private fun LogItemRow(entry: AiRequestLogEntry, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = 48.dp)
             .clickable(onClick = onClick)
-            .padding(vertical = spacing.sm),
+            .padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(spacing.sm),
     ) {
         Icon(
-            imageVector = if (log.success) Icons.Filled.CheckCircle else Icons.Filled.Error,
+            imageVector = if (entry.success) Icons.Filled.CheckCircle else Icons.Filled.Error,
             contentDescription = null,
-            tint = if (log.success) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+            tint = if (entry.success) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.error
+            },
+            modifier = Modifier.padding(end = 8.dp),
         )
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = stringResource(
                     R.string.advanced_log_line,
-                    taskLabel(log.taskType),
-                    log.modelName,
+                    entry.taskType.name,
+                    entry.modelName,
                 ),
                 style = MaterialTheme.typography.bodyMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
             Text(
                 text = stringResource(
                     R.string.advanced_log_meta,
-                    log.durationMs,
-                    log.inputTokens,
-                    log.outputTokens,
-                    formatEpoch(log.timestampEpochMs),
+                    entry.durationMs,
+                    entry.inputTokens,
+                    entry.outputTokens,
+                    formatEpoch(entry.timestampEpochMs),
                 ),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -716,11 +766,10 @@ private fun LogRow(log: AiRequestLogEntry, onClick: () -> Unit) {
 }
 
 @Composable
-private fun PromptInspectorDialog(
-    log: AiRequestLogEntry,
+private fun LogDetailsDialog(
+    entry: AiRequestLogEntry,
     onDismiss: () -> Unit,
 ) {
-    val spacing = LocalSpacing.current
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.advanced_log_details_title)) },
@@ -729,54 +778,43 @@ private fun PromptInspectorDialog(
                 modifier = Modifier
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(spacing.sm),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Text(
                     text = stringResource(
-                        R.string.advanced_log_line,
-                        taskLabel(log.taskType),
-                        log.modelName,
-                    ),
-                    style = MaterialTheme.typography.titleMedium,
-                )
-                Text(
-                    text = stringResource(
                         R.string.advanced_log_detail_meta,
-                        log.durationMs,
-                        log.inputTokens,
-                        log.outputTokens,
+                        entry.durationMs,
+                        entry.inputTokens,
+                        entry.outputTokens,
                     ),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
                 )
-                Spacer(modifier = Modifier.height(spacing.xs))
                 Text(
                     text = stringResource(R.string.advanced_log_prompt),
-                    style = MaterialTheme.typography.labelLarge,
+                    style = MaterialTheme.typography.titleSmall,
                 )
                 Text(
-                    text = log.redactedRequestSummary.ifBlank {
+                    text = entry.redactedRequestSummary.ifBlank {
                         stringResource(R.string.advanced_log_empty_value)
                     },
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.bodySmall,
                 )
-                Spacer(modifier = Modifier.height(spacing.xs))
                 Text(
                     text = stringResource(R.string.advanced_log_response),
-                    style = MaterialTheme.typography.labelLarge,
+                    style = MaterialTheme.typography.titleSmall,
                 )
                 Text(
-                    text = log.redactedResponseSnippet.ifBlank {
+                    text = entry.redactedResponseSnippet.ifBlank {
                         stringResource(R.string.advanced_log_empty_value)
                     },
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.bodySmall,
                 )
-                val errorMsg = log.errorMessage
-                if (!errorMsg.isNullOrBlank()) {
-                    Spacer(modifier = Modifier.height(spacing.xs))
+                val errorMsg = entry.errorMessage
+                if (errorMsg != null) {
                     Text(
                         text = stringResource(R.string.advanced_log_error),
-                        style = MaterialTheme.typography.labelLarge,
+                        style = MaterialTheme.typography.titleSmall,
                         color = MaterialTheme.colorScheme.error,
                     )
                     Text(
@@ -809,115 +847,115 @@ private fun BackupDialog(
     var passphrase by remember { mutableStateOf("") }
     var includeAssets by remember { mutableStateOf(false) }
     var includePdfs by remember { mutableStateOf(false) }
-    var automaticEnabled by remember { mutableStateOf(false) }
-    var frequency by remember { mutableStateOf(AutomaticBackupFrequency.DAILY) }
+    var automaticBackup by remember { mutableStateOf(true) }
+    var backupFrequency by remember { mutableStateOf(AutomaticBackupFrequency.DAILY) }
     val isValid = passphrase.length >= 8
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.advanced_backup_title)) },
         text = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
                     value = passphrase,
                     onValueChange = { passphrase = it },
                     label = { Text(stringResource(R.string.advanced_backup_passphrase_label)) },
                     visualTransformation = PasswordVisualTransformation(),
                     singleLine = true,
+                    isError = passphrase.isNotEmpty() && !isValid,
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Row(
-                    verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
-                        .heightIn(min = 48.dp)
+                        .fillMaxWidth()
                         .clickable { includeAssets = !includeAssets },
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Checkbox(checked = includeAssets, onCheckedChange = { includeAssets = it })
                     Text(
                         text = stringResource(R.string.advanced_backup_include_assets),
-                        style = MaterialTheme.typography.bodySmall,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(start = 8.dp),
                     )
                 }
                 Row(
-                    verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
-                        .heightIn(min = 48.dp)
+                        .fillMaxWidth()
                         .clickable { includePdfs = !includePdfs },
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Checkbox(checked = includePdfs, onCheckedChange = { includePdfs = it })
                     Text(
                         text = stringResource(R.string.advanced_backup_include_pdfs),
-                        style = MaterialTheme.typography.bodySmall,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(start = 8.dp),
                     )
                 }
                 SettingSwitchRow(
                     title = stringResource(R.string.advanced_backup_automatic),
                     subtitle = stringResource(R.string.advanced_backup_schedule_helper),
-                    checked = automaticEnabled,
-                    onCheckedChange = { automaticEnabled = it },
+                    checked = automaticBackup,
+                    onCheckedChange = { automaticBackup = it },
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(
-                        selected = frequency == AutomaticBackupFrequency.DAILY,
-                        onClick = { frequency = AutomaticBackupFrequency.DAILY },
-                        label = { Text(stringResource(R.string.advanced_backup_daily)) },
-                        enabled = automaticEnabled,
-                    )
-                    FilterChip(
-                        selected = frequency == AutomaticBackupFrequency.WEEKLY,
-                        onClick = { frequency = AutomaticBackupFrequency.WEEKLY },
-                        label = { Text(stringResource(R.string.advanced_backup_weekly)) },
-                        enabled = automaticEnabled,
-                    )
-                }
-                OutlinedButton(
-                    onClick = {
-                        onChooseLocation(
-                            passphrase,
-                            BackupOptions(includeAssets, includePdfs),
-                            automaticEnabled,
-                            frequency,
+                if (automaticBackup) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(
+                            selected = backupFrequency == AutomaticBackupFrequency.DAILY,
+                            onClick = { backupFrequency = AutomaticBackupFrequency.DAILY },
+                            label = { Text(stringResource(R.string.advanced_backup_daily)) },
                         )
-                    },
-                    enabled = isValid,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(stringResource(R.string.advanced_backup_choose_location))
+                        FilterChip(
+                            selected = backupFrequency == AutomaticBackupFrequency.WEEKLY,
+                            onClick = { backupFrequency = AutomaticBackupFrequency.WEEKLY },
+                            label = { Text(stringResource(R.string.advanced_backup_weekly)) },
+                        )
+                    }
                 }
             }
         },
         confirmButton = {
             Button(
                 onClick = {
-                    onConfirm(passphrase, BackupOptions(includeAssets, includePdfs))
+                    val options = BackupOptions(
+                        includeRenderedAssets = includeAssets,
+                        includeOriginalPdfs = includePdfs,
+                    )
+                    onChooseLocation(passphrase, options, automaticBackup, backupFrequency)
                 },
                 enabled = isValid,
             ) {
-                Text(stringResource(R.string.advanced_backup_action))
+                Text(stringResource(R.string.advanced_backup_choose_location))
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.advanced_cancel))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(onClick = onDismiss) {
+                    Text(stringResource(R.string.advanced_cancel))
+                }
+                TextButton(
+                    onClick = {
+                        val options = BackupOptions(
+                            includeRenderedAssets = includeAssets,
+                            includeOriginalPdfs = includePdfs,
+                        )
+                        onConfirm(passphrase, options)
+                    },
+                    enabled = isValid,
+                ) {
+                    Text(stringResource(R.string.advanced_backup_action))
+                }
             }
         },
     )
 }
 
 @Composable
-private fun backupStatusSummary(status: BackupDestinationStatus): String {
-    val target = stringResource(
-        if (status.hasDestination) {
-            R.string.advanced_backup_location_configured
-        } else {
-            R.string.advanced_backup_location_missing
-        },
-    )
+private fun backupDestinationSummary(status: BackupDestinationStatus): String {
+    val target = if (status.hasDestination) {
+        stringResource(R.string.advanced_backup_location_configured)
+    } else {
+        stringResource(R.string.advanced_backup_location_missing)
+    }
     val lastRun = status.lastBackupAtEpochMs?.let(::formatEpoch)
         ?: stringResource(R.string.advanced_backup_never_run)
     val result = when (status.lastBackupSucceeded) {
@@ -930,6 +968,8 @@ private fun backupStatusSummary(status: BackupDestinationStatus): String {
 
 @Composable
 private fun RestoreDialog(
+    selectedUri: Uri?,
+    onPickFile: () -> Unit,
     onDismiss: () -> Unit,
     onConfirm: (passphrase: String) -> Unit,
 ) {
@@ -946,6 +986,22 @@ private fun RestoreDialog(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
                 )
+                if (selectedUri != null) {
+                    Text(
+                        text = stringResource(
+                            R.string.advanced_restore_file_selected,
+                            selectedUri.lastPathSegment ?: "backup.fwbk",
+                        ),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+                OutlinedButton(
+                    onClick = onPickFile,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(stringResource(R.string.advanced_restore_from_file))
+                }
                 OutlinedTextField(
                     value = passphrase,
                     onValueChange = { passphrase = it },

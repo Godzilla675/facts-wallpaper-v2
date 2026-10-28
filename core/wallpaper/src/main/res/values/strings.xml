@@ -3,9 +3,14 @@
     <string name="facts_wallpaper_service_name">Facts Wallpaper</string>
     <string name="facts_wallpaper_service_description">Study facts, formulas and diagrams on your lock screen.</string>
     <string name="facts_wallpaper_service_title">Facts Wallpaper</string>
-            <string name="facts_wallpaper_service_caption">Your facts will appear here</string>
+    <string name="facts_wallpaper_service_caption">Your facts will appear here</string>
     <string name="wallpaper_fallback_fact_label">FACT</string>
     <string name="wallpaper_fallback_page_short">p. %1$d</string>
     <string name="wallpaper_fallback_subtitle">Import a PDF to start studying</string>
     <string name="wallpaper_fallback_hint">Open Facts Wallpaper to configure rotation</string>
+    <string name="notification_channel_daily_fact">Fact of the Day</string>
+    <string name="notification_channel_daily_fact_desc">Surfaces a daily study fact from your active materials.</string>
+    <string name="notification_daily_fact_title">Fact of the Day</string>
+    <string name="notification_action_next">Next</string>
+    <string name="notification_action_got_it">Got it</string>
 </resources>

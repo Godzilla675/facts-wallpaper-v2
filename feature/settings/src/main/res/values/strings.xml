@@ -162,6 +162,11 @@
     <string name="advanced_database_compacted">Database compacted successfully.</string>
     <string name="advanced_database_compact_failed">Failed to compact database.</string>
 
+    <string name="advanced_pipeline_title">Background Pipeline</string>
+    <string name="advanced_pipeline_helper">Monitor and manage document extraction and lesson generation jobs.</string>
+    <string name="advanced_whats_happening">What&#8217;s happening</string>
+    <string name="advanced_whats_happening_action">View queue &amp; status</string>
+
     <string name="advanced_data_title">Data &amp; Backup</string>
     <string name="advanced_data_helper">Encrypted .fwbk archives use AES-256 and your passphrase. Choose device storage, Google Drive, or another document provider.</string>
     <string name="advanced_backup">Create Backup</string>
@@ -183,6 +188,8 @@
     <string name="advanced_backup_choose_location_first">Choose a backup location before enabling or starting backup.</string>
     <string name="advanced_backup_schedule_failed">Could not schedule automatic backup.</string>
     <string name="advanced_restore">Restore Backup</string>
+    <string name="advanced_restore_from_file">Restore from file&#8230;</string>
+    <string name="advanced_restore_file_selected">Restoring from: %1$s</string>
     <string name="advanced_backup_title">Create Encrypted Backup</string>
     <string name="advanced_backup_passphrase_label">Passphrase (min 8 characters)</string>
     <string name="advanced_backup_include_assets">Include pre-rendered cards &amp; diagrams</string>
@@ -225,4 +232,21 @@
     <string name="provider_fetch_models_loading">Fetching models...</string>
     <string name="provider_test_success">Connected in %1$d ms.</string>
     <string name="provider_test_failed">Connection failed: %1$s</string>
+
+    <string name="advanced_theme_title">Theme &amp; Appearance</string>
+    <string name="advanced_theme_helper">Choose between system, light, dark, or AMOLED. Toggle Material You dynamic color.</string>
+    <string name="advanced_theme_mode">App theme</string>
+    <string name="advanced_theme_system">System</string>
+    <string name="advanced_theme_light">Light</string>
+    <string name="advanced_theme_dark">Dark</string>
+    <string name="advanced_theme_amoled">AMOLED</string>
+    <string name="advanced_theme_dynamic_color">Material You dynamic colors</string>
+    <string name="advanced_theme_dynamic_color_helper">Tint app surfaces using wallpaper colors on Android 12+.</string>
+
+    <string name="provider_search_hint">Search settings (profiles, models, tasks, backups&#8230;)</string>
+    <string name="provider_search_clear">Clear search</string>
+    <string name="provider_copy_model_list">Copy model list</string>
+    <string name="provider_model_list_copied">Model list copied to clipboard.</string>
+    <string name="provider_select_model">Select model</string>
+    <string name="provider_filter_models_hint">Filter models&#8230;</string>
 </resources>

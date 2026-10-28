@@ -1,6 +1,9 @@
 package com.factswallpaper.core.ui.component
 
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -13,12 +16,22 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.MenuBook
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconToggleButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -26,6 +39,10 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -39,7 +56,7 @@ import com.factswallpaper.core.model.SourceReferenceMode
 import com.factswallpaper.core.ui.R
 
 /** Fact curation card: badges, body, optional formula/diagram, tags and actions. */
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class, ExperimentalFoundationApi::class)
 @Composable
 fun FactListItemCard(
     fact: Fact,
@@ -49,10 +66,21 @@ fun FactListItemCard(
     onEdit: () -> Unit,
     onRegenerate: () -> Unit,
     modifier: Modifier = Modifier,
+    onCopyText: (() -> Unit)? = null,
+    onShareAsImage: (() -> Unit)? = null,
+    onJumpToSource: (() -> Unit)? = null,
+    onDelete: (() -> Unit)? = null,
 ) {
     val spacing = LocalSpacing.current
+    var menuExpanded by remember { mutableStateOf(false) }
+
     Card(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .combinedClickable(
+                onClick = {},
+                onLongClick = { menuExpanded = true },
+            ),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
         ),
@@ -88,6 +116,124 @@ fun FactListItemCard(
                             MaterialTheme.colorScheme.onSurfaceVariant
                         },
                     )
+                }
+                Box {
+                    IconButton(onClick = { menuExpanded = true }) {
+                        Icon(
+                            imageVector = Icons.Filled.MoreVert,
+                            contentDescription = stringResource(R.string.fact_card_menu),
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = menuExpanded,
+                        onDismissRequest = { menuExpanded = false },
+                    ) {
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    stringResource(
+                                        if (fact.favorite) R.string.fact_action_unfavorite else R.string.fact_action_favorite,
+                                    ),
+                                )
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    if (fact.favorite) Icons.Outlined.StarBorder else Icons.Filled.Star,
+                                    contentDescription = null,
+                                )
+                            },
+                            onClick = {
+                                menuExpanded = false
+                                onToggleFavorite(!fact.favorite)
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    stringResource(
+                                        if (fact.active) R.string.fact_action_hide_from_rotation else R.string.fact_action_show_in_rotation,
+                                    ),
+                                )
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    if (fact.active) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
+                                    contentDescription = null,
+                                )
+                            },
+                            onClick = {
+                                menuExpanded = false
+                                onToggleActive(!fact.active)
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.fact_action_edit)) },
+                            leadingIcon = { Icon(Icons.Filled.Edit, contentDescription = null) },
+                            onClick = {
+                                menuExpanded = false
+                                onEdit()
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.fact_action_regenerate)) },
+                            leadingIcon = { Icon(Icons.Filled.AutoAwesome, contentDescription = null) },
+                            onClick = {
+                                menuExpanded = false
+                                onRegenerate()
+                            },
+                        )
+                        onCopyText?.let { copyAction ->
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.fact_action_copy_text)) },
+                                leadingIcon = { Icon(Icons.Filled.ContentCopy, contentDescription = null) },
+                                onClick = {
+                                    menuExpanded = false
+                                    copyAction()
+                                },
+                            )
+                        }
+                        onShareAsImage?.let { shareAction ->
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.fact_action_share_image)) },
+                                leadingIcon = { Icon(Icons.Filled.Share, contentDescription = null) },
+                                onClick = {
+                                    menuExpanded = false
+                                    shareAction()
+                                },
+                            )
+                        }
+                        if (fact.sourcePage != null && onJumpToSource != null) {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.fact_action_jump_to_source)) },
+                                leadingIcon = { Icon(Icons.Filled.MenuBook, contentDescription = null) },
+                                onClick = {
+                                    menuExpanded = false
+                                    onJumpToSource()
+                                },
+                            )
+                        }
+                        onDelete?.let { deleteAction ->
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        stringResource(R.string.fact_delete),
+                                        color = MaterialTheme.colorScheme.error,
+                                    )
+                                },
+                                leadingIcon = {
+                                    Icon(
+                                        Icons.Filled.Delete,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.error,
+                                    )
+                                },
+                                onClick = {
+                                    menuExpanded = false
+                                    deleteAction()
+                                },
+                            )
+                        }
+                    }
                 }
             }
             Text(

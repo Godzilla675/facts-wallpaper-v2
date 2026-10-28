@@ -33,6 +33,14 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
             <intent-filter>
+                <action android:name="com.factswallpaper.action.NEXT_FACT" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="com.factswallpaper.action.IMPORT_PDF" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <intent-filter>
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="application/pdf" />
@@ -45,7 +53,53 @@
                 <data android:scheme="content" />
                 <data android:scheme="file" />
             </intent-filter>
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
         </activity>
+
+        <activity
+            android:name=".WhatsHappeningActivity"
+            android:exported="true"
+            android:theme="@style/Theme.FactsWallpaper">
+            <intent-filter>
+                <action android:name="com.factswallpaper.action.WHATS_HAPPENING" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
+        <service
+            android:name=".NextFactTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_shortcut_next"
+            android:label="@string/quick_settings_next_fact"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
+        <receiver
+            android:name=".FactAppWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="com.factswallpaper.app.ACTION_WIDGET_NEXT_FACT" />
+                <action android:name="com.factswallpaper.app.ACTION_FACT_UPDATED" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_fact_info" />
+        </receiver>
+
+        <receiver
+            android:name=".FactNotificationReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.factswallpaper.app.ACTION_NOTIFICATION_NEXT_FACT" />
+                <action android:name="com.factswallpaper.app.ACTION_NOTIFICATION_GOT_IT" />
+            </intent-filter>
+        </receiver>
 
         <receiver
             android:name="com.factswallpaper.core.pdf.OcrControlReceiver"
@@ -67,6 +121,16 @@
                 android:name="androidx.work.WorkManagerInitializer"
                 android:value="androidx.startup"
                 tools:node="remove" />
+        </provider>
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
         </provider>
     </application>
 

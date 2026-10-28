@@ -13,6 +13,15 @@
     <string name="collections_smart_favorites">Favorites</string>
     <string name="collections_smart_formulas">Formulas</string>
     <string name="collections_smart_diagrams">Diagrams</string>
+    <string name="collections_smart_due_review">Due for review</string>
+    <string name="collections_study">Study</string>
+    <string name="collections_export">Export</string>
+    <string name="collections_export_dialog_title">Export Collection</string>
+    <string name="collections_export_zip">ZIP of PNG Cards</string>
+    <string name="collections_export_pdf">Multi-page PDF</string>
+    <string name="collections_export_markdown">Markdown</string>
+    <string name="collections_export_success">Collection exported successfully.</string>
+    <string name="collections_export_failed">Failed to export collection.</string>
     <string name="collections_suggestions_title">Suggested collections</string>
     <string name="collections_suggestions_helper">Suggestions are grouped from shared fact tags and stay private until you accept them.</string>
     <string name="collections_section_collections">Collections</string>
@@ -63,6 +72,9 @@
     <string name="collections_dismissed">Suggestion dismissed.</string>
     <string name="collections_deleted">Deleted.</string>
     <string name="collections_delete_failed">Could not delete this item.</string>
+    <string name="collections_undo">Undo</string>
+    <string name="collections_collection_deleted">Collection deleted</string>
+    <string name="collections_folder_deleted">Folder deleted</string>
     <string name="collections_generated">%1$d suggested collections created.</string>
     <string name="collections_no_suggestions">No new collection themes were found among your active facts.</string>
     <string name="collections_generate_failed">Could not generate suggestions.</string>

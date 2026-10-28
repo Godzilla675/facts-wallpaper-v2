@@ -175,6 +175,12 @@ private data class WallpaperPalette(
 )
 
 private fun wallpaperPalette(themeMode: ThemeMode): WallpaperPalette = when (themeMode) {
+    ThemeMode.SYSTEM -> WallpaperPalette(
+        background = Color(0xFF10151B),
+        content = Color(0xFFE7EAF0),
+        accent = Color(0xFF76D1FF),
+    )
+
     ThemeMode.LIGHT -> WallpaperPalette(
         background = Color(0xFFF6F0E7),
         content = Color(0xFF1A1C20),

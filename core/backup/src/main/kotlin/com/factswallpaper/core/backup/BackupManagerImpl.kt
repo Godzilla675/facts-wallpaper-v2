@@ -321,6 +321,31 @@ class BackupManagerImpl @Inject constructor(
         AppResult.Success(manifest)
     }
 
+    override suspend fun restoreBackupFromUri(
+        sourceUri: Uri,
+        passphrase: String,
+    ): AppResult<BackupManifest> = withContext(dispatchers.io) {
+        var temporaryFile: File? = null
+        try {
+            val temp = File.createTempFile("backup-restore-", ".fwbk", context.cacheDir)
+            temporaryFile = temp
+            val input = context.contentResolver.openInputStream(sourceUri)
+                ?: return@withContext AppResult.Failure(AppError.Storage(IOException("Cannot open input stream for selected backup file.")))
+            input.use { inStream ->
+                temp.outputStream().use { outStream ->
+                    inStream.copyTo(outStream)
+                }
+            }
+            restoreBackup(temp, passphrase)
+        } catch (error: kotlinx.coroutines.CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            AppResult.Failure(AppError.Storage(error))
+        } finally {
+            temporaryFile?.delete()
+        }
+    }
+
     private fun exportTableToJsonArray(
         db: androidx.sqlite.db.SupportSQLiteDatabase,
         tableName: String,

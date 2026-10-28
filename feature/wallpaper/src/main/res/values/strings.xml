@@ -33,6 +33,7 @@
     <string name="wallpaper_source_label">Source reference</string>
     <string name="wallpaper_template_label">Template</string>
     <string name="wallpaper_templates_empty">No templates available. Built-in layout will be used.</string>
+    <string name="wallpaper_theme_system">System</string>
     <string name="wallpaper_theme_light">Light</string>
     <string name="wallpaper_theme_dark">Dark</string>
     <string name="wallpaper_theme_amoled">AMOLED</string>
@@ -57,4 +58,33 @@
     <string name="wallpaper_pool_empty">Add active facts to the pool first.</string>
     <string name="wallpaper_next_ready">Next card prepared.</string>
     <string name="wallpaper_load_error">Could not load wallpaper settings.</string>
+
+    <string name="wallpaper_source_picker_title">Rotation source</string>
+    <string name="wallpaper_source_picker_helper">Control which set of cards feeds the rotation pool.</string>
+    <string name="wallpaper_source_picker_all">All cards</string>
+    <string name="wallpaper_source_picker_collections">Collections</string>
+    <string name="wallpaper_source_picker_favorites">Favorites</string>
+    <string name="wallpaper_source_picker_due">Due for review</string>
+
+    <string name="wallpaper_controls_title">Rotation controls</string>
+    <string name="wallpaper_controls_helper">Control when rotation runs to fit your daily schedule.</string>
+    <string name="wallpaper_pause_rotation">Pause rotation</string>
+    <string name="wallpaper_pause_rotation_helper">Temporarily stop updating the wallpaper on unlock or interval.</string>
+    <string name="wallpaper_battery_saver">Battery saver awareness</string>
+    <string name="wallpaper_battery_saver_helper">Slow down rotation when battery saver is active.</string>
+    <string name="wallpaper_quiet_hours">Quiet hours</string>
+    <string name="wallpaper_quiet_hours_helper">No wallpaper changes between %1$02d:%2$02d and %3$02d:%4$02d.</string>
+    <string name="wallpaper_quiet_hours_dialog_title">Configure Quiet Hours</string>
+    <string name="wallpaper_quiet_hours_start_label">Start time</string>
+    <string name="wallpaper_quiet_hours_end_label">End time</string>
+
+    <string name="wallpaper_notification_title">Fact of the Day</string>
+    <string name="wallpaper_notification_helper">Receive a daily study card notification at your preferred time.</string>
+    <string name="wallpaper_notification_toggle">Daily notification</string>
+    <string name="wallpaper_notification_time">Notification time: %1$02d:%2$02d</string>
+    <string name="wallpaper_notification_dialog_title">Set Notification Time</string>
+    <string name="wallpaper_time_hour_label">Hour (0-23)</string>
+    <string name="wallpaper_time_minute_label">Minute (0-59)</string>
+    <string name="wallpaper_dialog_save">Save</string>
+    <string name="wallpaper_dialog_cancel">Cancel</string>
 </resources>

@@ -97,6 +97,14 @@ class OutlineViewModel @Inject constructor(
     private val pendingCostGuard = MutableStateFlow<CostGuardRequest?>(null)
     private val factsJobStarted = MutableStateFlow(false)
 
+    val showCoachHint = settingsRepository.observePreferences()
+        .map { !it.outlineCoachHintDismissed }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = false,
+        )
+
     private val workInfos = workManager.getWorkInfosForUniqueWorkFlow(
         OutlineWork.uniqueName(documentId),
     )
@@ -386,6 +394,25 @@ class OutlineViewModel @Inject constructor(
         }
     }
 
+    fun regenerateFailedLessons() {
+        viewModelScope.launch {
+            val allFacts = factRepository.observeFacts(FactFilter(documentId = documentId)).first()
+            val lessonsWithFacts = allFacts.mapNotNull { it.lessonId }.toSet()
+            val content = uiState.value as? OutlineUiState.Content ?: return@launch
+            val failedLessons = content.lessons.filter { it.id !in lessonsWithFacts }
+            if (failedLessons.isEmpty()) {
+                showMessage(R.string.outline_no_failed_lessons)
+                return@launch
+            }
+            if (!content.online) {
+                showMessage(R.string.outline_offline)
+                return@launch
+            }
+            enqueueFacts(content, failedLessons)
+            showMessage(R.string.outline_regenerating_failed)
+        }
+    }
+
     fun confirmCostGuard() {
         val content = uiState.value as? OutlineUiState.Content ?: return
         val request = pendingCostGuard.value ?: return
@@ -401,6 +428,12 @@ class OutlineViewModel @Inject constructor(
 
     fun dismissCostGuard() {
         pendingCostGuard.value = null
+    }
+
+    fun dismissCoachHint() {
+        viewModelScope.launch {
+            settingsRepository.setOutlineCoachHintDismissed(true)
+        }
     }
 
     fun cancelWork() {

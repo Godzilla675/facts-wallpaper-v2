@@ -31,6 +31,14 @@ sealed interface AppRoute {
     ) : AppRoute
 
     @Serializable
+    data class Study(
+        val collectionId: String? = null,
+        val documentId: String? = null,
+        val tag: String? = null,
+        val dueOnly: Boolean = false,
+    ) : AppRoute
+
+    @Serializable
     data object Collections : AppRoute
 
     @Serializable
@@ -50,4 +58,13 @@ sealed interface AppRoute {
         val factId: String? = null,
         val templateId: String? = null,
     ) : AppRoute
+
+    @Serializable
+    data class PdfViewer(
+        val documentId: String,
+        val initialPage: Int = 1,
+    ) : AppRoute
+
+    @Serializable
+    data object WhatsHappening : AppRoute
 }

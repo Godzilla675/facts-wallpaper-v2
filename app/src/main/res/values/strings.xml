@@ -3,4 +3,11 @@
     <string name="app_name">Facts Wallpaper</string>
     <string name="app_loading">Preparing your library</string>
     <string name="live_wallpaper_unavailable">Android could not open the live wallpaper picker on this device. Open it from your launcher settings instead.</string>
+    <string name="quick_settings_next_fact">Next fact</string>
+    <string name="shortcut_next_fact_short">Next fact</string>
+    <string name="shortcut_next_fact_long">Advance wallpaper to next fact</string>
+    <string name="shortcut_import_pdf_short">Import PDF</string>
+    <string name="shortcut_import_pdf_long">Import a PDF document</string>
+    <string name="toast_next_fact_advanced">Wallpaper rotated to next fact</string>
+    <string name="widget_empty_fact">No facts available in rotation</string>
 </resources>

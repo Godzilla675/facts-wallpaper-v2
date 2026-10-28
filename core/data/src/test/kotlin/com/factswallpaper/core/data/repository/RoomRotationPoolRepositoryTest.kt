@@ -11,11 +11,21 @@ import com.factswallpaper.core.database.entity.FactItemEntity
 import com.factswallpaper.core.database.entity.FolderFactCrossRef
 import com.factswallpaper.core.database.entity.LessonEntity
 import com.factswallpaper.core.database.entity.PdfDocumentEntity
-import com.factswallpaper.core.model.RotationOrder
 import com.factswallpaper.core.database.entity.UserFolderEntity
+import com.factswallpaper.core.datastore.AppPreferences
+import com.factswallpaper.core.datastore.SettingsRepository
+import com.factswallpaper.core.model.AiTask
+import com.factswallpaper.core.model.AutoProcessMode
+import com.factswallpaper.core.model.DocumentInputMode
+import com.factswallpaper.core.model.RotationOrder
+import com.factswallpaper.core.model.RotationSource
+import com.factswallpaper.core.model.RoutingStrategy
+import com.factswallpaper.core.model.ThemeMode
 import com.google.common.truth.Truth.assertThat
 import java.security.MessageDigest
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -31,6 +41,7 @@ class RoomRotationPoolRepositoryTest {
 
     private lateinit var database: FactsDatabase
     private lateinit var wallpaperRepository: WallpaperRepository
+    private lateinit var fakeSettingsRepository: FakeSettingsRepository
     private lateinit var repository: RoomRotationPoolRepository
 
     @Before
@@ -48,11 +59,13 @@ class RoomRotationPoolRepositoryTest {
             wallpaperStateDao = database.wallpaperStateDao(),
             dispatchers = dispatchers,
         )
+        fakeSettingsRepository = FakeSettingsRepository()
         repository = RoomRotationPoolRepository(
             factDao = database.factDao(),
             documentDao = database.pdfDocumentDao(),
             collectionDao = database.collectionDao(),
             wallpaperRepository = wallpaperRepository,
+            settingsRepository = fakeSettingsRepository,
         )
         wallpaperRepository.ensureInitialized()
     }
@@ -83,40 +96,54 @@ class RoomRotationPoolRepositoryTest {
         id: String,
         documentId: String,
         lessonId: String? = null,
-        createdAt: Long,
         active: Boolean = true,
         favorite: Boolean = false,
+        createdAt: Long = 1_000L,
+        nextReviewDueEpochMs: Long? = null,
     ) = FactItemEntity(
         id = id,
         documentId = documentId,
         lessonId = lessonId,
         text = "Fact $id",
-        sourceBookTitle = "Book $documentId",
-        sourceLessonTitle = null,
-        sourcePage = 1,
         active = active,
         favorite = favorite,
+        confidence = 0.9f,
+        templateType = "TEXT",
+        diagramType = "NONE",
+        diagramSource = null,
+        latex = null,
+        verificationStatus = "UNVERIFIED",
+        sourceBookTitle = "Doc $documentId",
+        sourceLessonTitle = null,
+        sourcePage = 1,
+        sourceReferenceModeOverride = null,
+        nextReviewDueEpochMs = nextReviewDueEpochMs,
         createdAtEpochMs = createdAt,
     )
 
     private suspend fun seed() {
-        val documentDao = database.pdfDocumentDao()
-        documentDao.upsert(document("doc-1", createdAt = 1_000L, included = true))
-        documentDao.upsert(document("doc-2", createdAt = 2_000L, included = false))
-        database.lessonDao().upsert(
+        val docDao = database.pdfDocumentDao()
+        val lessonDao = database.lessonDao()
+        val factDao = database.factDao()
+
+        docDao.upsert(document("doc-1", createdAt = 100L, included = true))
+        docDao.upsert(document("doc-2", createdAt = 200L, included = false))
+
+        lessonDao.upsert(
             LessonEntity(
                 id = "lesson-1",
                 documentId = "doc-1",
-                title = "Lesson",
-                summary = "",
+                title = "Overview",
+                summary = "Intro summary",
                 startPage = 1,
                 endPage = 5,
                 sortOrder = 0,
+                chapterTitle = "Intro",
             )
         )
-        val factDao = database.factDao()
+
         factDao.upsert(fact("f1", "doc-1", "lesson-1", createdAt = 1_000L))
-        factDao.upsert(fact("f2", "doc-1", createdAt = 2_000L, active = false))
+        factDao.upsert(fact("f2", "doc-1", active = false, createdAt = 2_000L))
         factDao.upsert(fact("f3", "doc-2", createdAt = 3_000L))
         factDao.upsert(fact("f4", "doc-2", createdAt = 4_000L))
     }
@@ -124,69 +151,79 @@ class RoomRotationPoolRepositoryTest {
     private suspend fun poolIds(): List<String> = repository.observePool().first().map { it.id }
 
     @Test
-    fun `default pool contains active facts from rotation-enabled documents only`() = runBlocking<Unit> {
-        seed()
+    fun `default pool yields active facts from included documents in canonical order`() =
+        runBlocking<Unit> {
+            seed()
+            assertThat(poolIds()).containsExactly("f1").inOrder()
+        }
 
+    @Test
+    fun `rotation source favorites filters pool to favorites only`() = runBlocking<Unit> {
+        seed()
+        database.factDao().upsert(fact("f1", "doc-1", "lesson-1", createdAt = 1_000L, favorite = true))
+        fakeSettingsRepository.setRotationSource(RotationSource.FAVORITES)
         assertThat(poolIds()).containsExactly("f1")
     }
 
     @Test
-    fun `favourites-only toggle narrows the pool and can be disabled again`() = runBlocking<Unit> {
+    fun `rotation source due for review filters pool to due facts only`() = runBlocking<Unit> {
+        seed()
+        val factDao = database.factDao()
+        // f1 has null due date (due immediately)
+        // f5 is scheduled in the future (+1 hour)
+        factDao.upsert(fact("f5", "doc-1", createdAt = 5_000L, nextReviewDueEpochMs = System.currentTimeMillis() + 3_600_000L))
+        fakeSettingsRepository.setRotationSource(RotationSource.DUE_FOR_REVIEW)
+        assertThat(poolIds()).containsExactly("f1")
+    }
+
+    @Test
+    fun `rotation source all cards includes all active facts even when collections are selected`() = runBlocking<Unit> {
+        seed()
+        val collectionDao = database.collectionDao()
+        collectionDao.upsertCollection(
+            CollectionEntity(id = "col-1", name = "Deck", createdAtEpochMs = 1L)
+        )
+        collectionDao.addFactsToCollection(listOf(CollectionFactCrossRef("col-1", "f3")))
+        // Default (COLLECTIONS) yields f3 because explicit collection is selected
+        assertThat(poolIds()).containsExactly("f3")
+
+        fakeSettingsRepository.setRotationSource(RotationSource.ALL)
+        // ALL yields f1 from included doc-1
+        assertThat(poolIds()).containsExactly("f1")
+    }
+
+    @Test
+    fun `only favorites flag restricts pool even when document is included`() = runBlocking<Unit> {
         seed()
         wallpaperRepository.updateState { it.copy(onlyFavoritesInPool = true) }
         assertThat(poolIds()).isEmpty()
 
         database.factDao().upsert(fact("f1", "doc-1", "lesson-1", createdAt = 1_000L, favorite = true))
         assertThat(poolIds()).containsExactly("f1")
-
-        wallpaperRepository.updateState { it.copy(onlyFavoritesInPool = false) }
-        assertThat(poolIds()).containsExactly("f1")
     }
 
     @Test
-    fun `explicit collection sources bypass document rotation flags but not active state`() = runBlocking<Unit> {
+    fun `explicit collection selection overrides document rotation flags`() = runBlocking<Unit> {
         seed()
         val collectionDao = database.collectionDao()
         collectionDao.upsertCollection(
             CollectionEntity(id = "col-1", name = "Deck", createdAtEpochMs = 1L)
         )
         collectionDao.addFactsToCollection(
-            listOf(
-                CollectionFactCrossRef("col-1", "f1"),
-                CollectionFactCrossRef("col-1", "f2"),
-                CollectionFactCrossRef("col-1", "f3"),
-                CollectionFactCrossRef("col-1", "f4"),
-            )
+            listOf(CollectionFactCrossRef("col-1", "f4"), CollectionFactCrossRef("col-1", "f2"))
         )
 
-        assertThat(poolIds()).containsExactly("f1", "f3", "f4").inOrder()
+        assertThat(poolIds()).containsExactly("f4")
     }
 
     @Test
-    fun `excluding a collection from rotation falls back to document sources`() = runBlocking<Unit> {
-        seed()
-        val collectionDao = database.collectionDao()
-        collectionDao.upsertCollection(
-            CollectionEntity(id = "col-1", name = "Deck", createdAtEpochMs = 1L)
-        )
-        collectionDao.addFactsToCollection(
-            listOf(CollectionFactCrossRef("col-1", "f3"), CollectionFactCrossRef("col-1", "f4"))
-        )
-        assertThat(poolIds()).containsExactly("f3", "f4").inOrder()
-
-        collectionDao.setCollectionInRotation("col-1", included = false)
-
-        assertThat(poolIds()).containsExactly("f1")
-    }
-
-    @Test
-    fun `unaccepted ai collections never become explicit sources`() = runBlocking<Unit> {
+    fun `unaccepted AI suggestions are never included in the pool`() = runBlocking<Unit> {
         seed()
         val collectionDao = database.collectionDao()
         collectionDao.upsertCollection(
             CollectionEntity(
                 id = "ai-1",
-                name = "Suggested",
+                name = "AI",
                 source = "AI_SUGGESTED",
                 accepted = false,
                 createdAtEpochMs = 1L,
@@ -266,4 +303,39 @@ class RoomRotationPoolRepositoryTest {
         MessageDigest.getInstance("SHA-256")
             .digest(value.toByteArray(Charsets.UTF_8))
             .joinToString(separator = "") { byte -> "%02x".format(byte) }
+
+    private class FakeSettingsRepository : SettingsRepository {
+        val preferencesFlow = MutableStateFlow(AppPreferences())
+        override fun observePreferences(): Flow<AppPreferences> = preferencesFlow
+        override suspend fun setOnboardingCompleted(completed: Boolean) {}
+        override suspend fun setAppThemeMode(mode: ThemeMode) {}
+        override suspend fun setWallpaperThemeMode(mode: ThemeMode) {}
+        override suspend fun setRoutingStrategy(strategy: RoutingStrategy) {}
+        override suspend fun setTaskProfileOverrides(overrides: Map<AiTask, String>) {}
+        override suspend fun setTaskProfileOverride(task: AiTask, profileId: String?) {}
+        override suspend fun setCustomTaskPromptSuffixes(suffixes: Map<AiTask, String>) {}
+        override suspend fun setCustomTaskPromptSuffix(task: AiTask, instruction: String?) {}
+        override suspend fun setDefaultOcrPageLimit(limit: Int) {}
+        override suspend fun setAllowAdvancedOcrEngines(allowed: Boolean) {}
+        override suspend fun setPreRenderQueueSize(size: Int) {}
+        override suspend fun setEncryptedDatabaseEnabled(enabled: Boolean) {}
+        override suspend fun setEnableAiDiagnosticsLog(enabled: Boolean) {}
+        override suspend fun setEnableDoubleTapWallpaperAdvance(enabled: Boolean) {}
+        override suspend fun setAiCostGuardThresholdUsd(thresholdUsd: Double) {}
+        override suspend fun setDefaultAutoProcessMode(mode: AutoProcessMode) {}
+        override suspend fun setDefaultDocumentInputMode(mode: DocumentInputMode) {}
+        override suspend fun setMaxImagesPerRequest(maxImages: Int) {}
+        override suspend fun setRotationSource(source: RotationSource) {
+            preferencesFlow.value = preferencesFlow.value.copy(rotationSource = source)
+        }
+        override suspend fun setQuietHoursEnabled(enabled: Boolean) {}
+        override suspend fun setQuietHoursWindow(startMinute: Int, endMinute: Int) {}
+        override suspend fun setRotationPaused(paused: Boolean) {}
+        override suspend fun setBatterySaverSlowdownEnabled(enabled: Boolean) {}
+        override suspend fun setDailyFactNotificationEnabled(enabled: Boolean) {}
+        override suspend fun setDailyFactNotificationTime(timeMinutes: Int) {}
+        override suspend fun setDynamicColorEnabled(enabled: Boolean) {}
+        override suspend fun setLibraryCoachHintDismissed(dismissed: Boolean) {}
+        override suspend fun setOutlineCoachHintDismissed(dismissed: Boolean) {}
+    }
 }

@@ -32,8 +32,10 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -41,9 +43,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -58,6 +62,7 @@ import com.factswallpaper.core.ui.component.DocumentCard
 import com.factswallpaper.core.ui.component.EmptyStatePanel
 import com.factswallpaper.core.ui.component.ErrorStatePanel
 import com.factswallpaper.core.ui.component.MetricPill
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -71,6 +76,10 @@ fun LibraryScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val message by viewModel.message.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
+    val context = LocalContext.current
+    val deletedMessage = stringResource(R.string.library_deleted)
+    val undoLabel = stringResource(R.string.library_undo)
+    val coroutineScope = rememberCoroutineScope()
     var pendingDelete by remember { mutableStateOf<Document?>(null) }
     var showBatchDeleteConfirm by remember { mutableStateOf(false) }
     UiMessageEffect(message, snackbarHostState, viewModel::onMessageShown)
@@ -212,8 +221,20 @@ fun LibraryScreen(
             confirmButton = {
                 TextButton(
                     onClick = {
-                        viewModel.deleteDocument(document)
+                        val docToDelete = document
                         pendingDelete = null
+                        viewModel.deleteDocumentWithUndo(docToDelete) { onUndo ->
+                            coroutineScope.launch {
+                                val result = snackbarHostState.showSnackbar(
+                                    message = deletedMessage,
+                                    actionLabel = undoLabel,
+                                    duration = SnackbarDuration.Short,
+                                )
+                                if (result == SnackbarResult.ActionPerformed) {
+                                    onUndo()
+                                }
+                            }
+                        }
                     },
                 ) {
                     Text(stringResource(R.string.library_delete_confirm))

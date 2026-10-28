@@ -35,6 +35,7 @@ import com.factswallpaper.core.model.FactFilter
 import com.factswallpaper.core.model.FactTag
 import com.factswallpaper.core.model.Lesson
 import com.factswallpaper.core.model.PdfProcessingRoute
+import com.factswallpaper.core.model.RotationSource
 import com.factswallpaper.core.model.RoutingStrategy
 import com.factswallpaper.core.model.SmartViewCounts
 import com.factswallpaper.core.model.ThemeMode
@@ -331,6 +332,16 @@ private class FakeSettingsRepository : SettingsRepository {
     override suspend fun setDefaultAutoProcessMode(mode: AutoProcessMode) {}
     override suspend fun setDefaultDocumentInputMode(mode: DocumentInputMode) {}
     override suspend fun setMaxImagesPerRequest(maxImages: Int) {}
+    override suspend fun setRotationSource(source: RotationSource) {}
+    override suspend fun setQuietHoursEnabled(enabled: Boolean) {}
+    override suspend fun setQuietHoursWindow(startMinute: Int, endMinute: Int) {}
+    override suspend fun setRotationPaused(paused: Boolean) {}
+    override suspend fun setBatterySaverSlowdownEnabled(enabled: Boolean) {}
+    override suspend fun setDailyFactNotificationEnabled(enabled: Boolean) {}
+    override suspend fun setDailyFactNotificationTime(timeMinutes: Int) {}
+    override suspend fun setDynamicColorEnabled(enabled: Boolean) {}
+    override suspend fun setLibraryCoachHintDismissed(dismissed: Boolean) {}
+    override suspend fun setOutlineCoachHintDismissed(dismissed: Boolean) {}
 }
 
 private class FakeStructuredAiService : StructuredAiService {

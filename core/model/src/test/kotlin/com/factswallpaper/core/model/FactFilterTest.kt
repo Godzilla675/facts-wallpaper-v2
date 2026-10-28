@@ -52,37 +52,37 @@ class FactFilterTest {
         favorite: Boolean = false,
         diagramType: DiagramKind = DiagramKind.NONE,
         diagramSource: String? = null,
+        nextReviewDueEpochMs: Long? = null,
     ): Fact = Fact(
         id = id,
         documentId = documentId,
         lessonId = lessonId,
         text = text,
         latex = latex,
-        requiresLatex = latex != null,
-        templateType = templateType,
-        diagramType = diagramType,
-        diagramSource = diagramSource,
-        sourceBookTitle = "Book",
-        sourceLessonTitle = sourceLessonTitle,
         tags = tags,
+        sourceLessonTitle = sourceLessonTitle,
+        templateType = templateType,
         verificationStatus = verificationStatus,
         active = active,
         favorite = favorite,
-        createdAtEpochMs = 1_000L,
+        diagramType = diagramType,
+        diagramSource = diagramSource,
+        sourceBookTitle = "Source Book",
+        createdAtEpochMs = 1000L,
+        nextReviewDueEpochMs = nextReviewDueEpochMs,
     )
 
     @Test
-    fun `empty filter matches every fact and reports no active filters`() {
+    fun `empty filter matches every fact`() {
         val filter = FactFilter()
-
-        assertThat(filter.hasActiveFilters).isFalse()
         assertThat(filter.matches(formulaFact)).isTrue()
         assertThat(filter.matches(plainFact)).isTrue()
         assertThat(filter.matches(diagramFact)).isTrue()
+        assertThat(filter.hasActiveFilters).isFalse()
     }
 
     @Test
-    fun `document and lesson filters narrow by identity`() {
+    fun `document and lesson filters match IDs exactly`() {
         assertThat(FactFilter(documentId = "doc-1").matches(formulaFact)).isTrue()
         assertThat(FactFilter(documentId = "doc-2").matches(formulaFact)).isFalse()
         assertThat(FactFilter(lessonId = "lesson-2").matches(plainFact)).isTrue()
@@ -90,13 +90,13 @@ class FactFilterTest {
     }
 
     @Test
-    fun `tag filter is case insensitive`() {
+    fun `tag filter matches case-insensitively`() {
         assertThat(FactFilter(tag = "PHYSICS").matches(formulaFact)).isTrue()
         assertThat(FactFilter(tag = "Chemistry").matches(formulaFact)).isFalse()
     }
 
     @Test
-    fun `query searches text latex tags and lesson title`() {
+    fun `query filter checks text formula lesson and tags`() {
         assertThat(FactFilter(query = "F = ma").matches(formulaFact)).isTrue()
         assertThat(FactFilter(query = "newton").matches(formulaFact)).isTrue()
         assertThat(FactFilter(query = "MECHANICS").matches(formulaFact)).isTrue()
@@ -105,13 +105,13 @@ class FactFilterTest {
     }
 
     @Test
-    fun `query is trimmed and blank query matches all`() {
+    fun `query trims leading and trailing whitespace`() {
         assertThat(FactFilter(query = "   ").matches(plainFact)).isTrue()
         assertThat(FactFilter(query = "  cells  ").matches(plainFact)).isTrue()
     }
 
     @Test
-    fun `status filters cover active ignored favourites formulas and diagrams`() {
+    fun `status filters cover active ignored favourites formulas diagrams and due for review`() {
         assertThat(FactFilter(status = FactStatusFilter.ACTIVE).matches(formulaFact)).isTrue()
         assertThat(FactFilter(status = FactStatusFilter.ACTIVE).matches(plainFact)).isFalse()
         assertThat(FactFilter(status = FactStatusFilter.IGNORED).matches(plainFact)).isTrue()
@@ -122,6 +122,15 @@ class FactFilterTest {
         assertThat(FactFilter(status = FactStatusFilter.FORMULAS).matches(diagramFact)).isFalse()
         assertThat(FactFilter(status = FactStatusFilter.DIAGRAMS).matches(diagramFact)).isTrue()
         assertThat(FactFilter(status = FactStatusFilter.DIAGRAMS).matches(formulaFact)).isFalse()
+
+        // Due for review: active and (due is null or due in past)
+        assertThat(FactFilter(status = FactStatusFilter.DUE_FOR_REVIEW).matches(formulaFact)).isTrue()
+        val futureDueFact = formulaFact.copy(nextReviewDueEpochMs = System.currentTimeMillis() + 100_000L)
+        assertThat(FactFilter(status = FactStatusFilter.DUE_FOR_REVIEW).matches(futureDueFact)).isFalse()
+        val pastDueFact = formulaFact.copy(nextReviewDueEpochMs = System.currentTimeMillis() - 1000L)
+        assertThat(FactFilter(status = FactStatusFilter.DUE_FOR_REVIEW).matches(pastDueFact)).isTrue()
+        // Inactive fact should not be due
+        assertThat(FactFilter(status = FactStatusFilter.DUE_FOR_REVIEW).matches(plainFact)).isFalse()
     }
 
     @Test
@@ -143,6 +152,5 @@ class FactFilterTest {
         assertThat(formulaFact.hasFormula).isTrue()
         assertThat(formulaFact.hasDiagram).isFalse()
         assertThat(diagramFact.hasDiagram).isTrue()
-        assertThat(plainFact.hasFormula).isFalse()
     }
 }

@@ -1,285 +1,3 @@
-suffixes) are stored as JSON text but exposed as `Map<AiTask, String>`.
-Preferences: onboarding completion, app theme, wallpaper theme, routing
-strategy, task profile overrides, prompt suffixes, default OCR page limit,
-advanced OCR engines, pre-render queue size, encrypted database flag, AI
-diagnostics log, and double-tap wallpaper advance.
-
-Numeric limits are clamped when written and when read (`1..500` OCR pages,
-`1..100` pre-render items). Unknown enum names fall back to the documented
-defaults instead of crashing after a downgrade or manual data edit.
-
-### Rotation pool semantics
-
-`RoomRotationPoolRepository` is the single source of truth used by the library
-banner, collections summary, wallpaper settings, and (later) the renderer:
-
-1. Start with active facts only.
-2. If at least one accepted, rotation-enabled collection or rotation-enabled
-   folder exists, use the union of facts explicitly assigned to those sources.
-   In this mode document rotation flags are intentionally ignored: choosing a
-   collection/folder is an explicit override.
-3. Otherwise use active facts whose document has `includedInRotation = true`.
-4. Apply `onlyFavoritesInPool` last.
-5. Keep canonical sequential order; random order is applied by the wallpaper
-   engine at read time, not by the pool query.
-
-## UI and design system
-
-- Theme modes: light, dark, AMOLED, and dynamic. App and wallpaper theme modes
-  are independent and persisted.
-- Shared components live in `core/ui/component`: adaptive scaffold, section
-  cards, setting switches, metric pills, document/fact rows, empty state,
-  inline banner, step progress, template/fact/diagram/formula previews, source
-  badge, provider profile row, phone wallpaper mock-up, and lesson selector.
-- `SourceReferenceFormatter` implements the `Book · Lesson · p. 42` rules from
-  spec 9.3, including compact/page-only/hidden modes; all copy used inside it is
-  parameterized for localization.
-- Later-phase actions remain enabled where the spec expects an action. Instead
-  of silently doing nothing, they show a precise "not yet available in this
-  phase" snackbar (SQLCipher enable, backup export/import, AI suggestions and
-  generation, static wallpaper apply, template creation).
-
-## Live wallpaper
-
-`:core:wallpaper` contains a real `WallpaperService` registered in the manifest,
-with service metadata and a thumbnail. For P1 it draws a branded placeholder
-canvas; card rendering, scheduling, double-tap advance, and the render cache are
-Phase P5 work. The app launches the system live-wallpaper picker directly with a
-fallback to the chooser, and shows a Toast if no picker is available.
-
-## Deliberately empty modules
-
-`:core:security`, `:core:ai`, `:core:render`, and `:core:backup` exist and are
-wired into the app but contain no fake implementations. Their features (API-key
-storage, AI client/routing, card rendering, backup/export) land in later phases.
-No screen pretends these features work.
-
-## Testing notes
-
-- `:core:model`: `FactFilter` matching/status/combination behavior and density
-  bounds; extraction-status parsing.
-- `:core:database`: converter round-trips, document/settings CRUD, OCR page
-  checkpoint transaction, tag normalization/cascades, document/lesson delete
-  behavior, wallpaper singleton, diagnostics pruning, cross-reference cascades,
-  and canonical active-fact ordering.
-- `:core:datastore`: defaults, every preference round-trip, enum fallback,
-  incremental map updates, clear-on-blank, and numeric clamping. The repository
-  is tested through a real DataStore update path backed by an in-memory
-  `DataStore<Preferences>` so the test is deterministic on Windows.
-- `:core:data`: tag CSV parsing, every domain/entity mapper round-trip, unknown
-  enum fallbacks, and rotation-pool integration against an in-memory Room
-  database (documents, lessons, favorites, collections, folders, summaries).
-- `:core:pdf`: SHA-256 hashing & `DuplicateHashDetector`, page-range parsing &
-  clamping, deterministic route classification & token/cost estimation, URL
-  validation & `HttpPdfUrlDownloader` streaming limits, and PDFBox synthetic
-  PDF inspection/extraction/sub-PDF building.
-- `:core:ocr`: checkpoint/resume resolution, language catalog & SHA-256
-  manifest verification, deterministic `.txt` rendering, and `DefaultOcrPipeline`
-  checkpointed execution/interrupted-page restart/digital-text preservation.
-- `:feature:library`: `LibraryViewModel` search/delete/pause/resume and
-  `ImportPdfUiState` route/override/language readiness rules.
-- `:core:ui`: source-reference formatting and metric/byte/token/cost/percent
-  formatting, including locale-stable output.
-- `:app`: onboarding-vs-library start routing and all 11 type-safe routes,
-  including optional arguments.
-
-## Phase P4 — Card Rendering, Templates & Collections
-
-- **Bundled offline renderer assets (`:core:render`)**: KaTeX (`katex.min.js`, `katex.min.css`, and all 19 `.woff2` font files), Mermaid (`mermaid.min.js`), and TikZJax (`tikzjax.js`, `tex.wasm`, `tex-core.gz`, `fonts.css`) are bundled under `core/render/src/main/assets/renderer/` and served strictly through `WebViewAssetLoader` (`https://appassets.androidplatform.net/assets/renderer/*`) with all external/network loads blocked (`403 Blocked`). If TikZ WASM compilation times out on a constrained WebView, `tikz.html` falls back to a clean inline SVG diagram stage as permitted by spec §7.3.
-- **Two-tier formula/diagram verification (`FormulaVerificationService`)**: Tier 1 runs `DiagramValidator` deterministically in `:core:render`. Tier 2 is exposed via the optional Hilt `@Multibinds Set<FormulaAiVerifier>` port so `:core:ai` (P3) can contribute its AI verifier without coupling `:core:render` to P3 internals during parallel development.
-- **Template AI generation & Smart Collections during parallel work**: `TemplateAiGenerator` and `CollectionsViewModel.generateAiCollections` provide deterministic local implementations backed by real Room data and validated by `CardTemplateCodec` so `:feature:templates` and `:feature:collections` work completely in isolation from P3 (`:core:ai`) and offline.
-
-## Phase P5 — Live Wallpaper, Rotation, Backup, Diagnostics, Onboarding
-
-- **Invariant 6 Live Wallpaper Engine (`:core:wallpaper`)**: `FactsLiveWallpaperService` strictly never accesses network, AI, PDF, or WebView. Draws pre-rendered PNG bitmaps from `CardRenderCache` onto `SurfaceHolder` canvas within `< 16ms`, fitted/center-cropped, or renders a clean typographic fallback card ("Facts Wallpaper · Import a PDF to start studying") on `#0F1419` if the cache is empty on fresh install. Safely honors clock-safe (26%) and gesture-bar (8%) insets.
-- **Cooldown & Rotation Engine (`RotationReducer`, `WallpaperRotationController`, `WallpaperRotationScheduler`)**: Enforces a minimum 15-second cooldown between unlock rotations (`Intent.ACTION_USER_PRESENT` via runtime non-exported receiver) so rapid screen toggles never skip unread study cards. Interval schedules advance on visibility and enqueue periodic WorkManager jobs (`WallpaperRotationWorker`, >= 15 min).
-- **Static System & Lock Screen Wallpaper (`StaticWallpaperExporter`)**: Direct bitmap export to system home screen, lock screen, or both via `WallpaperManager.setBitmap` with `FLAG_SYSTEM` and `FLAG_LOCK`. The Wallpaper UI explicitly details OEM lock-screen live wallpaper constraints and directs users to static lock export when needed.
-- **Encrypted Local Backup & Restore (`:core:backup`)**: `BackupManagerImpl` exports a single `.fwbk` archive encrypted with Zip4j AES-256 (`AesKeyStrength.KEY_STRENGTH_256`) using a user-supplied passphrase (>= 8 chars). Exports all 15 Room tables to JSON while strictly scrubbing any sensitive fields (`SecretScrubber.containsSecretKeyMarker`), excluding API keys and preserving token metrics (`inputTokens`, `outputTokens`, `maxContextTokens`). Strict path-traversal protection rejects suspicious archive entries (`..`, leading `/` or `\`, `:\`). Single-transaction SQLite restore with child-first deletion and parent-first insertion guarantees rollbacks on any failure, followed by cache clearing and pre-render rescheduling.
-- **Advanced Diagnostics, Prompt Inspector & Storage Manager (`:feature:settings`)**: Power users can inspect individual AI request logs in an interactive dialog (latency, token metrics, prompt summary, response snippet, errors), view token ledger aggregations, compact SQLite databases (`PRAGMA wal_checkpoint(FULL); VACUUM;`), clear caches, and execute encrypted backups and restores.
-- **Onboarding (`:feature:onboarding`)**: Completed 5-step first-launch guided flow saving provider selection, template selection, and theme to DataStore, setting `onboardingCompleted = true` and navigating to the library screen.
-
-## Phase P3: AI Layer, Outline, Facts, Provider Settings & Keystore
-
-### Architecture & Parallel Work Boundaries
-- To honor parallel-work isolation without waiting for P2 code to be merged, :core:data introduces DocumentTextRepository implemented by RoomDocumentTextRepository, which queries the existing Room database schema (imported pages/chunks) for document content.
-- StructuredAiService and ProviderDiagnosticsService are defined as clean interfaces with default implementations (DefaultStructuredAiService, DefaultProviderDiagnosticsService) bound via Hilt.
-- Json binding: Reused the singleton Json provided by :core:datastore rather than binding a duplicate in :core:ai.
-
-### Security (F23)
-- ApiKeyStore backed by AndroidKeystoreSecretCipher using Android Keystore AES/GCM/NoPadding (256-bit key alias \facts_wallpaper_api_key_v1). Fresh 12-byte IV per encryption with authenticated tag.
-- SharedPreferences store only SHA-256 hashed profile IDs (api_key_ + base64url(sha256(profileId))). Keys are never stored in plaintext or Room.
-- LogRedactor scrubs known credential prefixes and registered keys from all loggable output.
-
-### AI Wire Contracts & Routing (Section 6 & 11)
-- Ktor HTTP client with OkHttp engine, configurable timeouts, and full multi-format wire support: Gemini (generateContent API with contents, generationConfig, schema specification), OpenAI (chat completions & response format), Anthropic (messages API), and OpenAI-compatible providers (OpenRouter, DeepSeek, Qwen, Azure, custom).
-- Schema adapter handles dialect translations across providers (Gemini OpenAPI subset, OpenAI json_schema, Anthropic prompt-based tool schemas).
-- Reasoning models (e.g. o1, o3, deepseek-reasoner, r1): system prompts mapped to user messages where required; temperature suppressed; reasoning tokens parsed and billed.
-- AiRetryPolicy: exponential backoff (2s, 4s, 8s) for 429/5xx, honoring Retry-After. 400/401/403 are non-retryable.
-- Semantic TextChunker segments document text respecting page/paragraph/sentence boundaries with configurable token targets and overlap.
-- Fact deduplication uses normalized token overlap / Jaccard similarity threshold (0.75) against existing facts in the lesson/document.
-- Token cost ledger persisted to Room ai_usage_logs table via AiCostEstimator with per-model pricing catalog.
-
-### Durable Generation Jobs (WorkManager)
-- OutlineGenerationWorker and FactsGenerationWorker implemented as @HiltWorker durable jobs with progress tracking and retry support.
-- Registered via HiltWorkerFactory in FactsWallpaperApplication.
-
-## Phase P6a — Cross-Phase Integration
-
-### Real AI Template Generation (`:feature:templates`)
-- Replaced the parallel-development `LocalTemplateAiGenerator` binding with `DefaultTemplateAiGenerator` backed by `StructuredAiService.generateTemplate` (using `AiTask.TEMPLATE_GENERATION` and JSON schema constrained generation).
-- Output is validated using `CardTemplateCodec.validate(...)`. Unconfigured or failing providers raise `AiException`, which `TemplatesViewModel` traps and displays as a user-facing error dialog/snackbar without fallback to fake output.
-
-### Formula Verification Tier-2 Binding (`:core:render`)
-- Implemented `StructuredAiFormulaVerifier` in `:core:render:verify`, bound into `@IntoSet FormulaAiVerifier` within `RenderModule`.
-- Verifies LaTeX formulas via `StructuredAiService.verifyFormula`. If network or provider credentials fail, it returns `null` so formula verification status remains `PENDING` rather than falsely passing or failing.
-
-### AI-Suggested Collections (`:feature:collections`)
-- Added `suggestCollections` API to `StructuredAiService` using structured JSON schema output and routed to `AiTask.FACTS`.
-- `CollectionsViewModel.generateAiCollections()` sends active fact summaries to the AI provider, which clusters them into thematic collections. The ViewModel persists accepted collections with real references to the grouped facts.
-
-### Invariant-6-Safe Live Wallpaper Canvas Text Fallback (`:core:wallpaper`)
-- In `FactsLiveWallpaperService`, when the bitmap render cache does not yet contain a pre-rendered card for the current active fact, the engine retrieves the current `Fact` directly via `WallpaperRotationController.getCurrentFact()`.
-- Renders the actual fact title, body, and source reference using Android `StaticLayout` directly onto the Canvas with clock and navigation bar insets honored, satisfying the spec fallback requirement without violating Invariant 6 (no network/AI/PDF/WebView). The generic branded message is reserved strictly for when zero facts exist in the database.
-
-### End-to-End Pipeline & Cache Pre-Render Bridging
-- Created `CardPreRenderNotifier` in `:core:common`, implemented by `CardPreRenderScheduler` in `:core:render`, and injected into `FactsGenerationWorker` and `FactsViewModel`. Generating facts automatically triggers background card pre-rendering for the rotation pool.
-- `RoomDocumentTextRepository` in `:core:data` now delegates directly to `DocumentRepository.getChunks` and compiled text to eliminate duplication between P2 and P3 text access.
-- `OutlineScreen` header now provides an active navigation button to open the `FactsScreen` whenever facts have been extracted for the document.
-- Stubs and "not yet available" placeholder strings across onboarding and advanced settings have been replaced with real functional bindings and explanatory copy.
-
-## Phase P6b — Hardening, Accessibility and CI
-
-### String resources and localization
-- Remaining hardcoded user-facing labels were moved to module string resources:
-  advanced log detail metadata and empty values, provider API-key optional
-  labels, fact source-reference mode chips, and the outline cost estimate.
-- Technical exception text from provider diagnostics is still passed as the
-  `%2$s` detail argument of a localized failure message. Fully localizing
-  provider/network diagnostics would require a message-code layer in
-  `:core:ai`; this is intentionally deferred rather than adding a second
-  user-facing string system.
-
-### Lint and manifests
-- `PropertyEscape` is disabled in `:app` because the warning is raised only for
-  the machine-generated, git-ignored `local.properties` SDK path, not for
-  source code.
-- `:core:pdf` now declares the WorkManager foreground `SystemForegroundService`
-  with `foregroundServiceType="dataSync"` so the module lints independently.
-- `:core:wallpaper` declares `SET_WALLPAPER` in its own manifest instead of
-  relying on manifest merging from `:app`.
-
-### Testing
-- Added `JsonRepairServiceTest` covering the single repair pass, schema-bound
-  prompt construction, `temperature = 0.0`, the 1,024-token floor, larger token
-  budgets and `repairTriggered` log metadata.
-- Compose UI coverage remains Robolectric-based (`LibraryScreenTest` plus
-  feature ViewModel tests). Roborazzi golden screenshots and the full
-  seven-flow Hilt end-to-end suite from spec §10.2 are not implemented; this is
-  recorded as a remaining release-acceptance gap.
-
-### CI
-- Added `.github/workflows/android-ci.yml` with a tracked-file secret scanner
-  for Google API keys, OpenAI-style keys and hardcoded bearer tokens, followed
-  by `lintDebug testDebugUnitTest assembleDebug`.
-
-## Phase P7.1 — Reasoning Model Output Budgets
-
-- Provider profiles now persist a separate maximum output-token budget (default
-  8,192; minimum 1,024), independent of context-window size. Structured requests
-  start at half that budget and make one doubled-budget retry for truncated JSON
-  when the profile permits it.
-- Connection diagnostics request 1,024 output tokens and accept either normal
-  response text or parsed reasoning text. Empty responses ending in `length`
-  direct users to raise the output budget or disable thinking in advanced
-  parameters.
-- OpenAI-compatible responses keep `reasoning` fields and `<think>` blocks out
-  of structured content while including reported reasoning tokens in usage.
-
-## Phase P7.2 — Advanced Provider Parameters
-
-- Room schema version 3 adds per-profile `temperature`, `topP`,
-  `reasoningEffort`, and `rawRequestJson`; the existing `customHeadersJson`
-  field continues to hold editable extra headers. Migration 2→3 preserves
-  existing headers and supplies nullable typed settings plus an empty override
-  object.
-- Every HTTP request-body builder passes its provider-shaped body through the
-  shared override helper. Typed values are mapped to OpenAI chat/Responses,
-  Anthropic thinking/output configuration, and Gemini `thinkingConfig`; raw
-  JSON objects are recursively merged last, with arrays/scalars replaced.
-  Custom headers are applied to all HTTP provider clients, while required
-  authentication headers take precedence.
-- The provider editor exposes typed sampling/reasoning controls, editable
-  header rows, and a live-validating monospace raw JSON editor with the four
-  requested snippets. It flags credential-like values without persisting API
-  keys in a separate store; the existing secure API-key field remains the
-  supported place for credentials.
-
-## Phase P7.3 — Document-to-Wallpaper Generation
-
-- Lesson rows now carry an optional `chapterTitle` in Room schema version 4.
-  PDF bookmarks are read locally and used to seed/skip outline inference when
-  they yield multiple usable lessons; otherwise the existing extracted-page
-  pipeline runs chunked outline requests followed by a bounded merge/clean
-  request when its summary fits the selected profile's context window.
-- The outline screen groups lessons by chapter, lets the user toggle a chapter
-  or the whole book, retains the existing cost estimate/guard, and labels the
-  primary action "Generate wallpapers".
-- `GenerationOrchestrator` enforces page bounds and page-call limits for
-  tool-capable generation clients, verifies/fixes claims and render failures,
-  retries render repair twice, and falls back to a plain-text card or drops it
-  with a warning. The current structured HTTP clients do not expose tool-call
-  conversation messages, so their adapter intentionally uses the existing
-  bounded lesson-page input path; provider-native `get_pages` calls remain
-  unavailable until those client protocols expose tool calls.
-- Successfully rendered generated cards are assigned to a collection named
-  for the book and selection; that collection follows the existing default of
-  being accepted and included in wallpaper rotation. The existing pre-render
-  worker is then enqueued. WorkManager progress remains available in the
-  outline/facts screens, and its unique work can be cancelled by the user.
-
-## Phase P7.4 — SAF Backups and Cloud PDF Import
-
-- Backups use the Storage Access Framework rather than a Drive API. The user
-  chooses a document with `ACTION_CREATE_DOCUMENT`; the persisted URI grant
-  lets manual and WorkManager daily/weekly backups overwrite the same document
-  using provider mode `wt`. The archive format remains the existing encrypted
-  AES-256 `.fwbk`; only the destination changes.
-- The backup passphrase is encrypted with the Android Keystore-backed
-  `SecretCipher`. It is never stored in plaintext preferences, Room, or the
-  archive metadata. If URI permission is revoked or the provider becomes
-  unavailable, the run is recorded as failed with its cause and the user can
-  choose the destination again.
-- WorkManager periodic scheduling is approximate and subject to Android
-  battery/background execution policy; it is not an exact-time backup service.
-- Local SAF PDF copies report byte progress when the document provider exposes
-  a content length. Providers that do not report a size still show an
-  indeterminate progress indicator. Public PDF URLs retain HTTPS, content-type,
-  `%PDF` header, and streaming size-cap validation.
-- There is no Apps Script relay. A relay would add network latency and
-  maintenance, while Apps Script's six-minute execution limit constrains long
-  books; it provides no benefit over on-device PDF extraction followed by
-  direct provider calls from the app.
-
-## Phase P8.1 — Automatic End-to-End Background Processing and Pipeline Chaining
-
-- WorkManager background jobs (`PdfProcessingWorker`, `OutlineGenerationWorker`, `FactsGenerationWorker`, `CardPreRenderWorker`, `AutomaticBackupWorker`) run with Android foreground service type `dataSync` so that extraction, OCR, outline, fact generation, and pre-rendering survive app exit and low-memory kills.
-- Notifications keep the user informed with stage progress (0..100%), pause/cancel controls, and error alerts with retry triggers.
-- Introduced `PipelineScheduler` / `DocumentProcessingScheduler` which automates stage transitions based on `AutoProcessMode`:
-  - `OUTLINE_ONLY`: Extraction -> Outline -> Wait for user selection.
-  - `OUTLINE_AND_GENERATE_ALL`: Extraction -> Outline -> Automatic Facts Generation for selected lessons -> Pre-render cards into rotation pool.
-  - `ASK_ME`: Extraction -> Analyzed (user prompted to start outline).
-- Persisted Room schema version 5 adding `pipeline_progress`, `auto_process_mode`, `document_input_mode` with migration `MIGRATION_4_5`.
-
-## Phase P8.2 — Vision Mode with Page Images and Multimodal AI
-
-- Added `VisionPageRenderer` port in `:core:common` and implemented in `:core:pdf` via `PdfPageImageCache`, avoiding circular module dependencies between `:core:data` and `:core:pdf`.
-- `PdfPageImageCache` renders PDF pages at 150 DPI (~1600px maximum long edge, JPEG 85% compression) via Android `PdfRenderer` and caches rendered pages on disk in an LRU store bounded to 50 MB and 100 entries.
-- Page-range filtered sub-PDFs are sliced using `PdfSubPdfBuilder` with PDFBox to ensure direct-PDF and vision tasks only upload user-selected page ranges.
-- Universal `AiRequest` model extended with `images: List<ByteArray>` and multimodal serialization across Gemini (`inline_data`), Anthropic (`type: image`), OpenAI Responses (`type: input_image`), and OpenAI-compatible Chat Completions (`type: image_url`).
-- Cost estimation models vision tokens at 1,200 tokens per rendered page image in `CostEstimator` with pre-flight task estimation.
-- `StructuredAiService` exposes `generateOutlineVision` and `generateFactsVision`, using token budgeting, schema validation, and json repair for vision responses.
-- `OutlineGenerationWorker` and `FactsGenerationWorker` invoke the multimodal vision path when `documentInputMode` is configured to `VISION`, or in `AUTO` mode when no text was extracted.
-
 ## Phase P8.3 — Quality-of-Life, Study Mode, SAF Export, and Wallpaper Controls
 
 - **Wallpaper Gesture Controls:** FactsLiveWallpaperService.FactsWallpaperEngine supports double-tap gestures via both onTouchEvent and onCommand(WallpaperManager.COMMAND_TAP) (<400ms delta), advancing rotation immediately via rotationController.advance() and drawing the next card without waiting for the scheduled rotation interval.
@@ -292,3 +10,56 @@ No screen pretends these features work.
   - LibraryViewModel and LibraryScreen support sorting by recent date (DATE_DESC), title (TITLE_ASC), and pipeline progress (PROGRESS).
   - Added multi-document selection mode with select all, individual checkboxes, and batch deletion that cleans up database entries, associated files, and cancels active WorkManager tasks.
 - **PDF Share / View Integration:** Verified intent filter in AndroidManifest.xml handling ACTION_VIEW and ACTION_SEND for application/pdf, routed from MainActivity directly into the import pipeline.
+
+## Phase P9.1 — Finish P8 Gaps
+
+- **ZIP and Multi-page PDF Export (`CardExportService`):**
+  - Added `CardExportService` with `CardExportFormat` supporting `ZIP` (PNG card images rendered via `CardBitmapRenderer`), `PDF` (multi-page document rendered with Android `PdfDocument` at 1080x1920 with crisp canvas draw and font rendering), and `MARKDOWN`.
+  - Accessible directly through SAF `ACTION_CREATE_DOCUMENT` from `FactsScreen` and `CollectionsScreen`.
+- **Full-Screen Study Route with Spaced Repetition (`AppRoute.Study`):**
+  - Replaced the bottom sheet with a dedicated full-screen Compose route `StudyScreen` hosting a swipeable `HorizontalPager`.
+  - Added 3D perspective flip cards: front renders the full stylized card (LaTeX formula, diagram, source badge); back shows detailed review history and spaced repetition schedule.
+  - "Got it" schedules the card into expanding intervals: 1d, 3d, 7d, 14d, 30d. "Review again" reschedules the card in 10 minutes. Unreviewed cards are due immediately.
+  - Room schema version 6 adds `next_review_due_epoch_ms` with index on `facts` table via `MIGRATION_5_6`.
+  - Added smart filter and toggle for "Due for review" cards.
+- **Quick Settings Tile and Launcher Shortcuts:**
+  - Implemented `NextFactTileService` (`TileService`) enabling quick advance of the live wallpaper rotation directly from Android Quick Settings.
+  - Added static launcher shortcuts (`shortcuts.xml`): "Next fact" (`com.factswallpaper.app.ACTION_NEXT_FACT`) and "Import PDF" (`com.factswallpaper.app.ACTION_IMPORT_PDF`).
+- **Encrypted Backup Restore via File Picker:**
+  - Added `restoreBackupFromUri(Uri, String)` in `BackupManager` allowing direct file restore of encrypted `.fwbk` archives chosen by the user via SAF `OpenDocument`. Wired into `AdvancedSettingsScreen`.
+
+## Phase P9.2 — Wallpaper & Daily Use
+
+- **Fact of the Day Notification (`FactOfTheDayScheduler` & `FactOfTheDayWorker`):**
+  - Configurable daily notification with user-chosen delivery time (default 08:00).
+  - Tapping notification launches the app directly into the fact details.
+  - Notification action buttons: "Next" (advances rotation and updates notification text) and "Got it" (records successful spaced-repetition review and dismisses notification) handled in `FactNotificationReceiver`.
+- **Quiet Hours & Pause Rotation:**
+  - Time window (e.g. 22:00 to 07:00, with support for midnight-crossing intervals) during which wallpaper rotation is suppressed.
+  - Instant "Pause rotation" master toggle to halt periodic wallpaper changes without losing rotation state.
+- **Battery Saver Awareness:**
+  - Checks `PowerManager.isPowerSaveMode` when enabled; automatically doubles rotation interval during low-power mode to minimize battery and CPU impact.
+- **Home-Screen Widget (`FactAppWidgetProvider`):**
+  - Built an Android `AppWidgetProvider` displaying current fact card text and formatted source citation.
+  - Interactive "Next" button on widget advances rotation and broadcasts `ACTION_FACT_UPDATED` to update all active widgets and live wallpaper in sync.
+- **Rotation Source Picker:**
+  - Added `RotationSource` enum: `ALL` (all cards from active documents), `COLLECTIONS` (specific collections/folders marked for rotation), `FAVORITES` (favorite cards only), `DUE_FOR_REVIEW` (spaced repetition review cards).
+  - Integrated into `RoomRotationPoolRepository`, `AppPreferences`, `WallpaperViewModel`, and `WallpaperScreen`.
+
+## Phase P9.3 — Library, Cards and Generation
+
+- **Card Actions (Long-Press and Context Menu on Cards):**
+  - Added 8-action contextual menu and long-press handler across `FactListItemCard` and `FactsScreen`.
+  - Actions: favorite/pin toggle, hide from / restore to wallpaper rotation (`excluded_from_rotation`), inline text edit and immediate re-render, single-card AI regeneration, clipboard copy, share rendered card image via Android Sharesheet (`FileProvider`), jump to source PDF page, and delete.
+- **Built-in PDF Page Viewer (`PdfViewerScreen` & `PdfViewerViewModel`):**
+  - Full-screen viewer using `PdfRenderer` with pinch-to-zoom (1x–5x) and double-tap zoom/reset gestures.
+  - Opens directly at the card's referenced source page with an interactive bottom page slider and step controls.
+- **Duplicate PDF Detection on Import:**
+  - Integrated SHA-256 content hashing on imported files in `DocumentRepository` / `ImportPdfViewModel`.
+  - When an identical PDF has already been imported, prompts user with a dialog to open the existing document or re-import under a unique name.
+- **Background Pipeline Controls & What's Happening Activity:**
+  - Global pause and resume for WorkManager document extraction and lesson generation jobs via `DocumentProcessingScheduler.pauseAll()` and `resumeAll()`.
+  - Added per-document "Regenerate failed lessons only" in `OutlineScreen` and `DocumentProcessingScheduler`.
+  - Created standalone `WhatsHappeningActivity` and Compose route (`WhatsHappeningScreen`) displaying all running, queued, paused, and failed jobs with retry, cancel, pause-all, and resume-all controls. Reachable from foreground notification and Settings.
+- **Undo Snackbar for Deletions:**
+  - Implemented 5-second soft delete with Undo action for documents (Library), cards (Facts), and collections/folders (Collections). If not undone within 5 seconds, hard deletion is committed to the database and filesystem.

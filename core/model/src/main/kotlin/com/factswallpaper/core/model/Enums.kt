@@ -48,7 +48,15 @@ enum class WallpaperScheduleMode { ON_UNLOCK, INTERVAL, MANUAL }
 enum class RotationOrder { SEQUENTIAL, RANDOM }
 
 @Serializable
-enum class ThemeMode { LIGHT, DARK, AMOLED, DYNAMIC }
+enum class RotationSource {
+    ALL,
+    COLLECTIONS,
+    FAVORITES,
+    DUE_FOR_REVIEW
+}
+
+@Serializable
+enum class ThemeMode { SYSTEM, LIGHT, DARK, AMOLED, DYNAMIC }
 
 @Serializable
 enum class ProviderType {
@@ -121,5 +129,6 @@ enum class FactStatusFilter {
     IGNORED,
     FAVORITES,
     FORMULAS,
-    DIAGRAMS
+    DIAGRAMS,
+    DUE_FOR_REVIEW
 }

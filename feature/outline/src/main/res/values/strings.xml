@@ -76,4 +76,10 @@
     <string name="outline_cost_guard_confirm">Run anyway</string>
     <string name="outline_load_error">Could not load this outline.</string>
     <string name="outline_document_missing">This document is no longer in your library.</string>
+    <string name="outline_regenerate_failed">Regenerate failed lessons</string>
+    <string name="outline_no_failed_lessons">No failed lessons to regenerate</string>
+    <string name="outline_regenerating_failed">Regenerating failed lessons&#8230;</string>
+    <string name="outline_coach_hint_title">Outline &amp; Lesson Selection</string>
+    <string name="outline_coach_hint_body">Select the lessons you want to generate wallpaper facts for, adjust fact density, or tap Re-detect outline anytime.</string>
+    <string name="outline_coach_hint_dismiss">Got it</string>
 </resources>

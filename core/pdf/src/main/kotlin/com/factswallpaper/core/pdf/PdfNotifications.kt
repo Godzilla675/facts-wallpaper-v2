@@ -184,6 +184,17 @@ class PdfNotifications @Inject constructor(
         stageText: String,
         progressFraction: Float?,
     ): Notification {
+        val whatsHappeningIntent = Intent().apply {
+            setClassName(context.packageName, "com.factswallpaper.app.WhatsHappeningActivity")
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+        val whatsHappeningPendingIntent = PendingIntent.getActivity(
+            context,
+            9999,
+            whatsHappeningIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_pdf_processing)
             .setContentTitle(documentTitle)
@@ -202,8 +213,8 @@ class PdfNotifications @Inject constructor(
             )
             .addAction(
                 0,
-                context.getString(R.string.pdf_notification_open),
-                contentIntent(documentId),
+                context.getString(R.string.whats_happening_title),
+                whatsHappeningPendingIntent,
             )
 
         if (progressFraction != null && progressFraction in 0f..1f) {

@@ -27,12 +27,15 @@ fun FactsWallpaperApp(
     sharedPdfUri: String?,
     onSharedPdfConsumed: () -> Unit,
     onLaunchLiveWallpaper: () -> Unit,
+    initialOpenImport: Boolean = false,
+    onImportConsumed: () -> Unit = {},
     viewModel: AppViewModel = hiltViewModel(),
 ) {
     val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
+    val dynamicColorEnabled by viewModel.dynamicColorEnabled.collectAsStateWithLifecycle()
     val startDestination by viewModel.startDestination.collectAsStateWithLifecycle()
 
-    FactsTheme(themeMode = themeMode) {
+    FactsTheme(themeMode = themeMode, dynamicColorEnabled = dynamicColorEnabled) {
         val start = startDestination
         if (start == null) {
             StartLoading()
@@ -40,6 +43,8 @@ fun FactsWallpaperApp(
             AppNavHost(
                 startDestination = start,
                 sharedPdfUri = sharedPdfUri,
+                initialOpenImport = initialOpenImport,
+                onImportConsumed = onImportConsumed,
                 onSharedPdfConsumed = onSharedPdfConsumed,
                 onLaunchLiveWallpaper = onLaunchLiveWallpaper,
             )
@@ -61,19 +66,13 @@ private fun StartLoading() {
             verticalArrangement = Arrangement.spacedBy(spacing.md),
             modifier = Modifier.padding(spacing.xl),
         ) {
-            Text(
-                text = stringResource(R.string.app_name),
-                style = MaterialTheme.typography.headlineMedium,
-                color = MaterialTheme.colorScheme.primary,
-                textAlign = TextAlign.Center,
-            )
+            CircularProgressIndicator()
             Text(
                 text = stringResource(R.string.app_loading),
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
             )
-            CircularProgressIndicator(modifier = Modifier.padding(top = 8.dp))
         }
     }
 }

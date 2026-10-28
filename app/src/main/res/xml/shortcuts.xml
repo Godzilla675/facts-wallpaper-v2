@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="next_fact"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_next"
+        android:shortcutShortLabel="@string/shortcut_next_fact_short"
+        android:shortcutLongLabel="@string/shortcut_next_fact_long">
+        <intent
+            android:action="com.factswallpaper.action.NEXT_FACT"
+            android:targetPackage="com.factswallpaper"
+            android:targetClass="com.factswallpaper.app.MainActivity" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="import_pdf"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_import"
+        android:shortcutShortLabel="@string/shortcut_import_pdf_short"
+        android:shortcutLongLabel="@string/shortcut_import_pdf_long">
+        <intent
+            android:action="com.factswallpaper.action.IMPORT_PDF"
+            android:targetPackage="com.factswallpaper"
+            android:targetClass="com.factswallpaper.app.MainActivity" />
+    </shortcut>
+</shortcuts>

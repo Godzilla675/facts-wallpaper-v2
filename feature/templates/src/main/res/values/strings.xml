@@ -87,6 +87,7 @@
     <string name="preview_theme_helper">Wallpaper colors are independent from the app theme.</string>
     <string name="preview_source_section">Source reference</string>
     <string name="preview_source_helper">Choose how much provenance appears on each card.</string>
+    <string name="preview_theme_system">System</string>
     <string name="preview_theme_light">Light</string>
     <string name="preview_theme_dark">Dark</string>
     <string name="preview_theme_amoled">AMOLED</string>
@@ -97,7 +98,7 @@
     <string name="preview_source_hidden">Hidden</string>
     <string name="preview_load_error">Could not load this card preview.</string>
     <string name="preview_render_error">Could not render this card.</string>
-    <string name="preview_rendering">Rendering at wallpaper resolution…</string>
+    <string name="preview_rendering">Rendering at wallpaper resolution&#8230;</string>
     <string name="preview_needs_review">This formula or diagram needs review. The card falls back to plain text until both verification tiers pass.</string>
     <string name="preview_diagram_pending">The formula or diagram image is not ready. This card shows the source text until rendering finishes.</string>
     <string name="preview_layout_section">Typography &amp; safe margins</string>

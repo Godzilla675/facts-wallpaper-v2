@@ -20,8 +20,8 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /**
- * Smart-view counters power the "Active / Favourites / Formulas / Diagrams" pills,
- * so they are verified against a real Room database rather than a hand-built list.
+ * Smart-view counters power the "Active / Favourites / Formulas / Diagrams / Due for review"
+ * pills, so they are verified against a real Room database rather than a hand-built list.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -59,12 +59,24 @@ class RoomFactRepositorySmartViewsTest {
 
             val counts = repository.observeSmartViewCounts().first()
 
-            assertThat(counts.total).isEqualTo(4)
-            assertThat(counts.active).isEqualTo(3)
+            assertThat(counts.total).isEqualTo(5)
+            assertThat(counts.active).isEqualTo(4)
             assertThat(counts.favorites).isEqualTo(2)
             assertThat(counts.formulas).isEqualTo(1)
             assertThat(counts.diagrams).isEqualTo(1)
         }
+
+    @Test
+    fun `due for review counts active facts whose review date has passed`() = runBlocking<Unit> {
+        seedDocument()
+        seedFacts()
+
+        val counts = repository.observeSmartViewCounts().first()
+
+        // Three active facts have no schedule (treated as due); the inactive fact and the
+        // fact scheduled far in the future are excluded.
+        assertThat(counts.dueForReview).isEqualTo(3)
+    }
 
     @Test
     fun `counts react to database mutations instead of caching the first result`() =
@@ -72,8 +84,9 @@ class RoomFactRepositorySmartViewsTest {
             seedDocument()
             seedFacts()
             val before = repository.observeSmartViewCounts().first()
-            assertThat(before.active).isEqualTo(3)
+            assertThat(before.active).isEqualTo(4)
             assertThat(before.diagrams).isEqualTo(1)
+            assertThat(before.dueForReview).isEqualTo(3)
 
             database.factDao().setActive("fact-plain", active = false, updatedAtEpochMs = 9_000L)
             database.factDao().upsert(
@@ -82,15 +95,24 @@ class RoomFactRepositorySmartViewsTest {
 
             val after = repository.observeSmartViewCounts().first()
 
-            assertThat(after.total).isEqualTo(5)
-            assertThat(after.active).isEqualTo(3)
+            assertThat(after.total).isEqualTo(6)
+            assertThat(after.active).isEqualTo(4)
             assertThat(after.diagrams).isEqualTo(2)
+            // fact-plain left the pool, fact-extra-diagram joined it.
+            assertThat(after.dueForReview).isEqualTo(3)
         }
 
     @Test
     fun `empty database reports zeroed counters rather than null`() = runBlocking<Unit> {
         assertThat(repository.observeSmartViewCounts().first()).isEqualTo(
-            SmartViewCounts(total = 0, active = 0, favorites = 0, formulas = 0, diagrams = 0),
+            SmartViewCounts(
+                total = 0,
+                active = 0,
+                favorites = 0,
+                formulas = 0,
+                diagrams = 0,
+                dueForReview = 0,
+            ),
         )
         assertThat(repository.observeTotalCount().first()).isEqualTo(0)
         assertThat(repository.observeTags().first()).isEmpty()
@@ -101,7 +123,7 @@ class RoomFactRepositorySmartViewsTest {
         seedDocument()
         seedFacts()
 
-        assertThat(repository.observeTotalCount().first()).isEqualTo(4)
+        assertThat(repository.observeTotalCount().first()).isEqualTo(5)
         assertThat(repository.observeTags().first().map { it.tag })
             .containsExactly("entropy", "physics", "thermodynamics")
             .inOrder()
@@ -146,6 +168,10 @@ class RoomFactRepositorySmartViewsTest {
             fact("fact-ignored", active = false, favorite = true),
             tags = listOf("physics"),
         )
+        dao.upsertFactWithTags(
+            fact("fact-scheduled", nextReviewDueEpochMs = FUTURE_REVIEW_EPOCH_MS),
+            tags = listOf("physics"),
+        )
     }
 
     private fun fact(
@@ -158,6 +184,7 @@ class RoomFactRepositorySmartViewsTest {
         templateType: String = "TEXT",
         diagramType: String = "NONE",
         diagramSource: String? = null,
+        nextReviewDueEpochMs: Long? = null,
     ) = FactItemEntity(
         id = id,
         documentId = DOCUMENT_ID,
@@ -174,9 +201,11 @@ class RoomFactRepositorySmartViewsTest {
         active = active,
         favorite = favorite,
         createdAtEpochMs = createdAt,
+        nextReviewDueEpochMs = nextReviewDueEpochMs,
     )
 
     private companion object {
         const val DOCUMENT_ID = "doc-1"
+        const val FUTURE_REVIEW_EPOCH_MS = 4_102_444_800_000L // 2100-01-01
     }
 }

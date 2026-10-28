@@ -34,8 +34,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -44,6 +46,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -63,6 +66,7 @@ import com.factswallpaper.core.ui.component.ErrorStatePanel
 import com.factswallpaper.core.ui.component.InlineBanner
 import com.factswallpaper.core.ui.component.MetricPill
 import com.factswallpaper.core.ui.component.SectionGroupCard
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -75,6 +79,10 @@ fun CollectionsScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val message by viewModel.message.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    val collectionDeletedMessage = stringResource(R.string.collections_collection_deleted)
+    val folderDeletedMessage = stringResource(R.string.collections_folder_deleted)
+    val undoLabel = stringResource(R.string.collections_undo)
     var creatingCollection by remember { mutableStateOf(false) }
     var creatingFolder by remember { mutableStateOf(false) }
     var renamingCollection by remember { mutableStateOf<Collection?>(null) }
@@ -213,7 +221,18 @@ fun CollectionsScreen(
             body = stringResource(R.string.collections_delete_body, collection.name),
             onDismiss = { deletingCollection = null },
             onConfirm = {
-                viewModel.deleteCollection(collection.id)
+                viewModel.deleteCollectionWithUndo(collection.id) { onUndo ->
+                    scope.launch {
+                        val result = snackbarHostState.showSnackbar(
+                            message = collectionDeletedMessage,
+                            actionLabel = undoLabel,
+                            duration = SnackbarDuration.Short,
+                        )
+                        if (result == SnackbarResult.ActionPerformed) {
+                            onUndo()
+                        }
+                    }
+                }
                 deletingCollection = null
             },
         )
@@ -225,7 +244,18 @@ fun CollectionsScreen(
             body = stringResource(R.string.collections_delete_body, folder.name),
             onDismiss = { deletingFolder = null },
             onConfirm = {
-                viewModel.deleteFolder(folder.id)
+                viewModel.deleteFolderWithUndo(folder.id) { onUndo ->
+                    scope.launch {
+                        val result = snackbarHostState.showSnackbar(
+                            message = folderDeletedMessage,
+                            actionLabel = undoLabel,
+                            duration = SnackbarDuration.Short,
+                        )
+                        if (result == SnackbarResult.ActionPerformed) {
+                            onUndo()
+                        }
+                    }
+                }
                 deletingFolder = null
             },
         )
@@ -373,6 +403,8 @@ private fun CollectionsContent(
             item {
                 EmptySection(
                     message = stringResource(R.string.collections_empty_collections),
+                    actionLabel = stringResource(R.string.collections_new_collection),
+                    onAction = onNewCollection,
                 )
             }
         } else {
@@ -400,6 +432,8 @@ private fun CollectionsContent(
             item {
                 EmptySection(
                     message = stringResource(R.string.collections_empty_folders),
+                    actionLabel = stringResource(R.string.collections_new_folder),
+                    onAction = onNewFolder,
                 )
             }
         } else {
@@ -870,19 +904,36 @@ private fun SectionHeader(
 }
 
 @Composable
-private fun EmptySection(message: String) {
+private fun EmptySection(
+    message: String,
+    actionLabel: String? = null,
+    onAction: (() -> Unit)? = null,
+) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
         ),
     ) {
-        Text(
-            text = message,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        Column(
             modifier = Modifier.padding(16.dp),
-        )
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            if (actionLabel != null && onAction != null) {
+                OutlinedButton(onClick = onAction) {
+                    Icon(Icons.Filled.Add, contentDescription = null)
+                    Text(
+                        text = actionLabel,
+                        modifier = Modifier.padding(start = 4.dp),
+                    )
+                }
+            }
+        }
     }
 }
 

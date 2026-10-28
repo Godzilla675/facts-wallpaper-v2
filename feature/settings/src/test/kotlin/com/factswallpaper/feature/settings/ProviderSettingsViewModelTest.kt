@@ -16,6 +16,7 @@ import com.factswallpaper.core.model.DocumentInputMode
 import com.factswallpaper.core.model.ProviderKeyStatus
 import com.factswallpaper.core.model.ProviderProfile
 import com.factswallpaper.core.model.ProviderType
+import com.factswallpaper.core.model.RotationSource
 import com.factswallpaper.core.model.RoutingStrategy
 import com.factswallpaper.core.model.ThemeMode
 import com.factswallpaper.core.model.UsageEntry
@@ -252,6 +253,18 @@ private class FakeSettingsRepository : SettingsRepository {
     override suspend fun setMaxImagesPerRequest(maxImages: Int) {
         preferencesFlow.value = preferencesFlow.value.copy(maxImagesPerRequest = maxImages)
     }
+    override suspend fun setRotationSource(source: RotationSource) {
+        preferencesFlow.value = preferencesFlow.value.copy(rotationSource = source)
+    }
+    override suspend fun setQuietHoursEnabled(enabled: Boolean) {}
+    override suspend fun setQuietHoursWindow(startMinute: Int, endMinute: Int) {}
+    override suspend fun setRotationPaused(paused: Boolean) {}
+    override suspend fun setBatterySaverSlowdownEnabled(enabled: Boolean) {}
+    override suspend fun setDailyFactNotificationEnabled(enabled: Boolean) {}
+    override suspend fun setDailyFactNotificationTime(timeMinutes: Int) {}
+    override suspend fun setDynamicColorEnabled(enabled: Boolean) {}
+    override suspend fun setLibraryCoachHintDismissed(dismissed: Boolean) {}
+    override suspend fun setOutlineCoachHintDismissed(dismissed: Boolean) {}
 }
 
 private class FakeDiagnosticsRepository : DiagnosticsRepository {

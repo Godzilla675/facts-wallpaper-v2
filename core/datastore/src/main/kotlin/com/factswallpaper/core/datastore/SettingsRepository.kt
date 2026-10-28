@@ -3,6 +3,7 @@ package com.factswallpaper.core.datastore
 import com.factswallpaper.core.model.AiTask
 import com.factswallpaper.core.model.AutoProcessMode
 import com.factswallpaper.core.model.DocumentInputMode
+import com.factswallpaper.core.model.RotationSource
 import com.factswallpaper.core.model.RoutingStrategy
 import com.factswallpaper.core.model.ThemeMode
 import kotlinx.coroutines.flow.Flow
@@ -29,4 +30,14 @@ interface SettingsRepository {
     suspend fun setDefaultAutoProcessMode(mode: AutoProcessMode)
     suspend fun setDefaultDocumentInputMode(mode: DocumentInputMode)
     suspend fun setMaxImagesPerRequest(maxImages: Int)
+    suspend fun setRotationSource(source: RotationSource)
+    suspend fun setQuietHoursEnabled(enabled: Boolean)
+    suspend fun setQuietHoursWindow(startMinute: Int, endMinute: Int)
+    suspend fun setRotationPaused(paused: Boolean)
+    suspend fun setBatterySaverSlowdownEnabled(enabled: Boolean)
+    suspend fun setDailyFactNotificationEnabled(enabled: Boolean)
+    suspend fun setDailyFactNotificationTime(timeMinutes: Int)
+    suspend fun setDynamicColorEnabled(enabled: Boolean)
+    suspend fun setLibraryCoachHintDismissed(dismissed: Boolean)
+    suspend fun setOutlineCoachHintDismissed(dismissed: Boolean)
 }

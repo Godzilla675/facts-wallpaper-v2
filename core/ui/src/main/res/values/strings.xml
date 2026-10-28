@@ -126,4 +126,41 @@
     <string name="selection_selected">Selected</string>
     <string name="selection_not_selected">Not selected</string>
     <string name="color_swatch_description">Color %1$s</string>
+
+    <!-- Card actions -->
+    <string name="fact_card_menu">More options</string>
+    <string name="fact_active_indicator">Active in rotation</string>
+    <string name="fact_inactive_indicator">Hidden from rotation</string>
+    <string name="fact_toggle_active">Toggle active in rotation</string>
+    <string name="fact_favorite_indicator">Favorite fact</string>
+    <string name="fact_toggle_favorite">Toggle favorite</string>
+    <string name="fact_delete">Delete</string>
+    <string name="fact_delete_confirmation">Delete this fact? This cannot be undone.</string>
+    <string name="fact_action_more">More options</string>
+    <string name="fact_action_favorite">Favorite</string>
+    <string name="fact_action_unfavorite">Unfavorite</string>
+    <string name="fact_action_hide_from_rotation">Hide from rotation</string>
+    <string name="fact_action_show_in_rotation">Show in rotation</string>
+    <string name="fact_action_hide_rotation">Hide from rotation</string>
+    <string name="fact_action_show_rotation">Show in rotation</string>
+    <string name="fact_action_edit">Edit text</string>
+    <string name="fact_action_regenerate">Regenerate card</string>
+    <string name="fact_action_copy_text">Copy text</string>
+    <string name="fact_action_share_image">Share as image</string>
+    <string name="fact_action_jump_to_source">Jump to source page</string>
+    <string name="fact_copied_to_clipboard">Fact text copied to clipboard</string>
+
+    <!-- What's happening pipeline screen & actions -->
+    <string name="whats_happening_title">What\'s happening</string>
+    <string name="whats_happening_subtitle">Background jobs, OCR pipelines and AI generation</string>
+    <string name="whats_happening_pause_all">Pause all jobs</string>
+    <string name="whats_happening_resume_all">Resume all jobs</string>
+    <string name="whats_happening_no_jobs_title">No active background jobs</string>
+    <string name="whats_happening_no_jobs_body">Everything is up to date. Processing jobs will appear here when you import PDFs or generate facts.</string>
+    <string name="whats_happening_running_title">Running &amp; queued</string>
+    <string name="whats_happening_failed_title">Failed jobs</string>
+    <string name="whats_happening_retry">Retry</string>
+    <string name="whats_happening_cancel">Cancel</string>
+    <string name="whats_happening_open_document">Open document</string>
+    <string name="undo">Undo</string>
 </resources>

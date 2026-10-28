@@ -12,6 +12,8 @@ import com.factswallpaper.core.pdf.DocumentProcessingScheduler
 import com.factswallpaper.core.ui.FeatureViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.catch
@@ -53,15 +55,18 @@ class LibraryViewModel @Inject constructor(
         val query: String,
         val sortOrder: DocumentSortOrder,
         val selectedIds: Set<String>,
+        val pendingDeletedIds: Set<String>,
     )
 
     private val query = MutableStateFlow("")
     private val sortOrder = MutableStateFlow(DocumentSortOrder.DATE_DESC)
     private val selectedIds = MutableStateFlow<Set<String>>(emptySet())
+    private val pendingDeletedDocIds = MutableStateFlow<Set<String>>(emptySet())
+    private val deleteJobs = mutableMapOf<String, Job>()
     private val retrySignal = MutableStateFlow(0)
 
-    private val filterState = combine(query, sortOrder, selectedIds) { q, s, sel ->
-        FilterState(q, s, sel)
+    private val filterState = combine(query, sortOrder, selectedIds, pendingDeletedDocIds) { q, s, sel, pending ->
+        FilterState(q, s, sel, pending)
     }
 
     val uiState = retrySignal.flatMapLatest {
@@ -71,10 +76,11 @@ class LibraryViewModel @Inject constructor(
             rotationPoolRepository.observePoolSummary(),
             filterState,
         ) { documents, settings, summary, filters ->
-            val filtered = filterAndSortDocuments(documents, filters.query, filters.sortOrder)
+            val nonDeleted = documents.filter { it.id !in filters.pendingDeletedIds }
+            val filtered = filterAndSortDocuments(nonDeleted, filters.query, filters.sortOrder)
             if (filtered.isEmpty() && filters.query.isNotBlank()) {
                 LibraryUiState.Empty(query = filters.query)
-            } else if (documents.isEmpty()) {
+            } else if (nonDeleted.isEmpty()) {
                 LibraryUiState.Empty(query = "")
             } else {
                 LibraryUiState.Content(
@@ -141,6 +147,23 @@ class LibraryViewModel @Inject constructor(
             } else {
                 showMessage(R.string.library_delete_failed)
             }
+        }
+    }
+
+    fun deleteDocumentWithUndo(document: Document, onUndoAvailable: (onUndo: () -> Unit) -> Unit) {
+        pendingDeletedDocIds.update { it + document.id }
+        val job = viewModelScope.launch {
+            delay(5_000)
+            pendingDeletedDocIds.update { it - document.id }
+            scheduler.cancel(document.id)
+            documentRepository.deleteDocument(document.id)
+            deleteJobs.remove(document.id)
+        }
+        deleteJobs[document.id] = job
+        onUndoAvailable {
+            job.cancel()
+            deleteJobs.remove(document.id)
+            pendingDeletedDocIds.update { it - document.id }
         }
     }
 

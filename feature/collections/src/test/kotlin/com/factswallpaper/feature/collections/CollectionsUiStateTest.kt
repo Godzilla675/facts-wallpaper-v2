@@ -34,7 +34,14 @@ class CollectionsUiStateTest {
     )
 
     private val content = CollectionsUiState.Content(
-        counts = SmartViewCounts(total = 25, active = 18, favorites = 4, formulas = 3, diagrams = 2),
+        counts = SmartViewCounts(
+            total = 25,
+            active = 18,
+            favorites = 4,
+            formulas = 3,
+            diagrams = 2,
+            dueForReview = 6,
+        ),
         poolSummary = RotationPoolSummary(factCount = 18, collectionCount = 2, folderCount = 1),
         collections = listOf(userCollection, pendingSuggestion, acceptedSuggestion),
         folders = emptyList(),
@@ -87,6 +94,7 @@ class CollectionsUiStateTest {
         assertThat(content.counts.favorites).isEqualTo(4)
         assertThat(content.counts.formulas).isEqualTo(3)
         assertThat(content.counts.diagrams).isEqualTo(2)
+        assertThat(content.counts.dueForReview).isEqualTo(6)
         assertThat(content.poolSummary.factCount).isEqualTo(18)
     }
 

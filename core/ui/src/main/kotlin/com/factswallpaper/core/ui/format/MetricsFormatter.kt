@@ -20,6 +20,8 @@ object MetricsFormatter {
 
     fun costUsd(usd: Double): String = String.format(Locale.US, "$%.4f", usd)
 
+    fun compactTokens(tokens: Long): String = compactTokens(tokens.coerceIn(0L, Int.MAX_VALUE.toLong()).toInt())
+
     fun compactTokens(tokens: Int): String = when {
         tokens >= 1_000_000 -> String.format(Locale.US, "%.1fM", tokens / 1_000_000.0)
         tokens >= 1_000 -> "${tokens / 1_000}k"

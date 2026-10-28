@@ -11,8 +11,11 @@ import com.factswallpaper.core.ui.TopLevelDestination
 import com.factswallpaper.core.ui.component.FactsAppScaffold
 import com.factswallpaper.feature.collections.CollectionsScreen
 import com.factswallpaper.feature.facts.FactsScreen
+import com.factswallpaper.feature.facts.StudyScreen
 import com.factswallpaper.feature.library.ImportPdfScreen
 import com.factswallpaper.feature.library.LibraryScreen
+import com.factswallpaper.feature.library.PdfViewerScreen
+import com.factswallpaper.feature.library.WhatsHappeningScreen
 import com.factswallpaper.feature.onboarding.OnboardingScreen
 import com.factswallpaper.feature.outline.OutlineScreen
 import com.factswallpaper.feature.settings.AdvancedSettingsScreen
@@ -27,6 +30,8 @@ fun AppNavHost(
     sharedPdfUri: String?,
     onSharedPdfConsumed: () -> Unit,
     onLaunchLiveWallpaper: () -> Unit,
+    initialOpenImport: Boolean = false,
+    onImportConsumed: () -> Unit = {},
     navController: NavHostController = rememberNavController(),
 ) {
     LaunchedEffect(sharedPdfUri) {
@@ -34,6 +39,13 @@ fun AppNavHost(
         if (uri != null) {
             navController.navigate(AppRoute.ImportPdf(sharedUri = uri))
             onSharedPdfConsumed()
+        }
+    }
+
+    LaunchedEffect(initialOpenImport) {
+        if (initialOpenImport) {
+            navController.navigate(AppRoute.ImportPdf())
+            onImportConsumed()
         }
     }
 
@@ -98,6 +110,39 @@ fun AppNavHost(
                 FactsScreen(
                     onOpenLibrary = { navController.navigateTopLevel(TopLevelDestination.LIBRARY) },
                     onOpenTemplates = { navController.navigate(AppRoute.TemplateGallery) },
+                    onOpenStudy = { documentId ->
+                        navController.navigate(AppRoute.Study(documentId = documentId))
+                    },
+                    onOpenPdfViewer = { documentId, page ->
+                        navController.navigate(AppRoute.PdfViewer(documentId = documentId, initialPage = page))
+                    },
+                )
+            }
+        }
+
+        composable<AppRoute.Study> {
+            DetailFrame {
+                StudyScreen(
+                    onBack = { navController.popBackStack() },
+                )
+            }
+        }
+
+        composable<AppRoute.PdfViewer> {
+            DetailFrame {
+                PdfViewerScreen(
+                    onBack = { navController.popBackStack() },
+                )
+            }
+        }
+
+        composable<AppRoute.WhatsHappening> {
+            DetailFrame {
+                WhatsHappeningScreen(
+                    onBack = { navController.popBackStack() },
+                    onOpenDocument = { documentId ->
+                        navController.navigate(AppRoute.Outline(documentId))
+                    },
                 )
             }
         }
@@ -136,7 +181,10 @@ fun AppNavHost(
 
         composable<AppRoute.AdvancedSettings> {
             DetailFrame {
-                AdvancedSettingsScreen(onBack = { navController.popBackStack() })
+                AdvancedSettingsScreen(
+                    onBack = { navController.popBackStack() },
+                    onOpenWhatsHappening = { navController.navigate(AppRoute.WhatsHappening) },
+                )
             }
         }
 
@@ -169,30 +217,26 @@ fun AppNavHost(
 
 @Composable
 private fun TabFrame(
-    selected: TopLevelDestination,
+    destination: TopLevelDestination,
     navController: NavHostController,
     content: @Composable () -> Unit,
 ) {
     FactsAppScaffold(
-        selectedDestination = selected,
-        onNavigate = { destination -> navController.navigateTopLevel(destination) },
-        content = content,
-    )
+        selectedDestination = destination,
+        onNavigate = { target ->
+            navController.navigateTopLevel(target)
+        },
+    ) {
+        content()
+    }
 }
 
 @Composable
 private fun DetailFrame(content: @Composable () -> Unit) {
-    FactsAppScaffold(
-        selectedDestination = null,
-        onNavigate = {},
-        content = content,
-    )
+    content()
 }
 
-private fun NavHostController.navigateTopLevel(
-    destination: TopLevelDestination,
-    documentId: String? = null,
-) {
+private fun NavHostController.navigateTopLevel(destination: TopLevelDestination, documentId: String? = null) {
     val route: AppRoute = when (destination) {
         TopLevelDestination.LIBRARY -> AppRoute.Library
         TopLevelDestination.FACTS -> AppRoute.Facts(documentId = documentId)
@@ -201,7 +245,9 @@ private fun NavHostController.navigateTopLevel(
         TopLevelDestination.SETTINGS -> AppRoute.ProviderSettings
     }
     navigate(route) {
-        popUpTo(AppRoute.Library) { saveState = true }
+        popUpTo(graph.startDestinationId) {
+            saveState = true
+        }
         launchSingleTop = true
         restoreState = true
     }

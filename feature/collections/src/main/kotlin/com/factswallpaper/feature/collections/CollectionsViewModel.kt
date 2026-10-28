@@ -1,5 +1,7 @@
 package com.factswallpaper.feature.collections
 
+import android.content.Context
+import android.net.Uri
 import androidx.annotation.StringRes
 import androidx.lifecycle.viewModelScope
 import com.factswallpaper.core.ai.AiErrorKind
@@ -20,9 +22,12 @@ import com.factswallpaper.core.model.RotationPoolSummary
 import com.factswallpaper.core.model.SmartViewCounts
 import com.factswallpaper.core.model.UserFolder
 import com.factswallpaper.core.render.CardPreRenderScheduler
+import com.factswallpaper.core.render.export.CardExportFormat
+import com.factswallpaper.core.render.export.CardExportService
 import com.factswallpaper.core.ui.FeatureViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.catch
@@ -76,6 +81,7 @@ class CollectionsViewModel @Inject constructor(
     rotationPoolRepository: RotationPoolRepository,
     private val preRenderScheduler: CardPreRenderScheduler,
     private val structuredAiService: StructuredAiService,
+    private val cardExportService: CardExportService,
 ) : FeatureViewModel() {
 
     private val membership = MutableStateFlow<MembershipEditorState?>(null)
@@ -202,6 +208,20 @@ class CollectionsViewModel @Inject constructor(
         }
     }
 
+    fun deleteCollectionWithUndo(collectionId: String, onUndoAvailable: (onUndo: () -> Unit) -> Unit) {
+        val job = viewModelScope.launch {
+            delay(5_000)
+            when (collectionRepository.deleteCollection(collectionId)) {
+                is AppResult.Success -> {
+                    preRenderScheduler.enqueue()
+                    showMessage(R.string.collections_deleted)
+                }
+                is AppResult.Failure -> showMessage(R.string.collections_delete_failed)
+            }
+        }
+        onUndoAvailable { job.cancel() }
+    }
+
     fun deleteFolder(folderId: String) {
         viewModelScope.launch {
             when (collectionRepository.deleteFolder(folderId)) {
@@ -212,6 +232,20 @@ class CollectionsViewModel @Inject constructor(
                 is AppResult.Failure -> showMessage(R.string.collections_delete_failed)
             }
         }
+    }
+
+    fun deleteFolderWithUndo(folderId: String, onUndoAvailable: (onUndo: () -> Unit) -> Unit) {
+        val job = viewModelScope.launch {
+            delay(5_000)
+            when (collectionRepository.deleteFolder(folderId)) {
+                is AppResult.Success -> {
+                    preRenderScheduler.enqueue()
+                    showMessage(R.string.collections_deleted)
+                }
+                is AppResult.Failure -> showMessage(R.string.collections_delete_failed)
+            }
+        }
+        onUndoAvailable { job.cancel() }
     }
 
     fun openMembership(targetType: MembershipTargetType, targetId: String, targetName: String) {
@@ -272,6 +306,29 @@ class CollectionsViewModel @Inject constructor(
                 showMessage(R.string.collections_members_saved)
             } catch (_: Throwable) {
                 membership.update { it?.copy(saving = false, errorRes = R.string.collections_members_failed) }
+            }
+        }
+    }
+
+    fun exportCollection(
+        collectionId: String,
+        format: CardExportFormat,
+        destinationUri: Uri,
+        context: Context,
+    ) {
+        viewModelScope.launch {
+            val result = runCatching {
+                val factIds = collectionRepository.observeCollectionFactIds(collectionId).first()
+                val allFacts = factRepository.observeFacts(FactFilter()).first()
+                val collectionFacts = allFacts.filter { it.id in factIds }
+                context.contentResolver.openOutputStream(destinationUri, "wt")?.use { out ->
+                    cardExportService.export(collectionFacts, format, out)
+                } ?: error("Failed to open output stream")
+            }
+            if (result.isSuccess) {
+                showMessage(R.string.collections_export_success)
+            } else {
+                showMessage(R.string.collections_export_failed)
             }
         }
     }
