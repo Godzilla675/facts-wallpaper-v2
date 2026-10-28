@@ -37,12 +37,16 @@ class AzureOpenAiClient(
         )
         var omitTemperature = !shouldSendTemperature(request)
         var includeFormat = request.jsonSchema != null && profile.supportsJsonSchema
+        var usePageTool = request.pageTool != null
         val schema = ChatCompletionsSupport.schemaFor(profile, request)
 
         suspend fun call(): AiResponse {
             val body = ChatCompletionsSupport.buildBody(
                 profile = profile,
-                request = if (omitTemperature) request.copy(temperature = null) else request,
+                request = request.copy(
+                    temperature = if (omitTemperature) null else request.temperature,
+                    pageTool = if (usePageTool) request.pageTool else null,
+                ),
                 includeResponseFormat = includeFormat,
                 schema = schema,
             )
@@ -57,6 +61,11 @@ class AzureOpenAiClient(
             ) {
                 omitTemperature = true
                 onTemperatureUnsupported()
+                call()
+            } else if (exception.statusCode == 400 && usePageTool &&
+                ChatCompletionsSupport.isToolRejection(exception.message)
+            ) {
+                usePageTool = false
                 call()
             } else if (exception.statusCode == 400 && includeFormat &&
                 ChatCompletionsSupport.isSchemaRejection(exception.message)

@@ -31,7 +31,9 @@ class OpenAiClient(
 ) {
 
     override suspend fun execute(request: AiRequest): AiResponse {
-        val useResponses = request.pdfBytes != null && profile.supportsPdfInput
+        val useResponses = request.pdfBytes != null &&
+            profile.supportsPdfInput &&
+            request.pageTool == null
         return if (useResponses) executeResponses(request) else executeChat(request)
     }
 
@@ -44,12 +46,16 @@ class OpenAiClient(
         var omitTemperature = !shouldSendTemperature(request)
         var includeFormat = request.jsonSchema != null &&
             (profile.supportsJsonSchema || profile.supportsJsonMode)
+        var usePageTool = request.pageTool != null
         val schema = ChatCompletionsSupport.schemaFor(profile, request)
 
         suspend fun call(): AiResponse {
             val body = ChatCompletionsSupport.buildBody(
                 profile = profile,
-                request = if (omitTemperature) request.copy(temperature = null) else request,
+                request = request.copy(
+                    temperature = if (omitTemperature) null else request.temperature,
+                    pageTool = if (usePageTool) request.pageTool else null,
+                ),
                 includeResponseFormat = includeFormat,
                 schema = schema,
             )
@@ -64,6 +70,11 @@ class OpenAiClient(
             ) {
                 omitTemperature = true
                 onTemperatureUnsupported()
+                call()
+            } else if (exception.statusCode == 400 && usePageTool &&
+                ChatCompletionsSupport.isToolRejection(exception.message)
+            ) {
+                usePageTool = false
                 call()
             } else if (exception.statusCode == 400 && includeFormat &&
                 ChatCompletionsSupport.isSchemaRejection(exception.message)

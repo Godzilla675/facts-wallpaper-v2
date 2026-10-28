@@ -298,8 +298,59 @@ Rules:
         appendSuffix(suffix)
     }
 
-    fun repairUserPrompt(schema: String, malformed: String): String = buildString {
-        append("Target JSON Schema:\n")
+    fun factsPageToolUserPrompt(
+        lessonTitle: String,
+        material: String,
+        density: FactDensity,
+        includeFormulas: Boolean,
+        includeDiagrams: Boolean,
+        documentPageCount: Int,
+        includedPages: List<Int>,
+        feedback: List<PageToolFeedback> = emptyList(),
+        suffix: String? = null,
+    ): String = buildString {
+        append(
+            factsUserPromptFromText(
+                lessonTitle = lessonTitle,
+                material = material,
+                density = density,
+                includeFormulas = includeFormulas,
+                includeDiagrams = includeDiagrams,
+            ),
+        )
+        appendLine()
+        appendLine(
+            "The document has $documentPageCount pages. The material above is the current lesson selection" +
+                if (includedPages.isEmpty()) {
+                    "."
+                } else {
+                    " (pages ${includedPages.joinToString(", ")})."
+                },
+        )
+        appendLine(
+            "If the selected pages are not enough, call the `$PAGE_TOOL_NAME` tool to fetch up to " +
+                "$DEFAULT_PAGE_TOOL_PAGE_LIMIT additional pages. Request only pages that are not already " +
+                "included above. Otherwise return the facts JSON now without calling a tool.",
+        )
+        if (feedback.isNotEmpty()) {
+            appendLine("Previous page tool calls:")
+            feedback.forEach { item ->
+                if (item.error != null) {
+                    appendLine(
+                        "- Pages ${item.startPage}-${item.endPage} were rejected: ${item.error} " +
+                            "Do not repeat that exact request.",
+                    )
+                } else {
+                    appendLine(
+                        "- Pages ${item.startPage}-${item.endPage} were fetched and are included above.",
+                    )
+                }
+            }
+        }
+        appendSuffix(suffix)
+    }
+
+    fun repairUserPrompt(schema: String, malformed: String): String = buildString {        append("Target JSON Schema:\n")
         append(schema)
         append("\n\nMalformed response:\n")
         append(malformed.take(24_000))

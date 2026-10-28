@@ -127,6 +127,7 @@ class DataStoreSettingsRepositoryTest {
         repository.setEnableAiDiagnosticsLog(false)
         repository.setEnableDoubleTapWallpaperAdvance(true)
         repository.setHapticsEnabled(false)
+        repository.setPageToolCallsEnabled(false)
 
         val stored = preferences()
         assertThat(stored.allowAdvancedOcrEngines).isTrue()
@@ -134,6 +135,7 @@ class DataStoreSettingsRepositoryTest {
         assertThat(stored.enableAiDiagnosticsLog).isFalse()
         assertThat(stored.enableDoubleTapWallpaperAdvance).isTrue()
         assertThat(stored.hapticsEnabled).isFalse()
+        assertThat(stored.pageToolCallsEnabled).isFalse()
     }
 
     @Test

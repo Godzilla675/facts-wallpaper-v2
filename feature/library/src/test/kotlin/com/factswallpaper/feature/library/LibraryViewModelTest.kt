@@ -352,6 +352,7 @@ internal class FakeSettingsRepository : SettingsRepository {
     override suspend fun setDailyFactNotificationTime(timeMinutes: Int) = Unit
     override suspend fun setDynamicColorEnabled(enabled: Boolean) = Unit
     override suspend fun setHapticsEnabled(enabled: Boolean) = Unit
+    override suspend fun setPageToolCallsEnabled(enabled: Boolean) = Unit
     override suspend fun setLibraryCoachHintDismissed(dismissed: Boolean) = Unit
     override suspend fun setOutlineCoachHintDismissed(dismissed: Boolean) = Unit
 }

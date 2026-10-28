@@ -393,6 +393,13 @@ class AdvancedSettingsViewModel @Inject constructor(
             showMessage(R.string.advanced_saved)
         }
     }
+
+    fun setPageToolCallsEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setPageToolCallsEnabled(enabled)
+            showMessage(R.string.advanced_saved)
+        }
+    }
 }
 
 private fun backupErrorDetail(result: AppResult.Failure): String =

@@ -166,6 +166,8 @@
     <string name="advanced_pipeline_helper">Monitor and manage document extraction and lesson generation jobs.</string>
     <string name="advanced_whats_happening">What&#8217;s happening</string>
     <string name="advanced_whats_happening_action">View queue &amp; status</string>
+    <string name="advanced_page_tools">AI page tools</string>
+    <string name="advanced_page_tools_helper">Let supported models fetch extra document pages when a lesson is incomplete. Turn off to send only the lesson pages.</string>
 
     <string name="advanced_data_title">Data &amp; Backup</string>
     <string name="advanced_data_helper">Encrypted .fwbk archives use AES-256 and your passphrase. Choose device storage, Google Drive, or another document provider.</string>

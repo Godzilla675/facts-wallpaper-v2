@@ -62,6 +62,7 @@ data class FactsGenerationResult(
     val estimatedCostUsd: Double,
     val actualCostUsd: Double,
     val repairUsed: Boolean,
+    val pageRequest: PageRange? = null,
 )
 
 data class DiagramGenerationResult(
@@ -154,6 +155,41 @@ interface StructuredAiService {
         documentId = documentId,
         lessonTitle = lessonTitle,
         pages = emptyList(),
+        documentPageCount = documentPageCount,
+        density = density,
+        includeFormulas = includeFormulas,
+        includeDiagrams = includeDiagrams,
+        manualProfileId = manualProfileId,
+        existingFactTexts = existingFactTexts,
+        extraInstruction = extraInstruction,
+        progress = progress,
+    )
+
+    /**
+     * Facts generation with the native `get_pages` loop. The default delegates
+     * to [generateFacts] so fakes and older clients keep working; the bundled
+     * implementation sends a single tool-enabled request and returns a
+     * [FactsGenerationResult.pageRequest] when the model wants more pages.
+     */
+    suspend fun generateFactsWithPageTool(
+        documentId: String?,
+        lessonTitle: String,
+        pages: List<PageText>,
+        documentPageCount: Int,
+        density: FactDensity,
+        includeFormulas: Boolean,
+        includeDiagrams: Boolean,
+        manualProfileId: String? = null,
+        existingFactTexts: List<String> = emptyList(),
+        extraInstruction: String? = null,
+        pageFeedback: List<PageToolFeedback> = emptyList(),
+        progress: ((completed: Int, total: Int) -> Unit)? = null,
+    ): FactsGenerationResult = generateFacts(
+        documentId = documentId,
+        lessonTitle = lessonTitle,
+        pages = (pages + pageFeedback.flatMap { it.pages })
+            .distinctBy { it.pageNumber }
+            .sortedBy { it.pageNumber },
         documentPageCount = documentPageCount,
         density = density,
         includeFormulas = includeFormulas,
@@ -618,6 +654,230 @@ class DefaultStructuredAiService @Inject constructor(
             estimatedCostUsd = estimate.estimatedCostUsd,
             actualCostUsd = actualCost,
             repairUsed = repairUsed,
+        )
+    }
+
+    override suspend fun generateFactsWithPageTool(
+        documentId: String?,
+        lessonTitle: String,
+        pages: List<PageText>,
+        documentPageCount: Int,
+        density: FactDensity,
+        includeFormulas: Boolean,
+        includeDiagrams: Boolean,
+        manualProfileId: String?,
+        existingFactTexts: List<String>,
+        extraInstruction: String?,
+        pageFeedback: List<PageToolFeedback>,
+        progress: ((completed: Int, total: Int) -> Unit)?,
+    ): FactsGenerationResult {
+        val mergedPages = (pages + pageFeedback.flatMap { it.pages })
+            .filter { it.text.isNotBlank() }
+            .distinctBy { it.pageNumber }
+            .sortedBy { it.pageNumber }
+        if (mergedPages.isEmpty()) {
+            throw AiException(
+                AiErrorKind.INVALID_REQUEST,
+                "No extracted text is available for this lesson. Run OCR first.",
+            )
+        }
+        val baseRequest = factsRequest(
+            lessonTitle = lessonTitle,
+            material = "",
+            density = density,
+            includeFormulas = includeFormulas,
+            includeDiagrams = includeDiagrams,
+            extraInstruction = extraInstruction,
+        )
+        val profile = callService.resolveProfile(
+            request = baseRequest,
+            requireDirectPdf = false,
+            manualProfileId = manualProfileId,
+        )
+        if (!profile.providerType.supportsNativePageTool) {
+            val fallback = generateFacts(
+                documentId = documentId,
+                lessonTitle = lessonTitle,
+                pages = mergedPages,
+                documentPageCount = documentPageCount,
+                density = density,
+                includeFormulas = includeFormulas,
+                includeDiagrams = includeDiagrams,
+                manualProfileId = manualProfileId,
+                existingFactTexts = existingFactTexts,
+                extraInstruction = extraInstruction,
+                progress = progress,
+            )
+            return fallback.copy(
+                warnings = (
+                    fallback.warnings +
+                        "${profile.name} does not support AI page tools; used the lesson pages directly."
+                    ).distinct().take(20),
+            )
+        }
+
+        val userPrompt = AiPrompts.factsPageToolUserPrompt(
+            lessonTitle = lessonTitle,
+            material = TextChunker.formatPages(mergedPages),
+            density = density,
+            includeFormulas = includeFormulas,
+            includeDiagrams = includeDiagrams,
+            documentPageCount = documentPageCount,
+            includedPages = mergedPages.map { it.pageNumber },
+            feedback = pageFeedback,
+            suffix = extraInstruction,
+        )
+        val promptTokens = CostEstimator.estimateTextTokens(
+            AiPrompts.FactsSystemPrompt + userPrompt,
+        )
+        if (promptTokens > (profile.maxContextTokens * 0.9).toInt()) {
+            val fallback = generateFacts(
+                documentId = documentId,
+                lessonTitle = lessonTitle,
+                pages = mergedPages,
+                documentPageCount = documentPageCount,
+                density = density,
+                includeFormulas = includeFormulas,
+                includeDiagrams = includeDiagrams,
+                manualProfileId = manualProfileId,
+                existingFactTexts = existingFactTexts,
+                extraInstruction = extraInstruction,
+                progress = progress,
+            )
+            return fallback.copy(
+                warnings = (
+                    fallback.warnings +
+                        "The page-tool request exceeded the profile context budget; " +
+                        "used the chunked pipeline instead."
+                    ).distinct().take(20),
+                estimatedCostUsd = if (pageFeedback.isEmpty()) {
+                    fallback.estimatedCostUsd
+                } else {
+                    0.0
+                },
+            )
+        }
+        val estimatedCostUsd = if (pageFeedback.isEmpty()) {
+            estimateFactsCostUsd(
+                profile = profile,
+                lessonTitle = lessonTitle,
+                pages = mergedPages,
+                density = density,
+                includeFormulas = includeFormulas,
+                includeDiagrams = includeDiagrams,
+            ).estimatedCostUsd
+        } else {
+            0.0
+        }
+        val request = AiRequest(
+            task = AiTask.FACTS,
+            systemPrompt = AiPrompts.FactsSystemPrompt,
+            userPrompt = userPrompt,
+            jsonSchema = AiSchemas.FactsJsonSchema,
+            temperature = 0.3,
+            maxOutputTokens = profile.initialOutputTokenBudget(),
+            pageTool = PageToolRequest(
+                documentPageCount = documentPageCount,
+                availablePageNumbers = mergedPages.map { it.pageNumber },
+            ),
+        )
+        var outcome = callService.execute(
+            request = request,
+            documentId = documentId,
+            manualProfileId = manualProfileId,
+        )
+        var actualCost = outcomeCost(outcome)
+        var usedFailover = outcome.usedFailover
+        val maxFacts = density.maxFactsPerLesson
+
+        fun pageRequestResult(range: PageRange): FactsGenerationResult = FactsGenerationResult(
+            facts = emptyList(),
+            warnings = emptyList(),
+            profile = outcome.profile,
+            usedFailover = usedFailover,
+            estimatedCostUsd = estimatedCostUsd,
+            actualCostUsd = actualCost,
+            repairUsed = false,
+            pageRequest = range,
+        )
+
+        outcome.response.requestedPageRange?.let { return pageRequestResult(it) }
+        var validation = validator.validateFacts(
+            raw = outcome.response.text,
+            pageCount = documentPageCount,
+            maxFacts = maxFacts,
+        )
+        if (!validation.isValid) {
+            val retry = retryTruncatedJson(
+                outcome = outcome,
+                request = request,
+                documentId = documentId,
+            ) { raw ->
+                validator.validateFacts(
+                    raw = raw,
+                    pageCount = documentPageCount,
+                    maxFacts = maxFacts,
+                ).isValid
+            }
+            if (retry != null) {
+                outcome = retry
+                actualCost += outcomeCost(retry)
+                usedFailover = usedFailover || retry.usedFailover
+                retry.response.requestedPageRange?.let { return pageRequestResult(it) }
+                validation = validator.validateFacts(
+                    raw = retry.response.text,
+                    pageCount = documentPageCount,
+                    maxFacts = maxFacts,
+                )
+            }
+        }
+        var repairUsed = false
+        if (!validation.isValid) {
+            repairUsed = true
+            val repaired = runCatching {
+                repairService.repair(
+                    profile = outcome.profile,
+                    canonicalSchema = AiSchemas.FactsJsonSchema,
+                    malformed = outcome.response.text,
+                )
+            }.getOrNull()
+            if (repaired != null) {
+                actualCost += outcomeCost(repaired)
+                validation = validator.validateFacts(
+                    raw = repaired.response.text,
+                    pageCount = documentPageCount,
+                    maxFacts = maxFacts,
+                )
+            }
+        }
+
+        val facts = validation.value
+        if (facts == null) {
+            callService.recordContentFailure(
+                task = AiTask.FACTS,
+                profile = outcome.profile,
+                rawResponse = outcome.response.text,
+                message = validation.errors.joinToString("; "),
+            )
+            throw AiException(
+                AiErrorKind.CONTENT,
+                "The provider returned no usable facts after a budget retry and one repair attempt.",
+            )
+        }
+        progress?.invoke(1, 1)
+        return FactsGenerationResult(
+            facts = TextChunker.deduplicate(
+                facts = facts,
+                threshold = 0.82,
+                existing = existingFactTexts,
+            ),
+            warnings = validation.errors.distinct().take(20),
+            profile = outcome.profile,
+            usedFailover = usedFailover,
+            estimatedCostUsd = estimatedCostUsd,
+            actualCostUsd = actualCost,
+            repairUsed = repairUsed,
+            pageRequest = null,
         )
     }
 

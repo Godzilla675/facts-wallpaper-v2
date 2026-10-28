@@ -21,6 +21,7 @@ data class AiRequest(
     val jsonSchema: String? = null,
     val temperature: Double? = 0.2,
     val maxOutputTokens: Int = 8_192,
+    val pageTool: PageToolRequest? = null,
 ) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -36,7 +37,8 @@ data class AiRequest(
             images.indices.all { images[it].contentEquals(other.images[it]) } &&
             jsonSchema == other.jsonSchema &&
             temperature == other.temperature &&
-            maxOutputTokens == other.maxOutputTokens
+            maxOutputTokens == other.maxOutputTokens &&
+            pageTool == other.pageTool
     }
 
     override fun hashCode(): Int {
@@ -51,6 +53,7 @@ data class AiRequest(
         result = 31 * result + (jsonSchema?.hashCode() ?: 0)
         result = 31 * result + (temperature?.hashCode() ?: 0)
         result = 31 * result + maxOutputTokens
+        result = 31 * result + (pageTool?.hashCode() ?: 0)
         return result
     }
 }
@@ -64,6 +67,7 @@ data class AiResponse(
     val finishReason: String? = null,
     val rawUsageJson: String? = null,
     val reasoningText: String = "",
+    val requestedPageRange: PageRange? = null,
 )
 
 internal const val MIN_OUTPUT_TOKENS = 1_024

@@ -1,8 +1,13 @@
 package com.factswallpaper.feature.wallpaper
 
+import android.Manifest
 import android.app.WallpaperManager
 import android.content.ComponentName
 import android.content.Context
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -164,8 +169,20 @@ private fun WallpaperContent(
 ) {
     val spacing = LocalSpacing.current
     val haptic = rememberHapticFeedback()
+    val context = LocalContext.current
     val wallpaper = state.wallpaper
     val prefs = state.preferences
+    val notificationPermission = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { }
+    val requestNotificationPermission = {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
 
     var showQuietHoursDialog by remember { mutableStateOf(false) }
     var showNotificationTimeDialog by remember { mutableStateOf(false) }
@@ -317,7 +334,10 @@ private fun WallpaperContent(
                     title = stringResource(R.string.wallpaper_notification_toggle),
                     subtitle = stringResource(R.string.wallpaper_notification_time, notifH, notifM),
                     checked = prefs.dailyFactNotificationEnabled,
-                    onCheckedChange = onDailyNotificationEnabledChange,
+                    onCheckedChange = { enabled ->
+                        if (enabled) requestNotificationPermission()
+                        onDailyNotificationEnabledChange(enabled)
+                    },
                 )
 
                 if (prefs.dailyFactNotificationEnabled) {

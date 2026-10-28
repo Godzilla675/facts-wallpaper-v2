@@ -211,6 +211,7 @@ fun AdvancedSettingsScreen(
                 onThemeModeChange = viewModel::setAppThemeMode,
                 onDynamicColorChange = viewModel::setDynamicColorEnabled,
                 onHapticsChange = viewModel::setHapticsEnabled,
+                onPageToolCallsChange = viewModel::setPageToolCallsEnabled,
                 listState = listState,
                 modifier = Modifier.padding(padding),
             )
@@ -383,6 +384,7 @@ private fun AdvancedContent(
     onThemeModeChange: (ThemeMode) -> Unit,
     onDynamicColorChange: (Boolean) -> Unit,
     onHapticsChange: (Boolean) -> Unit,
+    onPageToolCallsChange: (Boolean) -> Unit,
     listState: androidx.compose.foundation.lazy.LazyListState,
     modifier: Modifier = Modifier,
 ) {
@@ -446,6 +448,12 @@ private fun AdvancedContent(
                     title = stringResource(R.string.advanced_whats_happening),
                     value = stringResource(R.string.advanced_whats_happening_action),
                     onClick = onOpenWhatsHappening,
+                )
+                SettingSwitchRow(
+                    title = stringResource(R.string.advanced_page_tools),
+                    subtitle = stringResource(R.string.advanced_page_tools_helper),
+                    checked = prefs.pageToolCallsEnabled,
+                    onCheckedChange = onPageToolCallsChange,
                 )
             }
         }

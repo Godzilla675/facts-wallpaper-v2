@@ -104,7 +104,7 @@ object SettingsSearchCatalog {
             id = "pipeline",
             titleRes = R.string.advanced_pipeline_title,
             summaryRes = R.string.advanced_pipeline_helper,
-            keywords = "pipeline background processing jobs activity whats happening pause resume retry",
+            keywords = "pipeline background processing jobs activity whats happening pause resume retry page tools get_pages tool calling",
             destination = SettingsDestination.ADVANCED,
             advancedSection = AdvancedSection.PIPELINE,
         ),

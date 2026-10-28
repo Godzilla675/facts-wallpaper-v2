@@ -4,6 +4,8 @@ import com.factswallpaper.core.ai.AiException
 import com.factswallpaper.core.ai.AiRequest
 import com.factswallpaper.core.ai.AiResponse
 import com.factswallpaper.core.ai.AiSchemas
+import com.factswallpaper.core.ai.PageRange
+import com.factswallpaper.core.ai.PAGE_TOOL_NAME
 import com.factswallpaper.core.ai.SchemaAdapter
 import com.factswallpaper.core.model.ProviderProfile
 import com.factswallpaper.core.model.ProviderType
@@ -43,29 +45,36 @@ class GeminiClient(
             supportsJsonSchema = profile.supportsJsonSchema,
             canonicalSchema = request.jsonSchema ?: AiSchemas.OutlineJsonSchema,
         ).takeIf { request.jsonSchema != null && profile.supportsJsonSchema }
+        var usePageTool = request.pageTool != null
 
-        suspend fun call(useSchema: Boolean): AiResponse {
-            val body = buildBody(request, omitTemperature, if (useSchema) schema else null)
+        suspend fun call(): AiResponse {
+            val effectiveSchema = if (usePageTool) null else schema
+            val body = buildBody(request, omitTemperature, effectiveSchema, usePageTool)
             val text = post(url, headers, body)
             return parse(text)
         }
 
         return try {
-            call(schema != null)
+            call()
         } catch (exception: AiException) {
             if (exception.statusCode == 400 && !omitTemperature &&
                 exception.message.contains("temperature", ignoreCase = true)
             ) {
                 omitTemperature = true
                 onTemperatureUnsupported()
-                call(schema != null)
+                call()
+            } else if (exception.statusCode == 400 && usePageTool &&
+                ChatCompletionsSupport.isToolRejection(exception.message)
+            ) {
+                usePageTool = false
+                call()
             } else if (exception.statusCode == 400 && schema != null &&
                 (exception.message.contains("responseSchema", ignoreCase = true) ||
                     exception.message.contains("schema", ignoreCase = true))
             ) {
                 schema = null
                 onResponseFormatUnsupported()
-                call(false)
+                call()
             } else {
                 throw exception
             }
@@ -76,6 +85,7 @@ class GeminiClient(
         request: AiRequest,
         omitTemperature: Boolean,
         schema: String?,
+        usePageTool: Boolean,
     ): String {
         val systemPrompt = if (request.jsonSchema != null && schema == null) {
             SchemaAdapter.embedSchema(request.systemPrompt, request.jsonSchema)
@@ -156,6 +166,12 @@ class GeminiClient(
                     }
                 },
             )
+            if (usePageTool) {
+                put(
+                    "tools",
+                    buildJsonArray { add(PageToolSupport.geminiToolJson()) },
+                )
+            }
         }
         return RequestParameterOverrides.apply(
             profile = profile,
@@ -180,6 +196,7 @@ class GeminiClient(
             (it["thought"] as? JsonPrimitive)?.booleanOrNull == true
         }.mapNotNull { it.string("text") }
         val parsed = ProviderReasoningParser.parse(content, reasoning)
+        val pageRange = parsePageToolCall(parts)
         val finish = candidate?.string("finishReason")
         val usage = root.obj("usageMetadata")
         val input = usage?.int("promptTokenCount") ?: 0
@@ -192,6 +209,26 @@ class GeminiClient(
             outputTokens = output,
             finishReason = finish,
             reasoningText = parsed.reasoning,
+            requestedPageRange = pageRange,
+        )
+    }
+
+    private fun parsePageToolCall(parts: List<JsonObject>): PageRange? {
+        val functionCall = parts
+            .mapNotNull { it.obj("functionCall") }
+            .firstOrNull { it.string("name") == PAGE_TOOL_NAME }
+            ?: return null
+        val arguments = functionCall["args"]
+        val payload = when (arguments) {
+            is JsonObject -> arguments
+            is JsonPrimitive -> runCatching {
+                ProviderJson.parseToJsonElement(arguments.content).asObject()
+            }.getOrNull()
+            else -> null
+        }
+        return PageToolSupport.parseRange(payload) ?: throw AiException(
+            com.factswallpaper.core.ai.AiErrorKind.CONTENT,
+            "The model requested pages but the get_pages arguments were invalid.",
         )
     }
 

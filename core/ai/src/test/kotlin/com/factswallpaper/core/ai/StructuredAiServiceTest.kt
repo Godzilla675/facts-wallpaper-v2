@@ -127,6 +127,104 @@ class StructuredAiServiceTest {
     }
 
     @Test
+    fun `page tool request returns the requested range without validating facts`() = runTest {
+        var calls = 0
+        var body = ""
+        val profile = testProfile(
+            type = ProviderType.OPENAI,
+            model = "gpt-test",
+            context = 100_000,
+        )
+        val (service, usage, _) = buildService(profile) { request ->
+            calls++
+            body = request.body.toByteArray().decodeToString()
+            respond(
+                content = """
+                    {
+                      "model": "gpt-test",
+                      "choices": [{
+                        "message": {
+                          "content": null,
+                          "tool_calls": [{
+                            "type": "function",
+                            "function": {
+                              "name": "get_pages",
+                              "arguments": "{\"start_page\":4,\"end_page\":6}"
+                            }
+                          }]
+                        },
+                        "finish_reason": "tool_calls"
+                      }],
+                      "usage": { "prompt_tokens": 70, "completion_tokens": 8 }
+                    }
+                """.trimIndent(),
+                status = HttpStatusCode.OK,
+                headers = jsonHeaders(),
+            )
+        }
+
+        val result = service.generateFactsWithPageTool(
+            documentId = "doc-1",
+            lessonTitle = "Thermodynamics",
+            pages = listOf(PageText(1, "Entropy never decreases in an isolated system.")),
+            documentPageCount = 20,
+            density = FactDensity.BALANCED,
+            includeFormulas = false,
+            includeDiagrams = false,
+        )
+
+        assertThat(calls).isEqualTo(1)
+        assertThat(result.pageRequest).isEqualTo(PageRange(4, 6))
+        assertThat(result.facts).isEmpty()
+        assertThat(body).contains("get_pages")
+        assertThat(body).contains("\"tools\"")
+        assertThat(usage.entries.single().taskType).isEqualTo(AiTask.FACTS)
+    }
+
+    @Test
+    fun `page tool feedback and fetched pages reach the follow up request`() = runTest {
+        var body = ""
+        val profile = testProfile(
+            type = ProviderType.OPENAI,
+            model = "gpt-test",
+            context = 100_000,
+        )
+        val (service, _, _) = buildService(profile) { request ->
+            body = request.body.toByteArray().decodeToString()
+            respond(
+                content = chatEnvelope(
+                    validFactJson("Entropy measures the disorder of an isolated system."),
+                ),
+                status = HttpStatusCode.OK,
+                headers = jsonHeaders(),
+            )
+        }
+
+        val result = service.generateFactsWithPageTool(
+            documentId = "doc-1",
+            lessonTitle = "Thermodynamics",
+            pages = listOf(PageText(1, "Entropy never decreases in an isolated system.")),
+            documentPageCount = 20,
+            density = FactDensity.BALANCED,
+            includeFormulas = false,
+            includeDiagrams = false,
+            pageFeedback = listOf(
+                PageToolFeedback(
+                    startPage = 4,
+                    endPage = 6,
+                    pages = listOf(PageText(4, "Extra entropy material from page four.")),
+                ),
+            ),
+        )
+
+        assertThat(result.pageRequest).isNull()
+        assertThat(result.facts).hasSize(1)
+        assertThat(body).contains("Pages 4-6 were fetched and are included above")
+        assertThat(body).contains("Extra entropy material from page four.")
+        assertThat(body).contains("get_pages")
+    }
+
+    @Test
     fun `truncated length response retries once with doubled output budget before repair`() = runTest {
         var calls = 0
         val budgets = mutableListOf<String>()

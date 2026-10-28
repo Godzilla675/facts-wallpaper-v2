@@ -5,6 +5,8 @@ import com.factswallpaper.core.ai.AiException
 import com.factswallpaper.core.ai.AiRequest
 import com.factswallpaper.core.ai.AiResponse
 import com.factswallpaper.core.ai.AiSchemas
+import com.factswallpaper.core.ai.PageRange
+import com.factswallpaper.core.ai.PAGE_TOOL_NAME
 import com.factswallpaper.core.ai.SchemaAdapter
 import com.factswallpaper.core.model.AiTask
 import com.factswallpaper.core.model.ProviderProfile
@@ -26,8 +28,9 @@ internal object ChatCompletionsSupport {
         includeResponseFormat: Boolean,
         schema: String?,
     ): String {
+        val includeFormat = includeResponseFormat && request.pageTool == null
         val systemPrompt = if (request.jsonSchema != null &&
-            (!includeResponseFormat || schema == null)
+            (!includeFormat || schema == null)
         ) {
             SchemaAdapter.embedSchema(request.systemPrompt, request.jsonSchema)
         } else {
@@ -102,7 +105,7 @@ internal object ChatCompletionsSupport {
                     put("reasoning_effort", "minimal")
                 }
             }
-            if (request.jsonSchema != null && includeResponseFormat) {
+            if (request.jsonSchema != null && includeFormat) {
                 when {
                     schema != null -> put(
                         "response_format",
@@ -123,6 +126,12 @@ internal object ChatCompletionsSupport {
                         buildJsonObject { put("type", "json_object") },
                     )
                 }
+            }
+            if (request.pageTool != null) {
+                put(
+                    "tools",
+                    buildJsonArray { add(PageToolSupport.openAiToolJson()) },
+                )
             }
         }
         return RequestParameterOverrides.apply(
@@ -160,6 +169,7 @@ internal object ChatCompletionsSupport {
             root["reasoning"],
         ).mapNotNull(ProviderReasoningParser::jsonText)
         val parsed = ProviderReasoningParser.parse(content, reasoningFields)
+        val pageRange = parsePageToolCall(message)
         val finish = choice?.string("finish_reason")
         val usage = root.obj("usage")
         val completionTokens = usage?.int("completion_tokens") ?: 0
@@ -174,7 +184,34 @@ internal object ChatCompletionsSupport {
             outputTokens = maxOf(completionTokens, reasoningTokens),
             finishReason = finish,
             reasoningText = parsed.reasoning,
+            requestedPageRange = pageRange,
         )
+    }
+
+    private fun parsePageToolCall(message: JsonObject?): PageRange? {
+        val function = message?.arr("tool_calls")
+            ?.objects()
+            .orEmpty()
+            .mapNotNull { it.obj("function") }
+            .firstOrNull { it.string("name") == PAGE_TOOL_NAME }
+            ?: return null
+        val arguments = function["arguments"]
+        val payload = when (arguments) {
+            is JsonObject -> arguments
+            is JsonPrimitive -> runCatching {
+                ProviderJson.parseToJsonElement(arguments.content).asObject()
+            }.getOrNull()
+            else -> null
+        }
+        return PageToolSupport.parseRange(payload) ?: throw AiException(
+            AiErrorKind.CONTENT,
+            "The model requested pages but the get_pages arguments were invalid.",
+        )
+    }
+
+    fun isToolRejection(message: String): Boolean {
+        val lower = message.lowercase()
+        return lower.contains("tool") || lower.contains("function")
     }
 
     fun isSchemaRejection(message: String): Boolean {

@@ -543,6 +543,100 @@ class WireFormatTest {
     }
 
     @Test
+    fun `openai chat get_pages call returns a range and embeds the schema`() = runTest {
+        var captured: HttpRequestData? = null
+        val client = mockHttpClient { data ->
+            captured = data
+            respond(
+                content = """
+                    {
+                      "model": "gpt-test",
+                      "choices": [{
+                        "message": {
+                          "role": "assistant",
+                          "content": null,
+                          "tool_calls": [{
+                            "id": "call_1",
+                            "type": "function",
+                            "function": {
+                              "name": "get_pages",
+                              "arguments": "{\"start_page\":3,\"end_page\":5}"
+                            }
+                          }]
+                        },
+                        "finish_reason": "tool_calls"
+                      }],
+                      "usage": { "prompt_tokens": 90, "completion_tokens": 12 }
+                    }
+                """.trimIndent(),
+                status = HttpStatusCode.OK,
+                headers = jsonHeaders(),
+            )
+        }
+        val profile = testProfile(type = ProviderType.OPENAI, model = "gpt-test")
+
+        val response = OpenAiClient(profile, "sk-test", client).execute(
+            request().copy(pageTool = PageToolRequest(documentPageCount = 12)),
+        )
+
+        val body = json.parseToJsonElement(captured!!.body.toByteArray().decodeToString()).jsonObject
+        val tool = body["tools"]!!.jsonArray[0].jsonObject
+        assertThat(tool["type"]!!.jsonPrimitive.content).isEqualTo("function")
+        assertThat(tool["function"]!!.jsonObject["name"]!!.jsonPrimitive.content)
+            .isEqualTo("get_pages")
+        assertThat(body.containsKey("response_format")).isFalse()
+        assertThat(
+            body["messages"]!!.jsonArray[0].jsonObject["content"]!!.jsonPrimitive.content,
+        ).contains("lessons")
+        assertThat(response.requestedPageRange).isEqualTo(PageRange(3, 5))
+        assertThat(response.finishReason).isEqualTo("tool_calls")
+    }
+
+    @Test
+    fun `gemini function call returns a range and embeds the schema`() = runTest {
+        var captured: HttpRequestData? = null
+        val client = mockHttpClient { data ->
+            captured = data
+            respond(
+                content = """
+                    {
+                      "candidates": [{
+                        "content": {
+                          "parts": [{
+                            "functionCall": {
+                              "name": "get_pages",
+                              "args": { "start_page": 7, "endPage": 9 }
+                            }
+                          }]
+                        },
+                        "finishReason": "STOP"
+                      }],
+                      "usageMetadata": { "promptTokenCount": 80, "candidatesTokenCount": 9 }
+                    }
+                """.trimIndent(),
+                status = HttpStatusCode.OK,
+                headers = jsonHeaders(),
+            )
+        }
+        val profile = testProfile(type = ProviderType.GEMINI, model = "gemini-test")
+
+        val response = GeminiClient(profile, "test-key", client).execute(
+            request().copy(pageTool = PageToolRequest(documentPageCount = 20)),
+        )
+
+        val body = json.parseToJsonElement(captured!!.body.toByteArray().decodeToString()).jsonObject
+        val declarations = body["tools"]!!.jsonArray[0].jsonObject["functionDeclarations"]!!
+            .jsonArray[0].jsonObject
+        assertThat(declarations["name"]!!.jsonPrimitive.content).isEqualTo("get_pages")
+        assertThat(body["generationConfig"]!!.jsonObject.containsKey("responseSchema")).isFalse()
+        assertThat(
+            body["systemInstruction"]!!.jsonObject["parts"]!!.jsonArray[0].jsonObject["text"]!!
+                .jsonPrimitive.content,
+        ).contains("lessons")
+        assertThat(response.requestedPageRange).isEqualTo(PageRange(7, 9))
+    }
+
+    @Test
     fun `http errors map to the documented taxonomy`() {
         assertThat(AiException.fromHttp(401, "").kind).isEqualTo(AiErrorKind.AUTHENTICATION)
         assertThat(AiException.fromHttp(404, "").kind).isEqualTo(AiErrorKind.NOT_FOUND)
