@@ -141,6 +141,8 @@ class OutlineViewModelTest {
         val content = state as OutlineUiState.Content
         assertThat(content.document.title).isEqualTo("Physics Textbook")
         assertThat(content.lessons).containsExactly(lesson)
+        // The screen is scoped to the document from SavedStateHandle, not to every lesson.
+        assertThat(fakeLessonRepo.observedDocumentIds).contains("doc-1")
     }
 
     @Test
@@ -290,8 +292,12 @@ private class FakeNetworkMonitor : NetworkMonitor {
 
 private class FakeLessonRepository : LessonRepository {
     val lessonsFlow = MutableStateFlow<List<Lesson>>(emptyList())
+    val observedDocumentIds = mutableListOf<String>()
 
-    override fun observeLessons(documentId: String): Flow<List<Lesson>> = lessonsFlow
+    override fun observeLessons(documentId: String): Flow<List<Lesson>> {
+        observedDocumentIds += documentId
+        return lessonsFlow
+    }
     override fun observeLesson(lessonId: String): Flow<Lesson?> =
         MutableStateFlow(lessonsFlow.value.firstOrNull { it.id == lessonId })
     override suspend fun getLessons(documentId: String): List<Lesson> = lessonsFlow.value

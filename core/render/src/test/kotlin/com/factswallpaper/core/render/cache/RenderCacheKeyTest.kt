@@ -34,12 +34,10 @@ class RenderCacheKeyTest {
             "renderEngineVersion" to createKey(renderEngineVersion = "3"),
         )
 
-        variants.forEach { (label, key) ->
-            assertThat("$label changed the cache key: $key").isNotEmpty()
-        }
         variants.forEach { (_, key) ->
             assertThat(key).isNotEqualTo(baseline)
             assertThat(key).hasLength(64)
+            assertThat(key).matches("[0-9a-f]{64}")
         }
         assertThat(variants.map { it.second } + baseline).containsNoDuplicates()
     }

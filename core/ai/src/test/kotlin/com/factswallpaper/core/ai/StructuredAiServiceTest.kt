@@ -122,8 +122,10 @@ class StructuredAiServiceTest {
             AiTask.JSON_REPAIR,
         ).inOrder()
         assertThat(usage.entries.first().documentId).isEqualTo("doc-1")
-        assertThat(result.actualCostUsd).isAtLeast(0.0)
-        assertThat(result.estimatedCostUsd).isAtLeast(0.0)
+        // Two calls at prompt 100 / completion 50 tokens, priced 1.0 and 2.0 USD per
+        // million: (100 * 1.0 + 50 * 2.0) / 1e6 = 0.0002 each.
+        assertThat(result.actualCostUsd).isWithin(1e-9).of(0.0004)
+        assertThat(result.estimatedCostUsd).isGreaterThan(0.0)
     }
 
     @Test

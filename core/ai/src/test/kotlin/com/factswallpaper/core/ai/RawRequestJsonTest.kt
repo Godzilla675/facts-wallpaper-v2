@@ -41,7 +41,9 @@ class RawRequestJsonTest {
 
     @Test
     fun `raw parameter validation warns for credential-shaped entries`() {
-        assertThat(RawRequestJson.looksLikeSecret("""{"api_key":"sk-examplecredential123456"}"""))
+        // The quoted "api_key" field is what the detector flags; the value is deliberately
+        // placeholder text so the repository secret-leak gate stays green.
+        assertThat(RawRequestJson.looksLikeSecret("""{"api_key":"placeholder-value"}"""))
             .isTrue()
         assertThat(RawRequestJson.looksLikeSecret("""{"max_output_tokens":8192}"""))
             .isFalse()

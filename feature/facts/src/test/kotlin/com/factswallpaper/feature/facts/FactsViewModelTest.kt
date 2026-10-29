@@ -130,6 +130,26 @@ class FactsViewModelTest {
     }
 
     @Test
+    fun `query and status are forwarded to the repository filter`() = runTest {
+        val collectJob = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.uiState.collect {}
+        }
+        advanceUntilIdle()
+        fakeFactRepo.observedFilters.clear()
+
+        viewModel.updateQuery("gravity")
+        advanceUntilIdle()
+        viewModel.setStatus(FactStatusFilter.FAVORITES)
+        advanceUntilIdle()
+
+        val lastFilter = fakeFactRepo.observedFilters.last()
+        assertThat(lastFilter.query).isEqualTo("gravity")
+        assertThat(lastFilter.status).isEqualTo(FactStatusFilter.FAVORITES)
+        assertThat(lastFilter.documentId).isEqualTo("doc-1")
+        collectJob.cancel()
+    }
+
+    @Test
     fun `setStatus updates status filter`() = runTest {
         val collectJob = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
             viewModel.uiState.collect {}
@@ -257,8 +277,12 @@ internal class FakeNetworkMonitor : NetworkMonitor {
 internal class FakeFactRepository : FactRepository {
     val factsFlow = MutableStateFlow<List<Fact>>(emptyList())
     val recordedReviews = mutableListOf<Pair<String, Boolean>>()
+    val observedFilters = mutableListOf<FactFilter>()
 
-    override fun observeFacts(filter: FactFilter): Flow<List<Fact>> = factsFlow
+    override fun observeFacts(filter: FactFilter): Flow<List<Fact>> {
+        observedFilters += filter
+        return factsFlow
+    }
     override fun observeFact(factId: String): Flow<Fact?> =
         MutableStateFlow(factsFlow.value.firstOrNull { it.id == factId })
     override suspend fun getFact(factId: String): Fact? =
