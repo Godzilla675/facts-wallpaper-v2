@@ -41,7 +41,9 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
@@ -246,6 +248,127 @@ class LibraryViewModelTest {
         assertThat(repo.getDocument("doc-mismatch")?.localFilePath)
             .isEqualTo("/data/pdfs/doc-mismatch.pdf")
         assertThat(viewModel.message.value?.textRes).isEqualTo(R.string.library_relink_wrong_file)
+    }
+
+    @Test
+    fun `sort order reorders the document list`() = runTest {
+        val older = sampleDocument("doc-older", "Alpha").copy(createdAtEpochMs = 100L)
+        val newer = sampleDocument("doc-newer", "Zulu").copy(createdAtEpochMs = 200L)
+        val repo = FakeLibraryDocumentRepository(listOf(older, newer))
+        val viewModel = LibraryViewModel(
+            documentRepository = repo,
+            rotationPoolRepository = FakeRotationPoolRepository(),
+            scheduler = FakeDocumentProcessingScheduler(repo),
+            settingsRepository = FakeSettingsRepository(),
+            pdfRelinkService = FakePdfRelinkService(),
+        )
+        val collectJob = backgroundScope.launch(testDispatcher) { viewModel.uiState.collect() }
+
+        assertThat((viewModel.uiState.value as LibraryUiState.Content).documents.map { it.id })
+            .containsExactly("doc-newer", "doc-older").inOrder()
+
+        viewModel.setSortOrder(DocumentSortOrder.DATE_ASC)
+        val ascending = viewModel.uiState.value as LibraryUiState.Content
+        assertThat(ascending.documents.map { it.id })
+            .containsExactly("doc-older", "doc-newer").inOrder()
+        assertThat(ascending.sortOrder).isEqualTo(DocumentSortOrder.DATE_ASC)
+
+        viewModel.setSortOrder(DocumentSortOrder.TITLE_ASC)
+        val byTitle = viewModel.uiState.value as LibraryUiState.Content
+        assertThat(byTitle.documents.map { it.id })
+            .containsExactly("doc-older", "doc-newer").inOrder()
+        collectJob.cancel()
+    }
+
+    @Test
+    fun `selection toggles per document and clears in bulk`() = runTest {
+        val doc1 = sampleDocument("doc-1", "Biochemistry")
+        val doc2 = sampleDocument("doc-2", "Algebra")
+        val repo = FakeLibraryDocumentRepository(listOf(doc1, doc2))
+        val viewModel = LibraryViewModel(
+            documentRepository = repo,
+            rotationPoolRepository = FakeRotationPoolRepository(),
+            scheduler = FakeDocumentProcessingScheduler(repo),
+            settingsRepository = FakeSettingsRepository(),
+            pdfRelinkService = FakePdfRelinkService(),
+        )
+        val collectJob = backgroundScope.launch(testDispatcher) { viewModel.uiState.collect() }
+
+        viewModel.toggleDocumentSelection("doc-1")
+        assertThat((viewModel.uiState.value as LibraryUiState.Content).selectedDocumentIds)
+            .containsExactly("doc-1")
+
+        viewModel.toggleDocumentSelection("doc-2")
+        assertThat((viewModel.uiState.value as LibraryUiState.Content).selectedDocumentIds)
+            .containsExactly("doc-1", "doc-2")
+
+        viewModel.toggleDocumentSelection("doc-1")
+        assertThat((viewModel.uiState.value as LibraryUiState.Content).selectedDocumentIds)
+            .containsExactly("doc-2")
+
+        viewModel.selectAll(listOf("doc-1", "doc-2"))
+        assertThat((viewModel.uiState.value as LibraryUiState.Content).selectedDocumentIds)
+            .containsExactly("doc-1", "doc-2")
+
+        viewModel.clearSelection()
+        assertThat((viewModel.uiState.value as LibraryUiState.Content).selectedDocumentIds).isEmpty()
+        collectJob.cancel()
+    }
+
+    @Test
+    fun `undo delete keeps the document and cancelling the timer prevents deletion`() = runTest {
+        val doc = sampleDocument("doc-undo", "Undo Me")
+        val repo = FakeLibraryDocumentRepository(listOf(doc))
+        val scheduler = FakeDocumentProcessingScheduler(repo)
+        val viewModel = LibraryViewModel(
+            documentRepository = repo,
+            rotationPoolRepository = FakeRotationPoolRepository(),
+            scheduler = scheduler,
+            settingsRepository = FakeSettingsRepository(),
+            pdfRelinkService = FakePdfRelinkService(),
+        )
+        val collectJob = backgroundScope.launch(testDispatcher) { viewModel.uiState.collect() }
+
+        var undo: (() -> Unit)? = null
+        viewModel.deleteDocumentWithUndo(doc) { undo = it }
+        runCurrent()
+
+        assertThat(undo).isNotNull()
+        assertThat(viewModel.uiState.value).isInstanceOf(LibraryUiState.Empty::class.java)
+
+        undo!!.invoke()
+        advanceTimeBy(6_000)
+        runCurrent()
+
+        assertThat(repo.getDocument("doc-undo")).isNotNull()
+        assertThat(scheduler.cancelledIds).isEmpty()
+        assertThat((viewModel.uiState.value as LibraryUiState.Content).documents.map { it.id })
+            .containsExactly("doc-undo")
+        collectJob.cancel()
+    }
+
+    @Test
+    fun `delete commits after the undo window elapses`() = runTest {
+        val doc = sampleDocument("doc-commit", "Delete Me")
+        val repo = FakeLibraryDocumentRepository(listOf(doc))
+        val scheduler = FakeDocumentProcessingScheduler(repo)
+        val viewModel = LibraryViewModel(
+            documentRepository = repo,
+            rotationPoolRepository = FakeRotationPoolRepository(),
+            scheduler = scheduler,
+            settingsRepository = FakeSettingsRepository(),
+            pdfRelinkService = FakePdfRelinkService(),
+        )
+        val collectJob = backgroundScope.launch(testDispatcher) { viewModel.uiState.collect() }
+
+        viewModel.deleteDocumentWithUndo(doc) {}
+        runCurrent()
+        advanceTimeBy(5_001)
+        runCurrent()
+
+        assertThat(repo.getDocument("doc-commit")).isNull()
+        assertThat(scheduler.cancelledIds).containsExactly("doc-commit")
+        collectJob.cancel()
     }
 
     private fun sampleDocument(id: String, title: String) = Document(

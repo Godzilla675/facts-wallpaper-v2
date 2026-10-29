@@ -133,16 +133,140 @@ class DocumentProcessingSchedulerTest {
         assertThat(fakeDocRepo.lastUpdatedStatus).isEqualTo(ExtractionStatus.COMPLETED)
         assertThat(fakeDocRepo.lastUpdatedProgress).isEqualTo(1.0f)
     }
+
+    @Test
+    fun `pauseAll pauses only documents whose pipeline is running`() = runTest {
+        fakeDocRepo.docsFlow.value = listOf(
+            document("ocr", ExtractionStatus.OCR_IN_PROGRESS),
+            document("outline", ExtractionStatus.OUTLINE_IN_PROGRESS),
+            document("facts", ExtractionStatus.FACTS_IN_PROGRESS),
+            document("waiting", ExtractionStatus.ANALYZED),
+            document("done", ExtractionStatus.COMPLETED),
+        )
+
+        scheduler.pauseAll()
+
+        assertThat(fakeDocRepo.updatedStatuses.keys)
+            .containsExactly("ocr", "outline", "facts")
+        assertThat(fakeDocRepo.updatedStatuses.values)
+            .containsExactly(
+                ExtractionStatus.OCR_PAUSED,
+                ExtractionStatus.OCR_PAUSED,
+                ExtractionStatus.OCR_PAUSED,
+            )
+    }
+
+    @Test
+    fun `resumeAll resumes only paused or waiting documents`() = runTest {
+        val recording = RecordingScheduler(fakeDocRepo, fakeLessonRepo)
+        fakeDocRepo.docsFlow.value = listOf(
+            document("paused", ExtractionStatus.OCR_PAUSED),
+            document("outline-ready", ExtractionStatus.OUTLINE_READY),
+            document("analyzed", ExtractionStatus.ANALYZED),
+            document("facts-running", ExtractionStatus.FACTS_IN_PROGRESS),
+            document("done", ExtractionStatus.COMPLETED),
+        )
+
+        recording.resumeAll()
+
+        assertThat(recording.resumed).containsExactly("paused", "outline-ready", "analyzed")
+    }
+
+    @Test
+    fun `regenerateFailedLessons enqueues only lessons with zero facts`() = runTest {
+        val recording = RecordingScheduler(fakeDocRepo, fakeLessonRepo)
+        fakeDocRepo.docsFlow.value = listOf(document("doc-6", ExtractionStatus.OUTLINE_READY))
+        fakeLessonRepo.lessons = listOf(
+            lesson("lesson-empty", factCount = 0),
+            lesson("lesson-filled", factCount = 4),
+            lesson("lesson-also-empty", factCount = 0),
+        )
+
+        recording.regenerateFailedLessons("doc-6")
+
+        assertThat(recording.enqueuedFacts)
+            .containsExactly("doc-6" to listOf("lesson-empty", "lesson-also-empty"))
+        assertThat(fakeDocRepo.lastUpdatedStatus).isEqualTo(ExtractionStatus.FACTS_IN_PROGRESS)
+        assertThat(fakeDocRepo.lastUpdatedProgress).isEqualTo(0.7f)
+    }
+
+    @Test
+    fun `regenerateFailedLessons is a no-op when every lesson has facts`() = runTest {
+        val recording = RecordingScheduler(fakeDocRepo, fakeLessonRepo)
+        fakeDocRepo.docsFlow.value = listOf(document("doc-7", ExtractionStatus.COMPLETED))
+        fakeLessonRepo.lessons = listOf(lesson("lesson-filled", factCount = 2))
+
+        recording.regenerateFailedLessons("doc-7")
+
+        assertThat(recording.enqueuedFacts).isEmpty()
+        assertThat(fakeDocRepo.lastUpdatedStatus).isNull()
+    }
+
+    private fun document(id: String, status: ExtractionStatus) = Document(
+        id = id,
+        title = "Document $id",
+        sourceUri = "content://docs/$id",
+        localFilePath = "/tmp/$id.pdf",
+        fileHash = "hash-$id",
+        fileSizeBytes = 1_024L,
+        pageCount = 10,
+        pagesWithText = 10,
+        processingRoute = PdfProcessingRoute.EXTRACT_TEXT,
+        extractionStatus = status,
+        createdAtEpochMs = 1_000L,
+    )
+
+    private fun lesson(id: String, factCount: Int) = Lesson(
+        id = id,
+        documentId = "doc-6",
+        title = "Lesson $id",
+        summary = "Summary",
+        startPage = 1,
+        endPage = 10,
+        sortOrder = 0,
+        factCount = factCount,
+    )
+}
+
+/** Records resume/enqueue calls so bulk-selection rules can be asserted without WorkManager. */
+private class RecordingScheduler(
+    documentRepository: FakeSchedulerDocumentRepository,
+    lessonRepository: FakeSchedulerLessonRepository,
+) : DocumentProcessingScheduler(
+    context = null,
+    documentRepository = documentRepository,
+    lessonRepository = lessonRepository,
+    dispatchers = FactsDispatchers(
+        io = Dispatchers.Unconfined,
+        default = Dispatchers.Unconfined,
+        main = Dispatchers.Unconfined,
+    ),
+    marker = null,
+) {
+    val resumed = mutableListOf<String>()
+    val enqueuedFacts = mutableListOf<Pair<String, List<String>>>()
+
+    override fun resume(documentId: String) {
+        resumed += documentId
+    }
+
+    override fun enqueueFacts(documentId: String, lessonIds: List<String>) {
+        enqueuedFacts += documentId to lessonIds
+    }
 }
 
 private class FakeSchedulerDocumentRepository : DocumentRepository {
+    val docsFlow = MutableStateFlow<List<Document>>(emptyList())
+    val updatedStatuses = linkedMapOf<String, ExtractionStatus>()
     var settings: DocumentSettings? = null
     var lastUpdatedStatus: ExtractionStatus? = null
     var lastUpdatedProgress: Float? = null
 
-    override fun observeDocuments(): Flow<List<Document>> = MutableStateFlow(emptyList())
-    override fun observeDocument(documentId: String): Flow<Document?> = MutableStateFlow(null)
-    override suspend fun getDocument(documentId: String): Document? = null
+    override fun observeDocuments(): Flow<List<Document>> = docsFlow
+    override fun observeDocument(documentId: String): Flow<Document?> =
+        MutableStateFlow(docsFlow.value.firstOrNull { it.id == documentId })
+    override suspend fun getDocument(documentId: String): Document? =
+        docsFlow.value.firstOrNull { it.id == documentId }
     override suspend fun findByHash(fileHash: String): Document? = null
     override suspend fun getLocalFilePath(documentId: String): String? = null
     override fun observeSettings(documentId: String): Flow<DocumentSettings?> = MutableStateFlow(settings)
@@ -155,6 +279,10 @@ private class FakeSchedulerDocumentRepository : DocumentRepository {
     override suspend fun setIncludedInRotation(documentId: String, included: Boolean) {}
     override suspend fun updateExtractionStatus(documentId: String, status: ExtractionStatus, errorMessage: String?) {
         lastUpdatedStatus = status
+        updatedStatuses[documentId] = status
+        docsFlow.value = docsFlow.value.map {
+            if (it.id == documentId) it.copy(extractionStatus = status) else it
+        }
     }
     override suspend fun updatePipelineProgress(documentId: String, progress: Float) {
         lastUpdatedProgress = progress

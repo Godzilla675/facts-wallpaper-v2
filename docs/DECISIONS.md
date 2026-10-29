@@ -64,7 +64,7 @@
 - **Undo Snackbar for Deletions:**
   - Implemented 5-second soft delete with Undo action for documents (Library), cards (Facts), and collections/folders (Collections). If not undone within 5 seconds, hard deletion is committed to the database and filesystem.
 
-## Phase P9.4 ? Settings Search, Model Picker, Haptics and Polish
+## Phase P9.4 — Settings Search, Model Picker, Haptics and Polish
 
 - **Settings search:** `SettingsSearchCatalog` lists 13 searchable entries across the provider screen (routing, task routing, usage, profiles) and the advanced screen (theme, pipeline, OCR, prompts, diagnostics, ledger, storage, backup). The filter requires every whitespace-separated token to match the localised title, summary or keyword list, so extra words narrow the result. Provider results scroll the existing `LazyColumn` to the matching section via `ProviderSection`; advanced results deep-link through `AppRoute.AdvancedSettings(section)` and `AdvancedSection.lazyListIndex()`.
 - **Model picker:** `ProviderDiagnosticsService.fetchModels` now takes an optional `apiKeyOverride` so an unsaved draft key can be tested without writing it to the keystore. It calls the provider-specific catalog endpoint (Gemini `/v1beta/models?pageSize=200`, Anthropic `/models?limit=100`, Azure `/openai/models?api-version=`, others `{base}/models`), tolerates `data`/`models`/`value` wrappers, strips `models/` prefixes for Gemini, filters non-`generateContent` Gemini models and sorts by id. The provider editor shows a scrollable, filterable result list and falls back to free text with the error message.
@@ -73,18 +73,18 @@
 - **Library coach hint:** one-time dismissible "Import -> outline -> generate" card at the top of the Library list, persisted through `setLibraryCoachHintDismissed`. Existing undo-delete behaviour is untouched.
 - **Empty states:** Library, Facts, Favorites (filtered Facts), Outline and What's Happening render icon + message + primary action. What's Happening gained an "Open Library" action; Facts already deep-linked to the Library.
 
-## Phase P10.1 ? Page-tool calling and M2 verification
+## Phase P10.1 — Page-tool calling and M2 verification
 
 - **Native `get_pages` tool:** `AiRequest.pageTool` opts a request into a native function declaration and `AiResponse.requestedPageRange` carries the parsed call. OpenAI Chat Completions (OpenAI, Azure OpenAI, OpenRouter, DeepSeek, Qwen, custom OpenAI-compatible) and Gemini implement the wire format; Anthropic is intentionally excluded because it already uses a forced `emit_result` tool for structured output. Unsupported providers fall back to the chunked direct-pages pipeline with a warning.
 - **One request per tool round:** `StructuredAiService.generateFactsWithPageTool` sends the lesson pages plus previously fetched pages in a single request, includes prior tool results/rejections in the prompt, and returns `FactsGenerationResult.pageRequest` when the model calls `get_pages`. `GenerationOrchestrator` owns the loop (max 3 calls, max 5 pages per call) and validates ranges. The prompt tells the model not to re-request pages already included.
 - **Context safety:** if the merged page text would exceed 90% of the profile context window, the service falls back to the chunked pipeline instead of failing or truncating source material.
 - **Schema + tool fallback:** while a page tool is active the canonical JSON schema is embedded in the system prompt and provider-native `response_format`/`responseSchema` is omitted. If a model rejects tool declarations (400 mentioning tools/functions), the provider client retries once without tools so generation still completes.
-- **Setting:** `pageToolCallsEnabled` defaults to true ("auto") and is exposed as Advanced ? Background Pipeline ? AI page tools. Disabling it restores the previous direct-pages behaviour. Cost estimates are only charged to the first tool round; later rounds report zero estimated cost so the orchestrator does not double count.
+- **Setting:** `pageToolCallsEnabled` defaults to true ("auto") and is exposed as Advanced → Background Pipeline → AI page tools. Disabling it restores the previous direct-pages behaviour. Cost estimates are only charged to the first tool round; later rounds report zero estimated cost so the orchestrator does not double count.
 - **Notifications:** `POST_NOTIFICATIONS` was already requested during onboarding and before OCR imports; enabling the daily fact notification in Wallpaper settings now also requests it on API 33+. Quiet hours are enforced by `WallpaperRotationController` and `WallpaperRotationWorker`; the fact-of-the-day notification keeps its own schedule.
 - **Tile/widget/shortcuts:** `NextFactTileService` (BIND_QUICK_SETTINGS_TILE), `FactAppWidgetProvider` (next-fact + refresh actions), `FactNotificationReceiver` (next/got-it) and the `shortcuts.xml` next-fact/import entries were verified already present in the manifest.
 - **TODO sweep:** no `TODO`, `FIXME`, `TODO()` or `NotImplementedError` remain in `app/`, `core/` or `feature/`; grep hits for `todo` are false positives from `toDomain` and `toDouble`.
 
-## Phase P10.2 ? Spec audit and remaining spec items
+## Phase P10.2 — Spec audit and remaining spec items
 
 - **SQLCipher mode:** `:core:security`'s `DatabaseEncryptionStore` is authoritative because `DatabaseModule` needs the flag before Room is built. It keeps a synchronous private `SharedPreferences` file with the user request, the last applied format and a 32-byte passphrase encrypted through the existing `SecretCipher` (Android Keystore AES-GCM). DataStore's `encryptedDatabaseEnabled` mirrors the request for spec section 5.4 and the settings UI. The switch requires an app restart; `DatabaseEncryptionMigrator` exports/imports with `sqlcipher_export`, copies `user_version`, runs `PRAGMA integrity_check`, swaps only after verification and otherwise keeps the original file. Trade-off: the first launch after toggling can take longer on large libraries, which the UI explains.
 - **Migration failure is not silent:** if the conversion fails, the request flag is rewritten to the format actually on disk and diagnostics log the cause. We deliberately do not generate a new passphrase on Keystore failure, because that would orphan an existing encrypted database.
@@ -93,3 +93,12 @@
 - **OCR language packs:** the Advanced settings manager lists only downloadable packs; bundled ML Kit scripts remain automatic and do not need a download. Downloads go to `noBackupFilesDir/ocr_models`, verify SHA-256 before activation and can be deleted.
 - **Source-PDF re-link:** restored documents whose app-private copy is gone show a "Source PDF not on device" badge in the Library. Re-linking copies the chosen PDF into app storage and rejects it unless its SHA-256 equals the document's recorded hash.
 - **Audit limits recorded, not hidden:** Roborazzi goldens, HTML_CANVAS custom-template rendering and per-host cleartext LAN allowlisting are documented as partial/infeasible in `docs/SPEC-AUDIT.md` with reasons. Theme default was corrected to `DARK` per §5.4.
+
+## Phase P10.3 — Testing and Verification (M4)
+
+- **Unit test suite:** 356 unit tests across 58 test suites pass cleanly with 0 failures and 0 errors. Expanded ViewModel tests covering Library (search, sort, multi-selection, undo delete), Facts (filters, favorite/hide, edit, export), Study (review flow, spaced repetition scheduling, due counters), Outline (curation, split/merge, density, retry-failed), and Provider Settings (model picker filter, fetch models, fallback error handling).
+- **AI Wire Format & Pipeline:** Added comprehensive request encoding coverage for OpenAI Chat, Gemini, and Anthropic with multimodal inline/base64 images; verified `DocumentProcessingScheduler` respects `AutoProcessMode` (`OUTLINE_ONLY`, `OUTLINE_AND_GENERATE_ALL`, `ASK_ME`), retry-failed-only logic, and global pause/resume.
+- **Wallpaper Rotation Reducer:** Extracted rotation state transitions into `RotationReducer` with 100% pure unit test coverage for quiet hours, battery-saver interval doubling, sequential vs no-repeat shuffle ordering, and rotation pool restrictions.
+- **Instrumented Room Migrations:** Verified schema migrations v1 through v6 on device/AVD (`facts_test` API 35) via `FactsDatabaseMigrationInstrumentedTest`, ensuring SQLite data preservation and spaced-repetition column indexing.
+- **Static Analysis:** `lintDebug` passed with 0 errors across all 14 modules.
+- **Testing Documentation:** Detailed results and manual smoke test checklist recorded in `docs/TESTING.md`.

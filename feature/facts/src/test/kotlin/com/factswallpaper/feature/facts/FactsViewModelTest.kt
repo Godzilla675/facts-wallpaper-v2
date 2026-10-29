@@ -1,6 +1,7 @@
 package com.factswallpaper.feature.facts
 
 import android.content.Context
+import android.net.Uri
 import androidx.lifecycle.SavedStateHandle
 import androidx.test.core.app.ApplicationProvider
 import androidx.work.WorkManager
@@ -20,6 +21,7 @@ import com.factswallpaper.core.common.AppResult
 import com.factswallpaper.core.data.repository.DocumentRepository
 import com.factswallpaper.core.data.repository.DocumentTextRepository
 import com.factswallpaper.core.data.repository.FactRepository
+import com.factswallpaper.core.model.CardTemplateType
 import com.factswallpaper.core.model.Document
 import com.factswallpaper.core.model.DocumentSettings
 import com.factswallpaper.core.model.ExtractionStatus
@@ -32,6 +34,7 @@ import com.factswallpaper.core.model.PdfProcessingRoute
 import com.factswallpaper.core.model.SmartViewCounts
 import com.factswallpaper.core.render.CardPreRenderScheduler
 import com.google.common.truth.Truth.assertThat
+import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -138,6 +141,111 @@ class FactsViewModelTest {
         val state = viewModel.uiState.value as FactsUiState.Content
         assertThat(state.filter.status).isEqualTo(FactStatusFilter.FAVORITES)
     }
+
+    @Test
+    fun `toggleFavorite persists the favorite flag`() = runTest {
+        val collectJob = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.uiState.collect {}
+        }
+        fakeFactRepo.factsFlow.value = listOf(sampleFact("fact-fav"))
+        advanceUntilIdle()
+
+        viewModel.toggleFavorite("fact-fav", true)
+        advanceUntilIdle()
+
+        assertThat(fakeFactRepo.getFact("fact-fav")?.favorite).isTrue()
+        collectJob.cancel()
+    }
+
+    @Test
+    fun `saveFact trims and persists edited content`() = runTest {
+        val collectJob = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.uiState.collect {}
+        }
+        fakeFactRepo.factsFlow.value = listOf(sampleFact("fact-edit"))
+        advanceUntilIdle()
+
+        viewModel.saveFact(
+            factId = "fact-edit",
+            text = "  Edited fact text  ",
+            latex = "  E = mc^2  ",
+            tags = listOf("physics", "energy"),
+            templateType = CardTemplateType.FORMULA,
+        )
+        advanceUntilIdle()
+
+        val saved = fakeFactRepo.getFact("fact-edit")
+        assertThat(saved?.text).isEqualTo("Edited fact text")
+        assertThat(saved?.latex).isEqualTo("E = mc^2")
+        assertThat(saved?.requiresLatex).isTrue()
+        assertThat(saved?.tags).containsExactly("physics", "energy")
+        assertThat(saved?.templateType).isEqualTo(CardTemplateType.FORMULA)
+        assertThat(viewModel.message.value?.textRes).isEqualTo(R.string.facts_saved)
+        collectJob.cancel()
+    }
+
+    @Test
+    fun `saveFact rejects blank text without touching the repository`() = runTest {
+        val collectJob = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.uiState.collect {}
+        }
+        fakeFactRepo.factsFlow.value = listOf(sampleFact("fact-blank"))
+        advanceUntilIdle()
+
+        viewModel.saveFact(
+            factId = "fact-blank",
+            text = "   ",
+            latex = "",
+            tags = emptyList(),
+            templateType = CardTemplateType.TEXT,
+        )
+        advanceUntilIdle()
+
+        assertThat(fakeFactRepo.getFact("fact-blank")?.text).isEqualTo("Fact text")
+        assertThat(viewModel.message.value?.textRes).isEqualTo(R.string.facts_text_required)
+        collectJob.cancel()
+    }
+
+    @Test
+    fun `exportFacts writes a markdown export to the chosen uri`() = runTest {
+        val collectJob = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.uiState.collect {}
+        }
+        fakeFactRepo.factsFlow.value = listOf(
+            sampleFact("fact-a").copy(latex = "a^2 + b^2 = c^2", tags = listOf("geometry")),
+            sampleFact("fact-b"),
+        )
+        advanceUntilIdle()
+
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val target = File(context.cacheDir, "facts-export-test.md").apply { delete() }
+        viewModel.exportFacts(Uri.fromFile(target), context)
+
+        val deadline = System.currentTimeMillis() + 10_000L
+        while (viewModel.message.value == null && System.currentTimeMillis() < deadline) {
+            Thread.sleep(20)
+        }
+        advanceUntilIdle()
+
+        assertThat(target.exists()).isTrue()
+        val markdown = target.readText()
+        assertThat(markdown).contains("Facts Study Export")
+        assertThat(markdown).contains("Fact text")
+        assertThat(markdown).contains("a^2 + b^2 = c^2")
+        assertThat(markdown).contains("geometry")
+        assertThat(viewModel.message.value?.textRes).isEqualTo(R.string.facts_export_success)
+        target.delete()
+        collectJob.cancel()
+    }
+
+    private fun sampleFact(id: String) = Fact(
+        id = id,
+        documentId = "doc-1",
+        lessonId = "lesson-1",
+        text = "Fact text",
+        sourceBookTitle = "Physics 101",
+        createdAtEpochMs = 1000L,
+    )
 }
 
 internal class FakeNetworkMonitor : NetworkMonitor {
@@ -148,6 +256,7 @@ internal class FakeNetworkMonitor : NetworkMonitor {
 
 internal class FakeFactRepository : FactRepository {
     val factsFlow = MutableStateFlow<List<Fact>>(emptyList())
+    val recordedReviews = mutableListOf<Pair<String, Boolean>>()
 
     override fun observeFacts(filter: FactFilter): Flow<List<Fact>> = factsFlow
     override fun observeFact(factId: String): Flow<Fact?> =
@@ -166,6 +275,9 @@ internal class FakeFactRepository : FactRepository {
     }
     override suspend fun setFavorite(factId: String, favorite: Boolean) {
         factsFlow.value = factsFlow.value.map { if (it.id == factId) it.copy(favorite = favorite) else it }
+    }
+    override suspend fun recordReview(factId: String, gotIt: Boolean) {
+        recordedReviews += factId to gotIt
     }
     override suspend fun deleteFact(factId: String): AppResult<Unit> {
         factsFlow.value = factsFlow.value.filter { it.id != factId }

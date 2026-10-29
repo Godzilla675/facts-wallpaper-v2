@@ -5,6 +5,7 @@ import com.factswallpaper.core.model.RotationOrder
 import com.factswallpaper.core.model.WallpaperScheduleMode
 import com.factswallpaper.core.model.WallpaperState
 import com.google.common.truth.Truth.assertThat
+import java.util.Calendar
 import org.junit.Test
 
 class RotationReducerTest {
@@ -100,4 +101,77 @@ class RotationReducerTest {
         // 45 minutes later: elapsed
         assertThat(RotationReducer.isIntervalElapsed(lastRotated, intervalMinutes, nowEpochMs = lastRotated + 45 * 60_000L)).isTrue()
     }
+
+    @Test
+    fun `quiet hours disabled never blocks rotation`() {
+        val noon = localEpochMs(hour = 12, minute = 0)
+        assertThat(RotationReducer.isQuietHours(noon, enabled = false, startMinute = 0, endMinute = 1439))
+            .isFalse()
+    }
+
+    @Test
+    fun `same-day quiet hours include both boundaries and exclude outside times`() {
+        val start = 9 * 60
+        val end = 17 * 60
+        assertThat(RotationReducer.isQuietHours(localEpochMs(8, 59), true, start, end)).isFalse()
+        assertThat(RotationReducer.isQuietHours(localEpochMs(9, 0), true, start, end)).isTrue()
+        assertThat(RotationReducer.isQuietHours(localEpochMs(12, 30), true, start, end)).isTrue()
+        assertThat(RotationReducer.isQuietHours(localEpochMs(17, 0), true, start, end)).isTrue()
+        assertThat(RotationReducer.isQuietHours(localEpochMs(17, 1), true, start, end)).isFalse()
+    }
+
+    @Test
+    fun `quiet hours window can span midnight`() {
+        val start = 22 * 60
+        val end = 7 * 60
+        assertThat(RotationReducer.isQuietHours(localEpochMs(21, 59), true, start, end)).isFalse()
+        assertThat(RotationReducer.isQuietHours(localEpochMs(22, 0), true, start, end)).isTrue()
+        assertThat(RotationReducer.isQuietHours(localEpochMs(23, 30), true, start, end)).isTrue()
+        assertThat(RotationReducer.isQuietHours(localEpochMs(0, 15), true, start, end)).isTrue()
+        assertThat(RotationReducer.isQuietHours(localEpochMs(6, 59), true, start, end)).isTrue()
+        assertThat(RotationReducer.isQuietHours(localEpochMs(7, 0), true, start, end)).isTrue()
+        assertThat(RotationReducer.isQuietHours(localEpochMs(7, 1), true, start, end)).isFalse()
+        assertThat(RotationReducer.isQuietHours(localEpochMs(12, 0), true, start, end)).isFalse()
+    }
+
+    @Test
+    fun `battery saver quadruples unlock cooldown only when slowdown is enabled`() {
+        assertThat(RotationReducer.effectiveUnlockCooldownMs(batterySaver = false, batterySaverSlowdownEnabled = true))
+            .isEqualTo(RotationReducer.UNLOCK_COOLDOWN_MS)
+        assertThat(RotationReducer.effectiveUnlockCooldownMs(batterySaver = true, batterySaverSlowdownEnabled = false))
+            .isEqualTo(RotationReducer.UNLOCK_COOLDOWN_MS)
+        assertThat(RotationReducer.effectiveUnlockCooldownMs(batterySaver = true, batterySaverSlowdownEnabled = true))
+            .isEqualTo(RotationReducer.UNLOCK_COOLDOWN_MS * 4)
+    }
+
+    @Test
+    fun `battery saver doubles interval only when slowdown is enabled`() {
+        assertThat(
+            RotationReducer.effectiveIntervalMinutes(
+                intervalMinutes = 30,
+                batterySaver = false,
+                batterySaverSlowdownEnabled = true,
+            ),
+        ).isEqualTo(30)
+        assertThat(
+            RotationReducer.effectiveIntervalMinutes(
+                intervalMinutes = 30,
+                batterySaver = true,
+                batterySaverSlowdownEnabled = false,
+            ),
+        ).isEqualTo(30)
+        assertThat(
+            RotationReducer.effectiveIntervalMinutes(
+                intervalMinutes = 30,
+                batterySaver = true,
+                batterySaverSlowdownEnabled = true,
+            ),
+        ).isEqualTo(60)
+    }
+
+    private fun localEpochMs(hour: Int, minute: Int): Long =
+        Calendar.getInstance().apply {
+            clear()
+            set(2026, Calendar.OCTOBER, 29, hour, minute, 0)
+        }.timeInMillis
 }

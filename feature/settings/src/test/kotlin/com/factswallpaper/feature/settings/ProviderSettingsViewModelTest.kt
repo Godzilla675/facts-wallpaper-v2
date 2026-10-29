@@ -184,6 +184,56 @@ class ProviderSettingsViewModelTest {
         assertThat(viewModel.message.value?.textRes).isEqualTo(R.string.provider_test_success)
         assertThat(viewModel.message.value?.args).containsExactly(120L)
     }
+
+    @Test
+    fun `fetchModels forwards the unsaved draft key without persisting it`() = testScope.runTest {
+        val testProfile = ProviderProfile(
+            id = "test-id",
+            name = "Test",
+            providerType = ProviderType.OPENAI,
+            baseUrl = "https://api.openai.com/v1",
+            modelName = "gpt-4o",
+            maxContextTokens = 128000,
+        )
+        fakeDiagnosticsService.catalogResult = ModelCatalogResult(
+            models = listOf(AiModelInfo(id = "gpt-5.2")),
+        )
+
+        val result = viewModel.fetchModels(testProfile, "draft-key")
+        advanceUntilIdle()
+
+        assertThat(result.models.map { it.id }).containsExactly("gpt-5.2")
+        assertThat(fakeDiagnosticsService.lastApiKeyOverride).isEqualTo("draft-key")
+        assertThat(fakeApiKeyStore.keys).isEmpty()
+    }
+
+    @Test
+    fun `copyModelCatalog copies ids or falls back to the profile model`() = testScope.runTest {
+        val profile = ProviderProfile(
+            id = "test-id",
+            name = "Test",
+            providerType = ProviderType.OPENAI,
+            baseUrl = "https://api.openai.com/v1",
+            modelName = "gpt-4o",
+            maxContextTokens = 128000,
+        )
+        var copied: String? = null
+
+        fakeDiagnosticsService.catalogResult = ModelCatalogResult(
+            models = listOf(AiModelInfo(id = "gpt-5.2"), AiModelInfo(id = "gpt-5.2-mini")),
+        )
+        viewModel.copyModelCatalog(profile) { copied = it }
+        advanceUntilIdle()
+
+        assertThat(copied).isEqualTo("gpt-5.2\ngpt-5.2-mini")
+        assertThat(viewModel.message.value?.textRes).isEqualTo(R.string.provider_model_list_copied)
+
+        fakeDiagnosticsService.catalogResult = ModelCatalogResult(error = "offline")
+        viewModel.copyModelCatalog(profile) { copied = it }
+        advanceUntilIdle()
+
+        assertThat(copied).isEqualTo("gpt-4o")
+    }
 }
 
 private class FakeProviderDiagnosticsService : ProviderDiagnosticsService {
@@ -194,12 +244,16 @@ private class FakeProviderDiagnosticsService : ProviderDiagnosticsService {
         keyStatus = ProviderKeyStatus.VALID,
     )
     var catalogResult: ModelCatalogResult = ModelCatalogResult(models = emptyList())
+    var lastApiKeyOverride: String? = null
 
     override suspend fun testConnection(profile: ProviderProfile): ConnectionTestResult = testResult
     override suspend fun fetchModels(
         profile: ProviderProfile,
         apiKeyOverride: String?,
-    ): ModelCatalogResult = catalogResult
+    ): ModelCatalogResult {
+        lastApiKeyOverride = apiKeyOverride
+        return catalogResult
+    }
 }
 
 private class FakeProviderProfileRepository : ProviderProfileRepository {

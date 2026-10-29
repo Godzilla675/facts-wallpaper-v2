@@ -17,7 +17,6 @@ import com.factswallpaper.core.render.CardPreRenderScheduler
 import com.factswallpaper.core.render.cache.CardRenderCache
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
-import java.util.Calendar
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.flow.first
@@ -49,11 +48,10 @@ class WallpaperRotationController @Inject constructor(
 
             val powerManager = context.getSystemService<PowerManager>()
             val isPowerSave = powerManager?.isPowerSaveMode == true
-            val cooldown = if (isPowerSave && prefs.batterySaverSlowdownEnabled) {
-                RotationReducer.UNLOCK_COOLDOWN_MS * 4
-            } else {
-                RotationReducer.UNLOCK_COOLDOWN_MS
-            }
+            val cooldown = RotationReducer.effectiveUnlockCooldownMs(
+                batterySaver = isPowerSave,
+                batterySaverSlowdownEnabled = prefs.batterySaverSlowdownEnabled,
+            )
 
             if (nowEpochMs - state.lastRotatedAtEpochMs < cooldown) {
                 return@withContext false
@@ -78,11 +76,11 @@ class WallpaperRotationController @Inject constructor(
 
         val powerManager = context.getSystemService<PowerManager>()
         val isPowerSave = powerManager?.isPowerSaveMode == true
-        val intervalMinutes = if (isPowerSave && prefs.batterySaverSlowdownEnabled) {
-            state.intervalMinutes * 2
-        } else {
-            state.intervalMinutes
-        }
+        val intervalMinutes = RotationReducer.effectiveIntervalMinutes(
+            intervalMinutes = state.intervalMinutes,
+            batterySaver = isPowerSave,
+            batterySaverSlowdownEnabled = prefs.batterySaverSlowdownEnabled,
+        )
 
         if (RotationReducer.isIntervalElapsed(state.lastRotatedAtEpochMs, intervalMinutes, nowEpochMs)) {
             advance(nowEpochMs)
@@ -158,16 +156,6 @@ class WallpaperRotationController @Inject constructor(
             enabled: Boolean,
             startMinute: Int,
             endMinute: Int,
-        ): Boolean {
-            if (!enabled) return false
-            val cal = Calendar.getInstance().apply { timeInMillis = nowEpochMs }
-            val minuteOfDay = cal.get(Calendar.HOUR_OF_DAY) * 60 + cal.get(Calendar.MINUTE)
-            return if (startMinute <= endMinute) {
-                minuteOfDay in startMinute..endMinute
-            } else {
-                // Window spans midnight (e.g., 22:00 to 07:00)
-                minuteOfDay >= startMinute || minuteOfDay <= endMinute
-            }
-        }
+        ): Boolean = RotationReducer.isQuietHours(nowEpochMs, enabled, startMinute, endMinute)
     }
 }

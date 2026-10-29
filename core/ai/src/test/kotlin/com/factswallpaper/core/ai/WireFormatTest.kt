@@ -112,6 +112,97 @@ class WireFormatTest {
     }
 
     @Test
+    fun `openai chat encodes page images as image url data parts`() = runTest {
+        var captured: HttpRequestData? = null
+        val client = mockHttpClient { data ->
+            captured = data
+            respond(
+                content = """{"choices":[{"message":{"content":"{}"},"finish_reason":"stop"}]}""",
+                status = HttpStatusCode.OK,
+                headers = jsonHeaders(),
+            )
+        }
+        val imageRequest = request(schema = null).copy(
+            imageBytes = byteArrayOf(1, 2, 3),
+            imageMimeType = "image/png",
+            images = listOf(byteArrayOf(4, 5, 6)),
+        )
+
+        OpenAiClient(testProfile(type = ProviderType.OPENAI), "sk-test", client)
+            .execute(imageRequest)
+
+        val body = json.parseToJsonElement(captured!!.body.toByteArray().decodeToString()).jsonObject
+        val content = body["messages"]!!.jsonArray[1].jsonObject["content"]!!.jsonArray
+        assertThat(content[0].jsonObject["type"]!!.jsonPrimitive.content).isEqualTo("text")
+        assertThat(content[0].jsonObject["text"]!!.jsonPrimitive.content).isEqualTo("user prompt")
+        assertThat(content[1].jsonObject["type"]!!.jsonPrimitive.content).isEqualTo("image_url")
+        assertThat(content[1].jsonObject["image_url"]!!.jsonObject["url"]!!.jsonPrimitive.content)
+            .isEqualTo("data:image/png;base64,AQID")
+        assertThat(content[2].jsonObject["image_url"]!!.jsonObject["url"]!!.jsonPrimitive.content)
+            .isEqualTo("data:image/png;base64,BAUG")
+    }
+
+    @Test
+    fun `gemini page images use inline_data parts with the request mime type`() = runTest {
+        var captured: HttpRequestData? = null
+        val client = mockHttpClient { data ->
+            captured = data
+            respond(
+                content = """{"candidates":[{"content":{"parts":[{"text":"{}"}]},"finishReason":"STOP"}]}""",
+                status = HttpStatusCode.OK,
+                headers = jsonHeaders(),
+            )
+        }
+        val imageRequest = request(schema = null).copy(
+            imageBytes = byteArrayOf(1, 2, 3),
+            imageMimeType = "image/webp",
+            images = listOf(byteArrayOf(4, 5, 6)),
+        )
+
+        GeminiClient(testProfile(type = ProviderType.GEMINI), "test-key", client)
+            .execute(imageRequest)
+
+        val body = json.parseToJsonElement(captured!!.body.toByteArray().decodeToString()).jsonObject
+        val parts = body["contents"]!!.jsonArray[0].jsonObject["parts"]!!.jsonArray
+        assertThat(parts[0].jsonObject["inline_data"]!!.jsonObject["mime_type"]!!.jsonPrimitive.content)
+            .isEqualTo("image/webp")
+        assertThat(parts[0].jsonObject["inline_data"]!!.jsonObject["data"]!!.jsonPrimitive.content)
+            .isEqualTo("AQID")
+        assertThat(parts[1].jsonObject["inline_data"]!!.jsonObject["data"]!!.jsonPrimitive.content)
+            .isEqualTo("BAUG")
+        assertThat(parts[2].jsonObject["text"]!!.jsonPrimitive.content).isEqualTo("user prompt")
+    }
+
+    @Test
+    fun `anthropic page images use base64 image sources`() = runTest {
+        var captured: HttpRequestData? = null
+        val client = mockHttpClient { data ->
+            captured = data
+            respond(
+                content = """{"stop_reason":"end_turn","content":[{"type":"text","text":"{}"}]}""",
+                status = HttpStatusCode.OK,
+                headers = jsonHeaders(),
+            )
+        }
+        val imageRequest = request(schema = null).copy(
+            imageBytes = byteArrayOf(1, 2, 3),
+            imageMimeType = "image/png",
+        )
+
+        AnthropicClient(testProfile(type = ProviderType.ANTHROPIC), "sk-ant-test", client)
+            .execute(imageRequest)
+
+        val body = json.parseToJsonElement(captured!!.body.toByteArray().decodeToString()).jsonObject
+        val content = body["messages"]!!.jsonArray[0].jsonObject["content"]!!.jsonArray
+        assertThat(content[0].jsonObject["type"]!!.jsonPrimitive.content).isEqualTo("image")
+        val source = content[0].jsonObject["source"]!!.jsonObject
+        assertThat(source["type"]!!.jsonPrimitive.content).isEqualTo("base64")
+        assertThat(source["media_type"]!!.jsonPrimitive.content).isEqualTo("image/png")
+        assertThat(source["data"]!!.jsonPrimitive.content).isEqualTo("AQID")
+        assertThat(content[1].jsonObject["text"]!!.jsonPrimitive.content).isEqualTo("user prompt")
+    }
+
+    @Test
     fun `openai chat uses strict json schema and max completion tokens`() = runTest {
         var captured: HttpRequestData? = null
         val client = mockHttpClient { data ->

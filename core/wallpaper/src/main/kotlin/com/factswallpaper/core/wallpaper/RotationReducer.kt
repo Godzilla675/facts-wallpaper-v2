@@ -3,9 +3,51 @@ package com.factswallpaper.core.wallpaper
 import com.factswallpaper.core.model.Fact
 import com.factswallpaper.core.model.RotationOrder
 import com.factswallpaper.core.model.WallpaperState
+import java.util.Calendar
 
 object RotationReducer {
     const val UNLOCK_COOLDOWN_MS = 15_000L
+
+    /** On-unlock cooldown, quadrupled by the optional battery-saver slowdown (F16). */
+    fun effectiveUnlockCooldownMs(
+        batterySaver: Boolean,
+        batterySaverSlowdownEnabled: Boolean,
+    ): Long = if (batterySaver && batterySaverSlowdownEnabled) {
+        UNLOCK_COOLDOWN_MS * 4
+    } else {
+        UNLOCK_COOLDOWN_MS
+    }
+
+    /** Interval rotation period, doubled by the optional battery-saver slowdown (F16). */
+    fun effectiveIntervalMinutes(
+        intervalMinutes: Int,
+        batterySaver: Boolean,
+        batterySaverSlowdownEnabled: Boolean,
+    ): Int = if (batterySaver && batterySaverSlowdownEnabled) {
+        intervalMinutes * 2
+    } else {
+        intervalMinutes
+    }
+
+    /**
+     * Quiet-hours window in local time. Windows may span midnight
+     * (for example 22:00 to 07:00), in which case both ends are inclusive.
+     */
+    fun isQuietHours(
+        nowEpochMs: Long,
+        enabled: Boolean,
+        startMinute: Int,
+        endMinute: Int,
+    ): Boolean {
+        if (!enabled) return false
+        val cal = Calendar.getInstance().apply { timeInMillis = nowEpochMs }
+        val minuteOfDay = cal.get(Calendar.HOUR_OF_DAY) * 60 + cal.get(Calendar.MINUTE)
+        return if (startMinute <= endMinute) {
+            minuteOfDay in startMinute..endMinute
+        } else {
+            minuteOfDay >= startMinute || minuteOfDay <= endMinute
+        }
+    }
 
     fun advance(
         currentState: WallpaperState,

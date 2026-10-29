@@ -205,6 +205,81 @@ class OutlineViewModelTest {
 
         assertThat(fakeDocRepo.settingsFlow.value?.factDensity).isEqualTo(FactDensity.DEEP)
     }
+
+    @Test
+    fun `saveLesson without an id inserts a bounded lesson`() = runTest {
+        val collectJob = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.uiState.collect {}
+        }
+        advanceUntilIdle()
+
+        viewModel.saveLesson(
+            lessonId = null,
+            title = "  New lesson  ",
+            summary = "  Summary  ",
+            startPage = 5,
+            endPage = 500,
+        )
+        advanceUntilIdle()
+
+        val saved = fakeLessonRepo.lessonsFlow.value.single()
+        assertThat(saved.title).isEqualTo("New lesson")
+        assertThat(saved.summary).isEqualTo("Summary")
+        assertThat(saved.startPage).isEqualTo(5)
+        assertThat(saved.endPage).isEqualTo(100)
+        assertThat(saved.selected).isTrue()
+        assertThat(viewModel.message.value?.textRes).isEqualTo(R.string.outline_lesson_saved)
+        collectJob.cancel()
+    }
+
+    @Test
+    fun `mergeSelectedLessons merges adjacent lessons and moves their facts`() = runTest {
+        val collectJob = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.uiState.collect {}
+        }
+        val first = lesson("lesson-1", start = 1, end = 10, sortOrder = 1)
+        val second = lesson("lesson-2", start = 11, end = 20, sortOrder = 2)
+        val third = lesson("lesson-3", start = 21, end = 30, sortOrder = 3, selected = false)
+        fakeLessonRepo.lessonsFlow.value = listOf(first, second, third)
+        fakeFactRepo.factsFlow.value = listOf(
+            Fact(
+                id = "fact-1",
+                documentId = "doc-1",
+                lessonId = "lesson-2",
+                text = "Merged fact",
+                sourceBookTitle = "Physics Textbook",
+                createdAtEpochMs = 1_000L,
+            ),
+        )
+        advanceUntilIdle()
+
+        viewModel.mergeSelectedLessons()
+        advanceUntilIdle()
+
+        val lessons = fakeLessonRepo.lessonsFlow.value
+        assertThat(lessons.map { it.id }).containsExactly("lesson-1", "lesson-3")
+        assertThat(lessons.first { it.id == "lesson-1" }.endPage).isEqualTo(20)
+        assertThat(fakeFactRepo.factsFlow.value.single().lessonId).isEqualTo("lesson-1")
+        assertThat(viewModel.message.value?.textRes).isEqualTo(R.string.outline_lessons_merged)
+        collectJob.cancel()
+    }
+
+    private fun lesson(
+        id: String,
+        start: Int,
+        end: Int,
+        sortOrder: Int,
+        selected: Boolean = true,
+    ) = Lesson(
+        id = id,
+        documentId = "doc-1",
+        title = "Lesson $id",
+        summary = "Summary $id",
+        startPage = start,
+        endPage = end,
+        sortOrder = sortOrder,
+        selected = selected,
+    )
 }
 
 private class FakeNetworkMonitor : NetworkMonitor {
@@ -242,11 +317,23 @@ private class FakeFactRepository : FactRepository {
     override fun observeFacts(filter: FactFilter): Flow<List<Fact>> = factsFlow
     override fun observeFact(factId: String): Flow<Fact?> = MutableStateFlow(null)
     override suspend fun getFact(factId: String): Fact? = null
-    override suspend fun saveFact(fact: Fact) {}
-    override suspend fun saveFacts(facts: List<Fact>) {}
-    override suspend fun setActive(factId: String, active: Boolean) {}
-    override suspend fun setFavorite(factId: String, favorite: Boolean) {}
-    override suspend fun deleteFact(factId: String): AppResult<Unit> = AppResult.Success(Unit)
+    override suspend fun saveFact(fact: Fact) {
+        factsFlow.value = factsFlow.value.filter { it.id != fact.id } + fact
+    }
+    override suspend fun saveFacts(facts: List<Fact>) {
+        val ids = facts.map { it.id }.toSet()
+        factsFlow.value = factsFlow.value.filter { it.id !in ids } + facts
+    }
+    override suspend fun setActive(factId: String, active: Boolean) {
+        factsFlow.value = factsFlow.value.map { if (it.id == factId) it.copy(active = active) else it }
+    }
+    override suspend fun setFavorite(factId: String, favorite: Boolean) {
+        factsFlow.value = factsFlow.value.map { if (it.id == factId) it.copy(favorite = favorite) else it }
+    }
+    override suspend fun deleteFact(factId: String): AppResult<Unit> {
+        factsFlow.value = factsFlow.value.filter { it.id != factId }
+        return AppResult.Success(Unit)
+    }
     override fun observeTags(): Flow<List<FactTag>> = MutableStateFlow(emptyList())
     override fun observeSmartViewCounts(): Flow<SmartViewCounts> = MutableStateFlow(SmartViewCounts())
     override fun observeTotalCount(): Flow<Int> = MutableStateFlow(0)
