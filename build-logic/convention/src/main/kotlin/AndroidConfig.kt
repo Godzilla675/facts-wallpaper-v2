@@ -53,6 +53,14 @@ internal fun Project.configureApplicationModule() {
             targetSdk = TARGET_SDK
             testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         }
+        signingConfigs {
+            getByName("debug") {
+                enableV1Signing = true
+                enableV2Signing = true
+                enableV3Signing = true
+                enableV4Signing = false
+            }
+        }
         compileOptions {
             sourceCompatibility = JavaVersion.VERSION_17
             targetCompatibility = JavaVersion.VERSION_17
@@ -65,6 +73,9 @@ internal fun Project.configureApplicationModule() {
             buildConfig = true
         }
         buildTypes {
+            getByName("debug") {
+                signingConfig = signingConfigs.getByName("debug")
+            }
             release {
                 isMinifyEnabled = false
             }
